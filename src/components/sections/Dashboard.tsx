@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
@@ -104,11 +103,13 @@ export const Dashboard = () => {
           <CSVUpload />
           
           {/* AI Coach */}
-          <AICoach />
+          <div id="insights">
+            <AICoach />
+          </div>
         </div>
 
         {/* Recent Transactions */}
-        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
+        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-white">Recent Transactions</h3>
             <button className="text-purple-400 hover:text-purple-300 font-medium text-sm transition-colors duration-200">
@@ -143,6 +144,21 @@ export const Dashboard = () => {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Placeholder sections for navigation */}
+        <div id="goals" className="py-16">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-white mb-4">Goals Section</h3>
+            <p className="text-white/70">Goal tracking functionality coming soon...</p>
+          </div>
+        </div>
+
+        <div id="budget" className="py-16">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-white mb-4">Budget Section</h3>
+            <p className="text-white/70">Budget management functionality coming soon...</p>
           </div>
         </div>
       </div>

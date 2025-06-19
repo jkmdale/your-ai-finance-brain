@@ -300,9 +300,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setHasBiometric(true);
       } else {
         console.log('Database error:', error);
+        return { error: error.message || 'Failed to save biometric credential' };
       }
 
-      return { error };
+      return { error: null };
     } catch (error: any) {
       console.error('Biometric setup error:', error);
       
