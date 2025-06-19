@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,11 +10,14 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  resendConfirmation: (email: string) => Promise<{ error: any }>;
   setupPin: (pin: string) => Promise<{ error: any }>;
   signInWithPin: (pin: string) => Promise<{ error: any }>;
   setupBiometric: () => Promise<{ error: any }>;
   signInWithBiometric: () => Promise<{ error: any }>;
   isBiometricAvailable: () => Promise<boolean>;
+  hasPin: boolean;
+  hasBiometric: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,24 +26,64 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasPin, setHasPin] = useState(false);
+  const [hasBiometric, setHasBiometric] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Check for additional auth methods when user is authenticated
+        if (session?.user) {
+          setTimeout(() => {
+            checkAdditionalAuthMethods(session.user.id);
+          }, 0);
+        } else {
+          setHasPin(false);
+          setHasBiometric(false);
+        }
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session:', session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      if (session?.user) {
+        checkAdditionalAuthMethods(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkAdditionalAuthMethods = async (userId: string) => {
+    try {
+      // Check for PIN
+      const { data: pinData } = await supabase
+        .from('user_pins')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+      setHasPin(!!pinData);
+
+      // Check for biometric
+      const { data: biometricData } = await supabase
+        .from('biometric_credentials')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+      setHasBiometric(!!biometricData);
+    } catch (error) {
+      console.log('Error checking additional auth methods:', error);
+    }
+  };
 
   const isBiometricAvailable = async (): Promise<boolean> => {
     if (!window.PublicKeyCredential) {
@@ -60,6 +104,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       password,
     });
+    
+    if (error) {
+      console.log('Sign in error:', error);
+      // Provide more specific error messages
+      if (error.message.includes('Invalid login credentials')) {
+        return { error: { ...error, message: 'Invalid email or password. Please check your credentials and try again.' } };
+      } else if (error.message.includes('Email not confirmed')) {
+        return { error: { ...error, message: 'Please check your email and click the confirmation link before signing in.' } };
+      }
+    }
+    
     return { error };
   };
 
@@ -72,6 +127,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         emailRedirectTo: redirectUrl
       }
     });
+    
+    if (error) {
+      console.log('Sign up error:', error);
+    }
+    
+    return { error };
+  };
+
+  const resendConfirmation = async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    });
+    
     return { error };
   };
 
@@ -87,34 +159,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .from('user_pins')
       .upsert({ user_id: user.id, pin_hash: pinHash });
     
+    if (!error) {
+      setHasPin(true);
+    }
+    
     return { error };
   };
 
   const signInWithPin = async (pin: string) => {
+    if (!user) {
+      return { error: 'Please sign in with email and password first to use PIN authentication' };
+    }
+
     const pinHash = await hashPin(pin);
     const { data, error } = await supabase
       .from('user_pins')
       .select('user_id')
       .eq('pin_hash', pinHash)
+      .eq('user_id', user.id)
       .single();
 
     if (error || !data) {
       return { error: 'Invalid PIN' };
     }
 
-    const sessionToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    const { error: sessionError } = await supabase
-      .from('user_sessions')
-      .insert({
-        user_id: data.user_id,
-        session_token: sessionToken,
-        auth_method: 'pin',
-        expires_at: expiresAt.toISOString()
-      });
-
-    return { error: sessionError };
+    return { error: null };
   };
 
   const setupBiometric = async () => {
@@ -141,8 +210,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             displayName: user.email || ''
           },
           pubKeyCredParams: [
-            { alg: -7, type: "public-key" }, // ES256
-            { alg: -257, type: "public-key" } // RS256
+            { alg: -7, type: "public-key" },
+            { alg: -257, type: "public-key" }
           ],
           authenticatorSelection: {
             authenticatorAttachment: "platform",
@@ -175,6 +244,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           device_name: navigator.userAgent.substring(0, 100)
         });
 
+      if (!error) {
+        setHasBiometric(true);
+      }
+
       return { error };
     } catch (error: any) {
       console.error('Biometric setup error:', error);
@@ -183,6 +256,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithBiometric = async () => {
+    if (!user) {
+      return { error: 'Please sign in with email and password first to use biometric authentication' };
+    }
+
     const isAvailable = await isBiometricAvailable();
     if (!isAvailable) {
       return { error: 'Biometric authentication not available' };
@@ -207,33 +284,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('biometric_credentials')
         .select('user_id')
         .eq('credential_id', assertion.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error || !data) {
         return { error: 'Biometric authentication failed' };
-      }
-
-      const sessionToken = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      const { error: sessionError } = await supabase
-        .from('user_sessions')
-        .insert({
-          user_id: data.user_id,
-          session_token: sessionToken,
-          auth_method: 'biometric',
-          expires_at: expiresAt.toISOString()
-        });
-
-      if (sessionError) {
-        return { error: sessionError };
-      }
-
-      // Get the user data and create a session
-      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(data.user_id);
-      
-      if (userError || !userData.user) {
-        return { error: 'Failed to authenticate user' };
       }
 
       return { error: null };
@@ -259,11 +314,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn,
       signUp,
       signOut,
+      resendConfirmation,
       setupPin,
       signInWithPin,
       setupBiometric,
       signInWithBiometric,
-      isBiometricAvailable
+      isBiometricAvailable,
+      hasPin,
+      hasBiometric
     }}>
       {children}
     </AuthContext.Provider>
