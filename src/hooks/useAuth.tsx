@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +8,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ error: any; needsConfirmation?: boolean; message?: string }>;
   signOut: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<{ error: any }>;
   setupPin: (pin: string) => Promise<{ error: any }>;
@@ -112,23 +113,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error.message.includes('Email not confirmed') || 
           error.message.includes('Invalid login credentials')) {
         
-        // Check if user exists but isn't confirmed
-        const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(email);
-        
-        if (!userError && userData?.user && !userData.user.email_confirmed_at) {
-          return { 
-            error: { 
-              ...error, 
-              message: 'Please check your email and click the confirmation link before signing in. If you haven\'t received the email, you can request a new one.',
-              needsConfirmation: true
-            } 
-          };
-        }
-        
         return { 
           error: { 
             ...error, 
-            message: 'Invalid email or password. If you just signed up, please check your email for a confirmation link first.' 
+            message: 'Invalid email or password. If you just signed up, please check your email for a confirmation link first.',
+            needsConfirmation: true
           } 
         };
       }

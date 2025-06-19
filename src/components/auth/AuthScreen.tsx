@@ -37,14 +37,14 @@ export const AuthScreen = () => {
     setLoading(true);
     
     if (isSignUp) {
-      const { error, needsConfirmation, message } = await signUp(email, password);
+      const result = await signUp(email, password);
       
-      if (error) {
-        toast.error(error.message);
-      } else if (needsConfirmation) {
+      if (result.error) {
+        toast.error(result.error.message);
+      } else if (result.needsConfirmation) {
         setPendingEmail(email);
         setMode('email-confirmation');
-        toast.success(message || 'Account created! Please check your email to confirm.');
+        toast.success(result.message || 'Account created! Please check your email to confirm.');
       } else {
         toast.success('Account created and signed in successfully!');
       }
