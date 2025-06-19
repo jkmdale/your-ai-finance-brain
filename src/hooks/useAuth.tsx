@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -232,57 +233,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
+      console.log('Starting biometric credential creation...');
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       
+      const publicKeyCredentialCreationOptions = {
+        challenge,
+        rp: { 
+          name: "SmartFinanceAI",
+          id: window.location.hostname
+        },
+        user: {
+          id: new TextEncoder().encode(user.id),
+          name: user.email || '',
+          displayName: user.email || ''
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" as const },
+          { alg: -257, type: "public-key" as const }
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform" as const,
+          userVerification: "required" as const,
+          requireResidentKey: false
+        },
+        timeout: 60000,
+        attestation: "direct" as const
+      };
+
+      console.log('Creating credential with options:', publicKeyCredentialCreationOptions);
+      
       const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge,
-          rp: { 
-            name: "SmartFinanceAI",
-            id: window.location.hostname
-          },
-          user: {
-            id: new TextEncoder().encode(user.id),
-            name: user.email || '',
-            displayName: user.email || ''
-          },
-          pubKeyCredParams: [
-            { alg: -7, type: "public-key" },
-            { alg: -257, type: "public-key" }
-          ],
-          authenticatorSelection: {
-            authenticatorAttachment: "platform",
-            userVerification: "required",
-            requireResidentKey: false
-          },
-          timeout: 60000,
-          attestation: "direct"
-        }
+        publicKey: publicKeyCredentialCreationOptions
       }) as PublicKeyCredential;
 
+      console.log('Credential created:', credential);
+
       if (!credential) {
+        console.log('No credential returned');
         return { error: 'Failed to create biometric credential' };
       }
 
+      console.log('Storing credential in database...');
+      const credentialData = {
+        user_id: user.id,
+        credential_id: credential.id,
+        public_key: JSON.stringify({
+          id: credential.id,
+          rawId: Array.from(new Uint8Array(credential.rawId)),
+          type: credential.type,
+          response: {
+            clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
+            attestationObject: Array.from(new Uint8Array((credential.response as AuthenticatorAttestationResponse).attestationObject))
+          }
+        }),
+        device_name: navigator.userAgent.substring(0, 100)
+      };
+
       const { error } = await supabase
         .from('biometric_credentials')
-        .insert({
-          user_id: user.id,
-          credential_id: credential.id,
-          public_key: JSON.stringify({
-            id: credential.id,
-            rawId: Array.from(new Uint8Array(credential.rawId)),
-            type: credential.type,
-            response: {
-              clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
-              attestationObject: Array.from(new Uint8Array((credential.response as AuthenticatorAttestationResponse).attestationObject))
-            }
-          }),
-          device_name: navigator.userAgent.substring(0, 100)
-        });
+        .insert(credentialData);
+
+      console.log('Database insert result:', { error });
 
       if (!error) {
+        console.log('Biometric setup successful!');
         setHasBiometric(true);
+      } else {
+        console.log('Database error:', error);
       }
 
       return { error };
@@ -296,6 +313,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'A biometric credential already exists for this account.' };
       } else if (error.name === 'NotSupportedError') {
         return { error: 'Biometric authentication is not supported on this device.' };
+      } else if (error.name === 'AbortError') {
+        return { error: 'Biometric setup was cancelled or timed out.' };
       }
       
       return { error: error.message || 'Biometric setup failed' };
