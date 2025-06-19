@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +13,7 @@ interface AuthContextType {
   signInWithPin: (pin: string) => Promise<{ error: any }>;
   setupBiometric: () => Promise<{ error: any }>;
   signInWithBiometric: () => Promise<{ error: any }>;
+  isBiometricAvailable: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,6 +40,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const isBiometricAvailable = async (): Promise<boolean> => {
+    if (!window.PublicKeyCredential) {
+      return false;
+    }
+    
+    try {
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      return available;
+    } catch (error) {
+      console.log('Biometric check failed:', error);
+      return false;
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -88,9 +102,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: 'Invalid PIN' };
     }
 
-    // Create session token
     const sessionToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const { error: sessionError } = await supabase
       .from('user_sessions')
@@ -107,47 +120,88 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setupBiometric = async () => {
     if (!user) return { error: 'No user logged in' };
     
+    const isAvailable = await isBiometricAvailable();
+    if (!isAvailable) {
+      return { error: 'Biometric authentication not available on this device' };
+    }
+
     try {
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      
       const credential = await navigator.credentials.create({
         publicKey: {
-          challenge: new Uint8Array(32),
-          rp: { name: "SmartFinanceAI" },
+          challenge,
+          rp: { 
+            name: "SmartFinanceAI",
+            id: window.location.hostname
+          },
           user: {
             id: new TextEncoder().encode(user.id),
             name: user.email || '',
             displayName: user.email || ''
           },
-          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" }, // ES256
+            { alg: -257, type: "public-key" } // RS256
+          ],
           authenticatorSelection: {
             authenticatorAttachment: "platform",
-            userVerification: "required"
-          }
+            userVerification: "required",
+            requireResidentKey: false
+          },
+          timeout: 60000,
+          attestation: "direct"
         }
       }) as PublicKeyCredential;
+
+      if (!credential) {
+        return { error: 'Failed to create biometric credential' };
+      }
 
       const { error } = await supabase
         .from('biometric_credentials')
         .insert({
           user_id: user.id,
           credential_id: credential.id,
-          public_key: JSON.stringify(credential.response),
-          device_name: navigator.userAgent
+          public_key: JSON.stringify({
+            id: credential.id,
+            rawId: Array.from(new Uint8Array(credential.rawId)),
+            type: credential.type,
+            response: {
+              clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
+              attestationObject: Array.from(new Uint8Array((credential.response as AuthenticatorAttestationResponse).attestationObject))
+            }
+          }),
+          device_name: navigator.userAgent.substring(0, 100)
         });
 
       return { error };
-    } catch (error) {
-      return { error: 'Biometric setup failed' };
+    } catch (error: any) {
+      console.error('Biometric setup error:', error);
+      return { error: error.message || 'Biometric setup failed' };
     }
   };
 
   const signInWithBiometric = async () => {
+    const isAvailable = await isBiometricAvailable();
+    if (!isAvailable) {
+      return { error: 'Biometric authentication not available' };
+    }
+
     try {
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      
       const assertion = await navigator.credentials.get({
         publicKey: {
-          challenge: new Uint8Array(32),
-          userVerification: "required"
+          challenge,
+          userVerification: "required",
+          timeout: 60000
         }
       }) as PublicKeyCredential;
+
+      if (!assertion) {
+        return { error: 'Biometric authentication cancelled' };
+      }
 
       const { data, error } = await supabase
         .from('biometric_credentials')
@@ -159,7 +213,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Biometric authentication failed' };
       }
 
-      // Create session token
       const sessionToken = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -172,9 +225,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           expires_at: expiresAt.toISOString()
         });
 
-      return { error: sessionError };
-    } catch (error) {
-      return { error: 'Biometric authentication failed' };
+      if (sessionError) {
+        return { error: sessionError };
+      }
+
+      // Get the user data and create a session
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(data.user_id);
+      
+      if (userError || !userData.user) {
+        return { error: 'Failed to authenticate user' };
+      }
+
+      return { error: null };
+    } catch (error: any) {
+      console.error('Biometric sign-in error:', error);
+      return { error: error.message || 'Biometric authentication failed' };
     }
   };
 
@@ -197,7 +262,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setupPin,
       signInWithPin,
       setupBiometric,
-      signInWithBiometric
+      signInWithBiometric,
+      isBiometricAvailable
     }}>
       {children}
     </AuthContext.Provider>

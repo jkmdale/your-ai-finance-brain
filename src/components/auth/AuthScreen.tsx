@@ -1,10 +1,10 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PinPad } from './PinPad';
 import { toast } from 'sonner';
 
 type AuthMode = 'welcome' | 'email' | 'pin' | 'biometric' | 'signup';
@@ -13,10 +13,18 @@ export const AuthScreen = () => {
   const [mode, setMode] = useState<AuthMode>('welcome');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [pin, setPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, signInWithPin, signInWithBiometric } = useAuth();
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable } = useAuth();
+
+  useEffect(() => {
+    const checkBiometric = async () => {
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
+    };
+    checkBiometric();
+  }, [isBiometricAvailable]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {
@@ -35,29 +43,29 @@ export const AuthScreen = () => {
     setLoading(false);
   };
 
-  const handlePinAuth = async () => {
-    if (pin.length !== 4) {
-      toast.error('PIN must be 4 digits');
-      return;
-    }
-
+  const handlePinComplete = async (pin: string) => {
     setLoading(true);
     const { error } = await signInWithPin(pin);
     
     if (error) {
       toast.error('Invalid PIN');
+      setTimeout(() => setLoading(false), 1000);
     } else {
       toast.success('Welcome back!');
     }
-    setLoading(false);
   };
 
   const handleBiometricAuth = async () => {
+    if (!biometricAvailable) {
+      toast.error('Biometric authentication is not available on this device');
+      return;
+    }
+
     setLoading(true);
     const { error } = await signInWithBiometric();
     
     if (error) {
-      toast.error('Biometric authentication failed');
+      toast.error(error.message || 'Biometric authentication failed');
     } else {
       toast.success('Welcome back!');
     }
@@ -124,11 +132,14 @@ export const AuthScreen = () => {
 
                 <Button
                   onClick={() => setMode('biometric')}
-                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
+                  disabled={!biometricAvailable}
+                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center space-x-3">
                     <Fingerprint className="w-5 h-5" />
-                    <span className="font-medium">Biometric</span>
+                    <span className="font-medium">
+                      {biometricAvailable ? 'Biometric' : 'Biometric (Unavailable)'}
+                    </span>
                   </div>
                   <ArrowRight className="w-5 h-5" />
                 </Button>
@@ -283,31 +294,16 @@ export const AuthScreen = () => {
                 <p className="text-white/70">Enter your 4-digit PIN code</p>
               </div>
 
-              <div className="space-y-6">
-                <div className="flex justify-center">
-                  <Input
-                    type="password"
-                    placeholder="••••"
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-16 text-2xl text-center w-32 tracking-widest"
-                    maxLength={4}
-                  />
-                </div>
+              <PinPad 
+                onPinComplete={handlePinComplete}
+                loading={loading}
+              />
 
-                <Button
-                  onClick={handlePinAuth}
-                  disabled={loading || pin.length !== 4}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-12"
-                >
-                  {loading ? 'Verifying...' : 'Unlock'}
-                </Button>
-              </div>
-
-              <div className="mt-6 text-center">
+              <div className="mt-8 text-center">
                 <button
                   onClick={() => setMode('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
+                  disabled={loading}
                 >
                   ← Back to options
                 </button>
@@ -329,14 +325,19 @@ export const AuthScreen = () => {
                   <Fingerprint className="w-10 h-10 text-white animate-pulse" />
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">Biometric Auth</h2>
-                <p className="text-white/70">Use your fingerprint or face ID</p>
+                <p className="text-white/70">
+                  {biometricAvailable 
+                    ? 'Use your fingerprint, face ID, or other biometric method' 
+                    : 'Biometric authentication is not available on this device'
+                  }
+                </p>
               </div>
 
               <div className="space-y-6">
                 <Button
                   onClick={handleBiometricAuth}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-12"
+                  disabled={loading || !biometricAvailable}
+                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-12 disabled:opacity-50"
                 >
                   {loading ? 'Authenticating...' : 'Authenticate'}
                 </Button>
@@ -346,6 +347,7 @@ export const AuthScreen = () => {
                 <button
                   onClick={() => setMode('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
+                  disabled={loading}
                 >
                   ← Back to options
                 </button>
