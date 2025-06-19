@@ -3,6 +3,20 @@ import React from 'react';
 import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
 
 export const BudgetOverview = () => {
+  const getColorClasses = (color: string) => {
+    const colorMap = {
+      blue: { bg: 'bg-blue-400', gradient: 'from-blue-400 to-blue-500' },
+      red: { bg: 'bg-red-400', gradient: 'from-red-400 to-red-500' },
+      green: { bg: 'bg-green-400', gradient: 'from-green-400 to-green-500' },
+      yellow: { bg: 'bg-yellow-400', gradient: 'from-yellow-400 to-yellow-500' },
+      purple: { bg: 'bg-purple-400', gradient: 'from-purple-400 to-purple-500' },
+      pink: { bg: 'bg-pink-400', gradient: 'from-pink-400 to-pink-500' },
+      cyan: { bg: 'bg-cyan-400', gradient: 'from-cyan-400 to-cyan-500' },
+      emerald: { bg: 'bg-emerald-400', gradient: 'from-emerald-400 to-emerald-500' }
+    };
+    return colorMap[color as keyof typeof colorMap] || { bg: 'bg-gray-400', gradient: 'from-gray-400 to-gray-500' };
+  };
+
   const budgetCategories = [
     { name: 'Housing', budgeted: 2500, spent: 2450, color: 'blue', percentage: 32 },
     { name: 'Food & Dining', budgeted: 800, spent: 920, color: 'red', percentage: 15 },
@@ -84,12 +98,13 @@ export const BudgetOverview = () => {
             {budgetCategories.map((category, index) => {
               const isOverBudget = category.spent > category.budgeted;
               const spentPercentage = (category.spent / category.budgeted) * 100;
+              const colors = getColorClasses(category.color);
               
               return (
                 <div key={index} className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      <div className={`w-4 h-4 bg-${category.color}-400 rounded-full`}></div>
+                      <div className={`w-4 h-4 ${colors.bg} rounded-full`}></div>
                       <span className="text-white font-medium">{category.name}</span>
                       {isOverBudget && <AlertCircle className="w-4 h-4 text-red-400" />}
                     </div>
@@ -105,7 +120,7 @@ export const BudgetOverview = () => {
                   
                   <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
                     <div 
-                      className={`h-full bg-gradient-to-r from-${category.color}-400 to-${category.color}-500 transition-all duration-1000 ${isOverBudget ? 'animate-pulse' : ''}`}
+                      className={`h-full bg-gradient-to-r ${colors.gradient} transition-all duration-1000 ${isOverBudget ? 'animate-pulse' : ''}`}
                       style={{ width: `${Math.min(spentPercentage, 100)}%` }}
                     ></div>
                   </div>

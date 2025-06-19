@@ -5,6 +5,16 @@ import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 
 export const Dashboard = () => {
+  const getColorClasses = (color: string) => {
+    const colorMap = {
+      blue: 'from-blue-400 to-blue-500',
+      green: 'from-green-400 to-green-500',
+      purple: 'from-purple-400 to-purple-500',
+      emerald: 'from-emerald-400 to-emerald-500'
+    };
+    return colorMap[color as keyof typeof colorMap] || 'from-gray-400 to-gray-500';
+  };
+
   const stats = [
     {
       title: 'Total Balance',
@@ -67,7 +77,7 @@ export const Dashboard = () => {
             return (
               <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl">
                 <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br from-${stat.color}-400 to-${stat.color}-500 rounded-xl flex items-center justify-center`}>
+                  <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses(stat.color)} rounded-xl flex items-center justify-center`}>
                     <IconComponent className="w-6 h-6 text-white" />
                   </div>
                   <div className={`flex items-center space-x-1 text-sm ${

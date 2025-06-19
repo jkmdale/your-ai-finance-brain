@@ -3,6 +3,16 @@ import React from 'react';
 import { Brain, TrendingUp, AlertTriangle, Lightbulb, Target, DollarSign } from 'lucide-react';
 
 export const AIInsights = () => {
+  const getColorClasses = (color: string) => {
+    const colorMap = {
+      yellow: { bg: 'bg-yellow-400', gradient: 'from-yellow-400 to-yellow-500', text: 'text-yellow-400' },
+      blue: { bg: 'bg-blue-400', gradient: 'from-blue-400 to-blue-500', text: 'text-blue-400' },
+      orange: { bg: 'bg-orange-400', gradient: 'from-orange-400 to-orange-500', text: 'text-orange-400' },
+      green: { bg: 'bg-green-400', gradient: 'from-green-400 to-green-500', text: 'text-green-400' }
+    };
+    return colorMap[color as keyof typeof colorMap] || { bg: 'bg-gray-400', gradient: 'from-gray-400 to-gray-500', text: 'text-gray-400' };
+  };
+
   const insights = [
     {
       type: 'opportunity',
@@ -58,10 +68,11 @@ export const AIInsights = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {insights.map((insight, index) => {
             const IconComponent = insight.icon;
+            const colors = getColorClasses(insight.color);
             return (
               <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl">
                 <div className="flex items-start space-x-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br from-${insight.color}-400 to-${insight.color}-500 rounded-xl flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-12 h-12 bg-gradient-to-br ${colors.gradient} rounded-xl flex items-center justify-center flex-shrink-0`}>
                     <IconComponent className="w-6 h-6 text-white" />
                   </div>
                   
@@ -69,7 +80,7 @@ export const AIInsights = () => {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-lg font-semibold text-white">{insight.title}</h3>
                       <div className="flex items-center space-x-1">
-                        <div className={`w-2 h-2 bg-${insight.color}-400 rounded-full`}></div>
+                        <div className={`w-2 h-2 ${colors.bg} rounded-full`}></div>
                         <span className="text-white/60 text-xs">{insight.confidence}% confidence</span>
                       </div>
                     </div>
@@ -77,7 +88,7 @@ export const AIInsights = () => {
                     <p className="text-white/80 leading-relaxed mb-4">{insight.message}</p>
                     
                     <div className="flex items-center justify-between">
-                      <button className={`text-${insight.color}-400 hover:text-${insight.color}-300 font-medium text-sm transition-colors duration-200`}>
+                      <button className={`${colors.text} hover:opacity-80 font-medium text-sm transition-colors duration-200`}>
                         View Details →
                       </button>
                       <div className="flex space-x-2">
