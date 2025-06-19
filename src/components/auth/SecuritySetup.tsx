@@ -52,7 +52,12 @@ export const SecuritySetup: React.FC<SecuritySetupProps> = ({ onComplete, onSkip
     const { error } = await setupBiometric();
     
     if (error) {
-      toast.error(error.message || 'Failed to set up biometric authentication');
+      // Show more user-friendly error message
+      if (error.includes('preview mode')) {
+        toast.error('Biometric setup is not available in preview mode. This will work when you deploy your app or access it directly.');
+      } else {
+        toast.error(error || 'Failed to set up biometric authentication');
+      }
     } else {
       toast.success('Biometric authentication set up successfully!');
       setBiometricSetup(true);

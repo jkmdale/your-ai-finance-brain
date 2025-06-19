@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -86,12 +85,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const isBiometricAvailable = async (): Promise<boolean> => {
+    // Check if we're in an iframe (like Lovable preview)
+    if (window.self !== window.top) {
+      console.log('Biometric authentication not available in iframe environment');
+      return false;
+    }
+
     if (!window.PublicKeyCredential) {
+      console.log('WebAuthn not supported in this browser');
       return false;
     }
     
     try {
       const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      console.log('Biometric authenticator available:', available);
       return available;
     } catch (error) {
       console.log('Biometric check failed:', error);
@@ -214,6 +221,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setupBiometric = async () => {
     if (!user) return { error: 'No user logged in' };
     
+    // Check if we're in an iframe first
+    if (window.self !== window.top) {
+      return { error: 'Biometric authentication is not available in preview mode. It will work when deployed or accessed directly.' };
+    }
+
     const isAvailable = await isBiometricAvailable();
     if (!isAvailable) {
       return { error: 'Biometric authentication not available on this device' };
@@ -276,6 +288,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error };
     } catch (error: any) {
       console.error('Biometric setup error:', error);
+      
+      // Provide user-friendly error messages
+      if (error.name === 'NotAllowedError') {
+        return { error: 'Biometric setup was cancelled or not allowed by your browser. Please try again and allow the permission when prompted.' };
+      } else if (error.name === 'InvalidStateError') {
+        return { error: 'A biometric credential already exists for this account.' };
+      } else if (error.name === 'NotSupportedError') {
+        return { error: 'Biometric authentication is not supported on this device.' };
+      }
+      
       return { error: error.message || 'Biometric setup failed' };
     }
   };
@@ -283,6 +305,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithBiometric = async () => {
     if (!user) {
       return { error: 'Please sign in with email and password first to use biometric authentication' };
+    }
+
+    // Check if we're in an iframe first
+    if (window.self !== window.top) {
+      return { error: 'Biometric authentication is not available in preview mode. It will work when deployed or accessed directly.' };
     }
 
     const isAvailable = await isBiometricAvailable();
