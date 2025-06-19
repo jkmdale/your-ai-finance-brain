@@ -1,64 +1,55 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Delete, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Delete } from 'lucide-react';
 
 interface PinPadProps {
   onPinComplete: (pin: string) => void;
-  onClear?: () => void;
-  maxLength?: number;
-  loading?: boolean;
+  loading: boolean;
+  isSetup?: boolean;
 }
 
-export const PinPad = ({ onPinComplete, onClear, maxLength = 4, loading = false }: PinPadProps) => {
+export const PinPad: React.FC<PinPadProps> = ({ onPinComplete, loading, isSetup = false }) => {
   const [pin, setPin] = useState('');
 
-  const handleNumberPress = (number: string) => {
-    if (pin.length < maxLength && !loading) {
+  const handleNumberClick = (number: string) => {
+    if (pin.length < 4 && !loading) {
       const newPin = pin + number;
       setPin(newPin);
       
-      if (newPin.length === maxLength) {
-        setTimeout(() => onPinComplete(newPin), 100);
+      if (newPin.length === 4) {
+        setTimeout(() => {
+          onPinComplete(newPin);
+          if (!isSetup) {
+            setPin(''); // Clear PIN after completion for login, but not for setup
+          }
+        }, 100);
       }
     }
   };
 
-  const handleBackspace = () => {
+  const handleDelete = () => {
     if (!loading) {
-      setPin(prev => prev.slice(0, -1));
+      setPin(pin.slice(0, -1));
     }
   };
 
-  const handleClear = () => {
-    if (!loading) {
-      setPin('');
-      onClear?.();
-    }
-  };
-
-  const numbers = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-    ['', '0', '']
-  ];
+  const numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
   return (
-    <div className="w-full max-w-sm mx-auto">
+    <div className="max-w-xs mx-auto">
       {/* PIN Display */}
       <div className="flex justify-center space-x-4 mb-8">
-        {Array.from({ length: maxLength }).map((_, index) => (
+        {[...Array(4)].map((_, index) => (
           <motion.div
             key={index}
-            className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+            className={`w-4 h-4 rounded-full border-2 ${
               index < pin.length 
                 ? 'bg-white border-white' 
                 : 'border-white/30'
             }`}
-            animate={{ 
-              scale: index === pin.length - 1 ? [1, 1.2, 1] : 1 
+            animate={{
+              scale: index === pin.length - 1 && pin.length > 0 ? [1, 1.2, 1] : 1
             }}
             transition={{ duration: 0.2 }}
           />
@@ -66,51 +57,46 @@ export const PinPad = ({ onPinComplete, onClear, maxLength = 4, loading = false 
       </div>
 
       {/* Number Pad */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {numbers.map((row, rowIndex) =>
-          row.map((number, colIndex) => (
-            <motion.div key={`${rowIndex}-${colIndex}`} whileTap={{ scale: 0.95 }}>
-              {number ? (
-                <Button
-                  onClick={() => handleNumberPress(number)}
-                  disabled={loading}
-                  variant="ghost"
-                  className="w-16 h-16 text-2xl font-semibold text-white hover:bg-white/10 rounded-full border-2 border-white/20 hover:border-white/40 transition-all duration-200"
-                >
-                  {number}
-                </Button>
-              ) : (
-                <div className="w-16 h-16" />
-              )}
-            </motion.div>
-          ))
-        )}
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        {numbers.slice(0, 9).map((number) => (
+          <motion.button
+            key={number}
+            onClick={() => handleNumberClick(number)}
+            disabled={loading}
+            className="w-16 h-16 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center text-white text-xl font-semibold transition-colors duration-200"
+            whileTap={{ scale: 0.95 }}
+          >
+            {number}
+          </motion.button>
+        ))}
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center space-x-8">
-        <Button
-          onClick={handleClear}
-          disabled={loading || pin.length === 0}
-          variant="ghost"
-          className="w-16 h-16 text-white hover:bg-white/10 rounded-full border-2 border-white/20 hover:border-white/40 transition-all duration-200"
+      {/* Bottom Row */}
+      <div className="grid grid-cols-3 gap-4">
+        <div /> {/* Empty space */}
+        <motion.button
+          onClick={() => handleNumberClick('0')}
+          disabled={loading}
+          className="w-16 h-16 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center text-white text-xl font-semibold transition-colors duration-200"
+          whileTap={{ scale: 0.95 }}
         >
-          <span className="text-sm font-medium">Clear</span>
-        </Button>
-
-        <Button
-          onClick={handleBackspace}
+          0
+        </motion.button>
+        <motion.button
+          onClick={handleDelete}
           disabled={loading || pin.length === 0}
-          variant="ghost"
-          className="w-16 h-16 text-white hover:bg-white/10 rounded-full border-2 border-white/20 hover:border-white/40 transition-all duration-200"
+          className="w-16 h-16 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center text-white transition-colors duration-200"
+          whileTap={{ scale: 0.95 }}
         >
-          <Delete className="w-6 h-6" />
-        </Button>
+          <Delete className="w-5 h-5" />
+        </motion.button>
       </div>
 
       {loading && (
-        <div className="flex justify-center mt-6">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+        <div className="text-center mt-4">
+          <div className="text-white/70 text-sm">
+            {isSetup ? 'Setting up PIN...' : 'Verifying PIN...'}
+          </div>
         </div>
       )}
     </div>

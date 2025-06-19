@@ -7,14 +7,28 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { PWAInstall } from "@/components/PWAInstall";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { SecuritySetup } from "@/components/auth/SecuritySetup";
 import { Navbar } from "@/components/layout/Navbar";
+import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, hasPin, hasBiometric } = useAuth();
+  const [showSecuritySetup, setShowSecuritySetup] = useState(false);
+  const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
+
+  useEffect(() => {
+    // Check if user needs security setup after they're authenticated
+    if (user && !loading && !hasCheckedSecurity) {
+      // Show security setup if user doesn't have PIN or biometric set up
+      const needsSecuritySetup = !hasPin && !hasBiometric;
+      setShowSecuritySetup(needsSecuritySetup);
+      setHasCheckedSecurity(true);
+    }
+  }, [user, loading, hasPin, hasBiometric, hasCheckedSecurity]);
 
   if (loading) {
     return (
@@ -40,6 +54,13 @@ const AppContent = () => {
         </div>
       </div>
       <PWAInstall />
+      
+      {showSecuritySetup && (
+        <SecuritySetup
+          onComplete={() => setShowSecuritySetup(false)}
+          onSkip={() => setShowSecuritySetup(false)}
+        />
+      )}
     </BrowserRouter>
   );
 };
