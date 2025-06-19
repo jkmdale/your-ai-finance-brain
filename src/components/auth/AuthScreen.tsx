@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PinPad } from './PinPad';
 import { toast } from 'sonner';
 
-type AuthMode = 'welcome' | 'email' | 'pin' | 'biometric' | 'signup';
+type AuthMode = 'welcome' | 'email' | 'pin' | 'biometric' | 'signup' | 'email-confirmation';
 
 export const AuthScreen = () => {
   const [mode, setMode] = useState<AuthMode>('welcome');
@@ -16,7 +17,8 @@ export const AuthScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable } = useAuth();
+  const [pendingEmail, setPendingEmail] = useState('');
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation } = useAuth();
 
   useEffect(() => {
     const checkBiometric = async () => {
@@ -33,13 +35,50 @@ export const AuthScreen = () => {
     }
 
     setLoading(true);
-    const { error } = isSignUp ? await signUp(email, password) : await signIn(email, password);
+    
+    if (isSignUp) {
+      const { error, needsConfirmation, message } = await signUp(email, password);
+      
+      if (error) {
+        toast.error(error.message);
+      } else if (needsConfirmation) {
+        setPendingEmail(email);
+        setMode('email-confirmation');
+        toast.success(message || 'Account created! Please check your email to confirm.');
+      } else {
+        toast.success('Account created and signed in successfully!');
+      }
+    } else {
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        if (error.needsConfirmation) {
+          setPendingEmail(email);
+          setMode('email-confirmation');
+          toast.error(error.message);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success('Welcome back!');
+      }
+    }
+    
+    setLoading(false);
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!pendingEmail) return;
+    
+    setLoading(true);
+    const { error } = await resendConfirmation(pendingEmail);
     
     if (error) {
-      toast.error(error.message);
+      toast.error('Failed to resend confirmation email');
     } else {
-      toast.success(isSignUp ? 'Account created successfully!' : 'Welcome back!');
+      toast.success('Confirmation email sent! Please check your inbox.');
     }
+    
     setLoading(false);
   };
 
@@ -266,6 +305,69 @@ export const AuthScreen = () => {
                   className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-12"
                 >
                   {loading ? 'Creating Account...' : 'Create Account'}
+                </Button>
+              </div>
+
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setMode('welcome')}
+                  className="text-white/70 hover:text-white transition-colors duration-200"
+                >
+                  ← Back to options
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {mode === 'email-confirmation' && (
+            <motion.div
+              key="email-confirmation"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
+            >
+              <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Mail className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
+                <p className="text-white/70 mb-4">
+                  We've sent a confirmation link to:
+                </p>
+                <p className="text-white font-medium">{pendingEmail}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl p-4">
+                  <div className="flex items-start space-x-3">
+                    <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-300">
+                      <p className="font-medium mb-1">Next steps:</p>
+                      <ul className="space-y-1 text-blue-200">
+                        <li>1. Check your email inbox (and spam folder)</li>
+                        <li>2. Click the confirmation link</li>
+                        <li>3. Return here to sign in</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleResendConfirmation}
+                  disabled={loading}
+                  variant="outline"
+                  className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
+                >
+                  {loading ? 'Sending...' : 'Resend confirmation email'}
+                </Button>
+
+                <Button
+                  onClick={() => setMode('email')}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
+                >
+                  Back to Sign In
                 </Button>
               </div>
 

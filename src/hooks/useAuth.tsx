@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -100,6 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signIn = async (email: string, password: string) => {
+    console.log('Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -107,11 +107,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     if (error) {
       console.log('Sign in error:', error);
-      // Provide more specific error messages
-      if (error.message.includes('Invalid login credentials')) {
-        return { error: { ...error, message: 'Invalid email or password. Please check your credentials and try again.' } };
-      } else if (error.message.includes('Email not confirmed')) {
-        return { error: { ...error, message: 'Please check your email and click the confirmation link before signing in.' } };
+      
+      // Check if it's an email confirmation issue
+      if (error.message.includes('Email not confirmed') || 
+          error.message.includes('Invalid login credentials')) {
+        
+        // Check if user exists but isn't confirmed
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(email);
+        
+        if (!userError && userData?.user && !userData.user.email_confirmed_at) {
+          return { 
+            error: { 
+              ...error, 
+              message: 'Please check your email and click the confirmation link before signing in. If you haven\'t received the email, you can request a new one.',
+              needsConfirmation: true
+            } 
+          };
+        }
+        
+        return { 
+          error: { 
+            ...error, 
+            message: 'Invalid email or password. If you just signed up, please check your email for a confirmation link first.' 
+          } 
+        };
       }
     }
     
@@ -119,8 +138,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string) => {
+    console.log('Attempting sign up for:', email);
     const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
+    
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -130,12 +151,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     if (error) {
       console.log('Sign up error:', error);
+      return { error };
     }
     
-    return { error };
+    // Check if user was created but needs confirmation
+    if (data.user && !data.session) {
+      return { 
+        error: null, 
+        needsConfirmation: true,
+        message: 'Please check your email and click the confirmation link to complete your registration.'
+      };
+    }
+    
+    return { error: null };
   };
 
   const resendConfirmation = async (email: string) => {
+    console.log('Resending confirmation for:', email);
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: email,
@@ -143,6 +175,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         emailRedirectTo: `${window.location.origin}/`
       }
     });
+    
+    if (error) {
+      console.log('Resend confirmation error:', error);
+    }
     
     return { error };
   };
