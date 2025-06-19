@@ -85,19 +85,19 @@ export const AppSidebar = () => {
           <div className="relative w-10 h-10 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
             <div className="relative w-10 h-10 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <SmartFinanceIcon size={20} className="text-white" />
+              <SmartFinanceIcon size={20} className="text-purple-300" />
             </div>
           </div>
           <div>
-            <h2 className="text-white font-bold text-sm">SmartFinanceAI</h2>
-            <p className="text-white/50 text-xs">Financial OS</p>
+            <h2 className="text-purple-200 font-bold text-sm">SmartFinanceAI</h2>
+            <p className="text-purple-400 text-xs">Financial OS</p>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-white/70">Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-purple-300">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
@@ -106,9 +106,9 @@ export const AppSidebar = () => {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.url)}
-                      className="text-white/80 hover:text-white hover:bg-white/10 data-[active=true]:bg-white/20"
+                      className="text-purple-200 hover:text-purple-100 hover:bg-purple-900/30 data-[active=true]:bg-purple-800/40"
                     >
-                      <IconComponent className="w-4 h-4" size={16} />
+                      <IconComponent className="w-4 h-4 text-purple-300" size={16} />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -118,10 +118,10 @@ export const AppSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="bg-white/20" />
+        <SidebarSeparator className="bg-purple-700/50" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-white/70">Account</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-purple-300">Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {accountItems.map((item) => {
@@ -130,9 +130,9 @@ export const AppSidebar = () => {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.url)}
-                      className="text-white/80 hover:text-white hover:bg-white/10"
+                      className="text-purple-200 hover:text-purple-100 hover:bg-purple-900/30"
                     >
-                      <IconComponent className="w-4 h-4" />
+                      <IconComponent className="w-4 h-4 text-purple-300" />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -142,7 +142,7 @@ export const AppSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="bg-white/20" />
+        <SidebarSeparator className="bg-purple-700/50" />
 
         <SidebarGroup>
           <SidebarGroupContent>
@@ -150,9 +150,9 @@ export const AppSidebar = () => {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => handleItemClick('#help')}
-                  className="text-white/80 hover:text-white hover:bg-white/10"
+                  className="text-purple-200 hover:text-purple-100 hover:bg-purple-900/30"
                 >
-                  <HelpCircle className="w-4 h-4" />
+                  <HelpCircle className="w-4 h-4 text-purple-300" />
                   <span>Help & Support</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -173,16 +173,16 @@ export const AppSidebar = () => {
       </SidebarContent>
 
       {user && (
-        <SidebarFooter className="border-t border-white/20 p-4">
+        <SidebarFooter className="border-t border-purple-700/50 p-4">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">
+              <p className="text-purple-200 text-sm font-medium truncate">
                 {user.email?.split('@')[0]}
               </p>
-              <p className="text-white/60 text-xs">Premium User</p>
+              <p className="text-purple-400 text-xs">Premium User</p>
             </div>
           </div>
         </SidebarFooter>
