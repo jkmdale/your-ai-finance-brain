@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Backspace, Check } from 'lucide-react';
+import { Delete, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface PinPadProps {
@@ -69,14 +69,13 @@ export const PinPad = ({ onPinComplete, onClear, maxLength = 4, loading = false 
       <div className="grid grid-cols-3 gap-4 mb-6">
         {numbers.map((row, rowIndex) =>
           row.map((number, colIndex) => (
-            <motion.div key={`${rowIndex}-${colIndex}`}>
+            <motion.div key={`${rowIndex}-${colIndex}`} whileTap={{ scale: 0.95 }}>
               {number ? (
                 <Button
                   onClick={() => handleNumberPress(number)}
                   disabled={loading}
                   variant="ghost"
                   className="w-16 h-16 text-2xl font-semibold text-white hover:bg-white/10 rounded-full border-2 border-white/20 hover:border-white/40 transition-all duration-200"
-                  whileTap={{ scale: 0.95 }}
                 >
                   {number}
                 </Button>
@@ -105,7 +104,7 @@ export const PinPad = ({ onPinComplete, onClear, maxLength = 4, loading = false 
           variant="ghost"
           className="w-16 h-16 text-white hover:bg-white/10 rounded-full border-2 border-white/20 hover:border-white/40 transition-all duration-200"
         >
-          <Backspace className="w-6 h-6" />
+          <Delete className="w-6 h-6" />
         </Button>
       </div>
 
