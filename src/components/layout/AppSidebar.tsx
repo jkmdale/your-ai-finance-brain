@@ -74,7 +74,11 @@ export const AppSidebar = () => {
   const handleItemClick = (url: string) => {
     const element = document.querySelector(url);
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      // If element doesn't exist, scroll to top and let user know
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      console.log(`Section ${url} not found, scrolling to top`);
     }
   };
 
@@ -106,7 +110,7 @@ export const AppSidebar = () => {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.url)}
-                      className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900"
+                      className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 cursor-pointer transition-colors duration-200"
                     >
                       <IconComponent className="w-4 h-4 text-purple-200" size={16} />
                       <span>{item.title}</span>
@@ -130,7 +134,7 @@ export const AppSidebar = () => {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.url)}
-                      className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900"
+                      className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
                     >
                       <IconComponent className="w-4 h-4 text-purple-200" />
                       <span>{item.title}</span>
@@ -150,7 +154,7 @@ export const AppSidebar = () => {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => handleItemClick('#help')}
-                  className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900"
+                  className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
                 >
                   <HelpCircle className="w-4 h-4 text-purple-200" />
                   <span>Help & Support</span>
@@ -160,7 +164,7 @@ export const AppSidebar = () => {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => signOut()}
-                    className="w-full text-red-300 hover:text-red-200 hover:bg-red-500/10 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900"
+                    className="w-full text-red-300 hover:text-red-200 hover:bg-red-500/10 cursor-pointer transition-colors duration-200"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
