@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { PWAInstall } from "@/components/PWAInstall";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { Navbar } from "@/components/layout/Navbar";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -29,10 +30,15 @@ const AppContent = () => {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
+        <Navbar />
+        <div className="pt-16">
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </div>
+      </div>
       <PWAInstall />
     </BrowserRouter>
   );
