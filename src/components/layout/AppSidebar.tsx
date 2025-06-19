@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { TrendingUp, Target, PieChart, CreditCard, Upload, User, Settings, Bell, HelpCircle, LogOut } from 'lucide-react';
 import {
@@ -12,6 +13,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { SmartFinanceIcon } from '@/components/ui/smart-finance-icon';
 import { useAuth } from '@/hooks/useAuth';
@@ -69,6 +71,7 @@ const accountItems = [
 
 export const AppSidebar = () => {
   const { user, signOut } = useAuth();
+  const { setOpenMobile, isMobile } = useSidebar();
 
   const handleItemClick = (url: string) => {
     const element = document.querySelector(url);
@@ -78,6 +81,23 @@ export const AppSidebar = () => {
       // If element doesn't exist, scroll to top and let user know
       window.scrollTo({ top: 0, behavior: 'smooth' });
       console.log(`Section ${url} not found, scrolling to top`);
+    }
+    
+    // Close mobile sidebar after navigation
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // Close mobile sidebar after sign out
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+    } catch (error) {
+      console.error('Sign out error:', error);
     }
   };
 
@@ -162,7 +182,7 @@ export const AppSidebar = () => {
               {user && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => signOut()}
+                    onClick={handleSignOut}
                     className="w-full text-red-300 hover:text-red-200 hover:bg-red-500/10 cursor-pointer transition-colors duration-200"
                   >
                     <LogOut className="w-4 h-4" />
