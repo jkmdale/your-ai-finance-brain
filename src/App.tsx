@@ -49,13 +49,13 @@ const AppContent = () => {
         <div className="min-h-screen flex w-full max-w-full overflow-x-hidden bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
           <AppSidebar />
           <SidebarInset className="flex-1 min-w-0">
-            <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 backdrop-blur-lg">
+            <header className="fixed top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 backdrop-blur-lg">
               <SidebarTrigger className="text-purple-100 hover:bg-purple-700/30" />
               <div className="ml-auto">
                 <span className="text-purple-100 text-sm">Welcome back!</span>
               </div>
             </header>
-            <div className="flex-1 overflow-auto w-full">
+            <div className="flex-1 overflow-auto w-full pt-16">
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="*" element={<NotFound />} />
