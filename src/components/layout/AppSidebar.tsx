@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TrendingUp, Target, PieChart, CreditCard, Upload, User, Settings, Bell, HelpCircle, LogOut } from 'lucide-react';
 import {
@@ -83,8 +82,8 @@ export const AppSidebar = () => {
   };
 
   return (
-    <Sidebar className="w-64 max-w-64 border-r border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
-      <SidebarHeader className="border-b border-purple-700/30 p-6 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900">
+    <Sidebar className="w-64 max-w-64 border-r border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 sticky top-0 h-screen">
+      <SidebarHeader className="border-b border-purple-700/30 p-6 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 sticky top-0 z-10">
         <div className="flex items-center space-x-3">
           <div className="relative w-10 h-10 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
@@ -99,7 +98,7 @@ export const AppSidebar = () => {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
+      <SidebarContent className="bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 overflow-y-auto">
         <SidebarGroup>
           <SidebarGroupLabel className="text-purple-200">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -177,7 +176,7 @@ export const AppSidebar = () => {
       </SidebarContent>
 
       {user && (
-        <SidebarFooter className="border-t border-purple-700/50 p-4 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900">
+        <SidebarFooter className="border-t border-purple-700/50 p-4 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 sticky bottom-0 z-10">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
               <User className="w-4 h-4 text-white" />
