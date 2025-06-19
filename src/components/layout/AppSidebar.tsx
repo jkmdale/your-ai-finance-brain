@@ -80,7 +80,7 @@ export const AppSidebar = () => {
 
   return (
     <Sidebar className="w-64 max-w-64 border-r border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
-      <SidebarHeader className="border-b border-purple-700/30 p-6">
+      <SidebarHeader className="border-b border-purple-700/30 p-6 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900">
         <div className="flex items-center space-x-3">
           <div className="relative w-10 h-10 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
