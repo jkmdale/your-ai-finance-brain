@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Menu, X, Brain, ChevronDown, User, Settings, CreditCard, TrendingUp, PieChart, Target, Bell, HelpCircle, LogOut } from 'lucide-react';
+import { Menu, X, Brain, ChevronDown, User, Settings, CreditCard, TrendingUp, PieChart, Target, Bell, HelpCircle, LogOut, DollarSign } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export const Navbar = () => {
@@ -10,16 +10,9 @@ export const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-black/30 border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Left side - Logo and Menu */}
+          {/* Left side - Menu and Logo */}
           <div className="flex items-center space-x-8">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                <Brain className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">SmartFinanceAI</span>
-            </div>
-
-            {/* Desktop Menu Dropdown */}
+            {/* Desktop Menu Dropdown - moved to far left */}
             <div className="hidden md:block">
               <DropdownMenu>
                 <DropdownMenuTrigger className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors duration-200 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10">
@@ -71,6 +64,15 @@ export const Navbar = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+
+            {/* Logo */}
+            <div className="flex items-center space-x-2">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-800 to-blue-800 rounded-xl flex items-center justify-center backdrop-blur-sm relative">
+                <Brain className="w-6 h-6 text-white/90" />
+                <DollarSign className="w-3 h-3 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <span className="text-xl font-bold text-white">SmartFinanceAI</span>
             </div>
           </div>
 
