@@ -57,6 +57,10 @@ enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
 
+[auth.external.custom]
+enabled = true
+url = "http://127.0.0.1:54321/functions/v1/send-auth-email"
+
 [edge_functions]
 enabled = true
 port = 54321
@@ -66,3 +70,6 @@ verify_jwt = true
 
 [functions.ai-coach]
 verify_jwt = true
+
+[functions.send-auth-email]
+verify_jwt = false
