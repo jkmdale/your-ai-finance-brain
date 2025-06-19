@@ -115,7 +115,11 @@ class ClaudeAIService {
       goals: data.goals?.map(g => ({
         name: g.name,
         progress: Math.round((g.current_amount / g.target_amount) * 100),
-        isOnTrack: g.target_date ? this.isGoalOnTrack(g) : null
+        isOnTrack: g.target_date ? this.isGoalOnTrack({
+          target_amount: g.target_amount,
+          current_amount: g.current_amount,
+          target_date: g.target_date
+        }) : null
       }))
     });
   }
