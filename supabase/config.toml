@@ -51,15 +51,13 @@ additional_redirect_urls = ["https://127.0.0.1:3000"]
 jwt_expiry = 3600
 enable_signup = true
 enable_confirmations = true
+hook_send_email_enabled = true
+hook_send_email_uri = "http://localhost:54321/functions/v1/send-auth-email"
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
-
-[auth.external.custom]
-enabled = true
-url = "http://127.0.0.1:54321/functions/v1/send-auth-email"
 
 [edge_functions]
 enabled = true
