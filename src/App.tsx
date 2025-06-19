@@ -49,10 +49,10 @@ const AppContent = () => {
         <div className="min-h-screen flex w-full max-w-full overflow-x-hidden bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
           <AppSidebar />
           <SidebarInset className="flex-1 min-w-0">
-            <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-white/20 backdrop-blur-xl bg-black/20">
-              <SidebarTrigger className="text-white hover:bg-white/10" />
+            <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900">
+              <SidebarTrigger className="text-purple-100 hover:bg-purple-700/30" />
               <div className="ml-auto">
-                <span className="text-white/70 text-sm">Welcome back!</span>
+                <span className="text-purple-100 text-sm">Welcome back!</span>
               </div>
             </header>
             <div className="flex-1 overflow-auto w-full">
