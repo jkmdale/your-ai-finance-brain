@@ -326,6 +326,30 @@ export type Database = {
           },
         ]
       }
+      user_pins: {
+        Row: {
+          created_at: string | null
+          id: string
+          pin_hash: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          pin_hash: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          pin_hash?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           country: string
@@ -359,6 +383,36 @@ export type Database = {
           last_name?: string | null
           onboarding_completed?: boolean | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_sessions: {
+        Row: {
+          auth_method: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          session_token: string
+          user_id: string | null
+        }
+        Insert: {
+          auth_method: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          session_token: string
+          user_id?: string | null
+        }
+        Update: {
+          auth_method?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          session_token?: string
+          user_id?: string | null
         }
         Relationships: []
       }
