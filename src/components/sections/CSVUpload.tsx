@@ -11,12 +11,14 @@ export const CSVUpload = () => {
   const { user } = useAuth();
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+    const files = event.target.files;
+    if (!files || files.length === 0 || !user) return;
 
-    if (!file.name.endsWith('.csv')) {
+    // Check if all files are CSV
+    const nonCsvFiles = Array.from(files).filter(file => !file.name.endsWith('.csv'));
+    if (nonCsvFiles.length > 0) {
       setUploadStatus('error');
-      setUploadMessage('Please upload a CSV file');
+      setUploadMessage(`Please upload only CSV files. Found non-CSV files: ${nonCsvFiles.map(f => f.name).join(', ')}`);
       return;
     }
 
@@ -24,16 +26,37 @@ export const CSVUpload = () => {
     setUploadStatus('idle');
 
     try {
-      const text = await file.text();
-      
-      const { data, error } = await supabase.functions.invoke('process-csv', {
-        body: { csvData: text }
-      });
+      let totalProcessed = 0;
+      const results = [];
 
-      if (error) throw error;
+      for (const file of Array.from(files)) {
+        const text = await file.text();
+        
+        const { data, error } = await supabase.functions.invoke('process-csv', {
+          body: { csvData: text, fileName: file.name }
+        });
 
-      setUploadStatus('success');
-      setUploadMessage(`Successfully processed ${data.processed} transactions`);
+        if (error) {
+          results.push({ fileName: file.name, success: false, error: error.message });
+        } else {
+          results.push({ fileName: file.name, success: true, processed: data.processed });
+          totalProcessed += data.processed;
+        }
+      }
+
+      const successfulFiles = results.filter(r => r.success);
+      const failedFiles = results.filter(r => !r.success);
+
+      if (successfulFiles.length === files.length) {
+        setUploadStatus('success');
+        setUploadMessage(`Successfully processed ${totalProcessed} transactions from ${files.length} file${files.length > 1 ? 's' : ''}`);
+      } else if (successfulFiles.length > 0) {
+        setUploadStatus('success');
+        setUploadMessage(`Processed ${totalProcessed} transactions from ${successfulFiles.length}/${files.length} files. ${failedFiles.length} files failed.`);
+      } else {
+        setUploadStatus('error');
+        setUploadMessage(`Failed to process any files. Errors: ${failedFiles.map(f => `${f.fileName}: ${f.error}`).join('; ')}`);
+      }
       
       // Reset file input
       event.target.value = '';
@@ -41,7 +64,7 @@ export const CSVUpload = () => {
     } catch (error: any) {
       console.error('Upload error:', error);
       setUploadStatus('error');
-      setUploadMessage(error.message || 'Failed to process CSV file');
+      setUploadMessage(error.message || 'Failed to process CSV files');
     } finally {
       setUploading(false);
     }
@@ -55,7 +78,7 @@ export const CSVUpload = () => {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Import Transactions</h3>
-          <p className="text-white/60 text-sm">Upload your bank CSV to automatically categorize transactions</p>
+          <p className="text-white/60 text-sm">Upload your bank CSV files to automatically categorize transactions</p>
         </div>
       </div>
 
@@ -64,6 +87,7 @@ export const CSVUpload = () => {
           <input
             type="file"
             accept=".csv"
+            multiple
             onChange={handleFileUpload}
             disabled={uploading || !user}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -84,10 +108,10 @@ export const CSVUpload = () => {
                 <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
               )}
               <p className="text-white/80 font-medium">
-                {uploading ? 'Processing...' : 'Click to upload CSV file'}
+                {uploading ? 'Processing...' : 'Click to upload CSV files'}
               </p>
               <p className="text-white/50 text-sm mt-1">
-                Supports standard bank CSV formats
+                Select multiple files to upload at once
               </p>
             </div>
           </label>
@@ -119,6 +143,7 @@ export const CSVUpload = () => {
             <li>• Date format: YYYY-MM-DD or DD/MM/YYYY</li>
             <li>• Positive amounts for income, negative for expenses</li>
             <li>• Transactions will be automatically categorized</li>
+            <li>• Select multiple files to upload them all at once</li>
           </ul>
         </div>
       </div>
