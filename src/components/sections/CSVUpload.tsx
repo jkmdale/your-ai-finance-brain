@@ -12,7 +12,14 @@ export const CSVUpload = () => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0 || !user) return;
+    if (!files || files.length === 0) return;
+
+    // Check if user is authenticated
+    if (!user) {
+      setUploadStatus('error');
+      setUploadMessage('Please log in to upload CSV files');
+      return;
+    }
 
     // Check if all files are CSV
     const nonCsvFiles = Array.from(files).filter(file => !file.name.endsWith('.csv'));
@@ -82,6 +89,12 @@ export const CSVUpload = () => {
         </div>
       </div>
 
+      {!user && (
+        <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+          <p className="text-yellow-300 text-sm">Please log in to upload CSV files</p>
+        </div>
+      )}
+
       <div className="space-y-4">
         <div className="relative">
           <input
@@ -89,14 +102,14 @@ export const CSVUpload = () => {
             accept=".csv"
             multiple
             onChange={handleFileUpload}
-            disabled={uploading || !user}
+            disabled={uploading}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             id="csv-upload"
           />
           <label
             htmlFor="csv-upload"
             className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              uploading || !user
+              uploading
                 ? 'border-white/20 bg-white/5 cursor-not-allowed'
                 : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
             }`}
