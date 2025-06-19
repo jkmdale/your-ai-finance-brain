@@ -85,12 +85,36 @@ export const Navbar = () => {
           </div>
 
           {/* Center - Logo */}
-          <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center backdrop-blur-sm relative border border-white/10">
-              <Brain className="w-6 h-6 text-white/90" />
-              <DollarSign className="w-3 h-3 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+          <div className="flex items-center space-x-3">
+            <div className="relative w-14 h-14 group cursor-pointer">
+              {/* Outer glow ring */}
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500"></div>
+              
+              {/* Main icon container */}
+              <div className="relative w-14 h-14 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-2xl group-hover:shadow-purple-500/25 transition-all duration-500 group-hover:scale-105">
+                
+                {/* Inner gradient overlay */}
+                <div className="absolute inset-1 bg-gradient-to-br from-violet-600/20 via-purple-600/20 to-blue-600/20 rounded-xl"></div>
+                
+                {/* Brain icon with enhanced styling */}
+                <div className="relative z-10">
+                  <Brain className="w-8 h-8 text-white drop-shadow-lg group-hover:text-violet-100 transition-colors duration-300" />
+                  
+                  {/* Dollar sign overlay with improved positioning and styling */}
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                    <DollarSign className="w-4 h-4 text-amber-300 drop-shadow-md group-hover:text-amber-200 transition-colors duration-300" />
+                  </div>
+                  
+                  {/* Subtle sparkle effect */}
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-br from-white to-violet-200 rounded-full opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div>
+                  <div className="absolute -bottom-1 -left-1 w-1.5 h-1.5 bg-gradient-to-br from-blue-200 to-purple-200 rounded-full opacity-40 group-hover:opacity-60 transition-opacity duration-300"></div>
+                </div>
+              </div>
             </div>
-            <span className="text-xl font-bold text-white">SmartFinanceAI</span>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold text-white drop-shadow-sm">SmartFinanceAI</span>
+              <span className="text-xs text-white/70 font-medium tracking-wider">INTELLIGENT FINANCIAL OS</span>
+            </div>
           </div>
 
           {/* Right side - Auth Button or User Menu */}
