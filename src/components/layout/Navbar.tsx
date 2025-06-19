@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
-import { Menu, X, Brain, ChevronDown, User, Settings, CreditCard, TrendingUp, PieChart, Target, Bell, HelpCircle, LogOut, DollarSign } from 'lucide-react';
+import { Menu, X, ChevronDown, User, Settings, CreditCard, TrendingUp, PieChart, Target, Bell, HelpCircle, LogOut } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { SmartFinanceIcon } from '@/components/ui/smart-finance-icon';
 import { useAuth } from '@/hooks/useAuth';
 
 export const Navbar = () => {
@@ -35,7 +35,7 @@ export const Navbar = () => {
                     Budget
                   </DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <Brain className="w-4 h-4 mr-3" />
+                    <SmartFinanceIcon size={16} className="mr-3" />
                     AI Insights
                   </DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
@@ -96,14 +96,12 @@ export const Navbar = () => {
                 {/* Inner gradient overlay */}
                 <div className="absolute inset-1 bg-gradient-to-br from-violet-600/20 via-purple-600/20 to-blue-600/20 rounded-xl"></div>
                 
-                {/* Brain icon with enhanced styling */}
+                {/* Custom SmartFinance icon */}
                 <div className="relative z-10">
-                  <Brain className="w-8 h-8 text-white drop-shadow-lg group-hover:text-violet-100 transition-colors duration-300" />
-                  
-                  {/* Dollar sign overlay with improved positioning and styling */}
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <DollarSign className="w-4 h-4 text-amber-300 drop-shadow-md group-hover:text-amber-200 transition-colors duration-300" />
-                  </div>
+                  <SmartFinanceIcon 
+                    size={32} 
+                    className="text-white drop-shadow-lg group-hover:text-violet-100 transition-colors duration-300 filter group-hover:drop-shadow-2xl" 
+                  />
                   
                   {/* Subtle sparkle effect */}
                   <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-br from-white to-violet-200 rounded-full opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div>
@@ -173,7 +171,7 @@ export const Navbar = () => {
               Budget
             </a>
             <a href="#insights" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
-              <Brain className="w-5 h-5 mr-3" />
+              <SmartFinanceIcon size={20} className="mr-3" />
               AI Insights
             </a>
             <a href="#transactions" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
