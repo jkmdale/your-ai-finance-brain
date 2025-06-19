@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -101,32 +102,31 @@ export const CSVUpload = () => {
             accept=".csv"
             multiple
             onChange={handleFileUpload}
-            disabled={uploading}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            disabled={uploading || !user}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
             id="csv-upload"
           />
-          <label
-            htmlFor="csv-upload"
+          <div
             className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              uploading
+              uploading || !user
                 ? 'border-white/20 bg-white/5 cursor-not-allowed'
                 : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
             }`}
           >
-            <div className="text-center">
+            <div className="text-center pointer-events-none">
               {uploading ? (
                 <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
               ) : (
                 <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
               )}
               <p className="text-white/80 font-medium">
-                {uploading ? 'Processing...' : 'Click to upload CSV files'}
+                {uploading ? 'Processing...' : !user ? 'Please log in to upload' : 'Click to upload CSV files'}
               </p>
               <p className="text-white/50 text-sm mt-1">
-                Select multiple files to upload at once
+                {!user ? 'Authentication required' : 'Select multiple files to upload at once'}
               </p>
             </div>
-          </label>
+          </div>
         </div>
 
         {uploadStatus !== 'idle' && (
