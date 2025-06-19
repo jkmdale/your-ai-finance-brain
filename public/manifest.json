@@ -6,7 +6,7 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
-  "theme_color": "#7c3aed",
+  "theme_color": "#20B2AA",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "src": "/icon-512.png",
-      "sizes": "512x512",
+      "sizes": "512x512",  
       "type": "image/png",
       "purpose": "maskable any"
     }

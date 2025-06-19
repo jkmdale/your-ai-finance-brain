@@ -18,11 +18,11 @@ export const SmartFinanceIcon = ({ className = "", size = 32 }: SmartFinanceIcon
         className="drop-shadow-lg"
       >
         <defs>
-          {/* Teal gradient for the brain */}
+          {/* Teal to blue gradient for the brain */}
           <linearGradient id="brainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#14B8A6" />
-            <stop offset="50%" stopColor="#0D9488" />
-            <stop offset="100%" stopColor="#0F766E" />
+            <stop offset="0%" stopColor="#20B2AA" />
+            <stop offset="50%" stopColor="#008B8B" />
+            <stop offset="100%" stopColor="#006400" />
           </linearGradient>
           
           {/* Glow effect */}
@@ -35,91 +35,75 @@ export const SmartFinanceIcon = ({ className = "", size = 32 }: SmartFinanceIcon
           </filter>
         </defs>
         
-        {/* Brain outline - main shape matching the uploaded logo */}
+        {/* Main brain outline matching uploaded logo */}
         <path
-          d="M30 25C30 18 35 12 42 12C46 12 49 14 51 17C53 14 56 12 60 12C67 12 72 18 72 25C72 28 71 30 69 32C72 35 74 39 74 44C74 51 69 57 62 57C60 57 58 56 56 55C54 58 51 60 47 60C43 60 40 58 38 55C36 56 34 57 32 57C25 57 20 51 20 44C20 39 22 35 25 32C23 30 22 28 22 25C22 18 27 12 34 12C36 12 38 13 40 14C42 13 44 12 46 12C48 12 50 13 52 14C54 13 56 12 58 12C65 12 70 18 70 25"
-          stroke="url(#brainGradient)"
-          strokeWidth="3"
-          fill="none"
+          d="M25 35C25 28 30 22 37 22C40 22 43 23 45 25C47 23 50 22 53 22C60 22 65 28 65 35C68 36 70 39 70 43C70 48 66 52 61 52C60 52 59 52 58 51C59 54 59 57 58 60C56 66 51 70 45 70C42 70 39 69 37 67C35 69 32 70 29 70C23 70 18 66 16 60C15 57 15 54 16 51C15 52 14 52 13 52C8 52 4 48 4 43C4 39 6 36 9 35C9 28 14 22 21 22C24 22 27 23 29 25C31 23 34 22 37 22"
+          fill="url(#brainGradient)"
           filter="url(#glow)"
         />
         
-        {/* Brain segments - creating the folded brain texture */}
+        {/* Brain texture lines */}
         <path
-          d="M35 22C37 20 40 21 42 23"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          opacity="0.9"
-        />
-        <path
-          d="M58 22C60 20 63 21 65 23"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          opacity="0.9"
-        />
-        <path
-          d="M32 32C34 30 37 31 39 33"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M30 30C32 28 35 29 37 31"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.8"
         />
         <path
-          d="M61 32C63 30 66 31 68 33"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M53 30C55 28 58 29 60 31"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.8"
         />
         <path
-          d="M28 42C30 40 33 41 35 43"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M28 40C30 38 33 39 35 41"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.7"
         />
         <path
-          d="M65 42C67 40 70 41 72 43"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M55 40C57 38 60 39 62 41"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.7"
         />
         <path
-          d="M33 50C35 48 38 49 40 51"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M25 50C27 48 30 49 32 51"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.6"
         />
         <path
-          d="M60 50C62 48 65 49 67 51"
-          stroke="url(#brainGradient)"
-          strokeWidth="2.5"
+          d="M58 50C60 48 63 49 65 51"
+          stroke="#006400"
+          strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.6"
         />
         
-        {/* Central dollar sign - positioned in the center */}
-        <g transform="translate(50, 50)">
+        {/* Central dollar sign */}
+        <g transform="translate(37, 46)">
           {/* Vertical line of dollar sign */}
           <line
             x1="0"
-            y1="-18"
+            y1="-14"
             x2="0"
-            y2="18"
-            stroke="url(#brainGradient)"
-            strokeWidth="3.5"
+            y2="14"
+            stroke="#FFFFFF"
+            strokeWidth="2.5"
             strokeLinecap="round"
           />
           
           {/* S shape for dollar sign */}
           <path
-            d="M-10 -12C-10 -16 -6 -18 0 -18C6 -18 10 -16 10 -12C10 -8 6 -6 0 -6C-6 -6 -10 -4 -10 0C-10 4 -6 6 0 6C6 6 10 4 10 0"
-            stroke="url(#brainGradient)"
-            strokeWidth="3.5"
+            d="M-8 -10C-8 -13 -5 -14 0 -14C5 -14 8 -13 8 -10C8 -7 5 -5 0 -5C-5 -5 -8 -3 -8 0C-8 3 -5 5 0 5C5 5 8 3 8 0"
+            stroke="#FFFFFF"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
