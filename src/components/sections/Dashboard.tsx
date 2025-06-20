@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
@@ -7,6 +8,7 @@ import { TransactionTable } from '@/components/ui/transaction-table';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { transactionProcessor } from '@/services/transactionProcessor';
 
 interface DashboardStats {
   totalBalance: number;
@@ -14,6 +16,8 @@ interface DashboardStats {
   monthlyExpenses: number;
   savingsRate: number;
   transactionCount: number;
+  isValidated: boolean;
+  warnings: string[];
 }
 
 interface Transaction {
@@ -56,7 +60,7 @@ export const Dashboard = () => {
           .select('*')
           .eq('user_id', user.id)
           .order('transaction_date', { ascending: false })
-          .limit(5);
+          .limit(50);
 
         if (!transactions || transactions.length === 0) {
           setStats(null);
@@ -65,34 +69,46 @@ export const Dashboard = () => {
           return;
         }
 
-        // Calculate stats from real data
-        const { data: allTransactions } = await supabase
-          .from('transactions')
-          .select('amount, is_income, transaction_date')
-          .eq('user_id', user.id);
+        // Process transactions through the new processor
+        const processedTransactions = transactionProcessor.processTransactions(transactions);
+        
+        // Calculate current month stats
+        const currentMonthStats = transactionProcessor.calculateMonthlyStats(processedTransactions);
+        
+        // Validate the numbers
+        const validation = transactionProcessor.validateRealisticNumbers(currentMonthStats);
+        
+        // Get transfer summary for debugging
+        const transferSummary = transactionProcessor.getTransferSummary(processedTransactions);
+        
+        console.log('Transfer Summary:', transferSummary);
+        console.log('Processed Stats:', currentMonthStats);
+        console.log('Validation:', validation);
 
-        if (allTransactions && allTransactions.length > 0) {
-          const totalIncome = allTransactions
-            .filter(t => t.is_income)
-            .reduce((sum, t) => sum + Number(t.amount), 0);
-          
-          const totalExpenses = allTransactions
-            .filter(t => !t.is_income)
-            .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+        setStats({
+          totalBalance: currentMonthStats.balance,
+          monthlyIncome: currentMonthStats.income,
+          monthlyExpenses: currentMonthStats.expenses,
+          savingsRate: currentMonthStats.savingsRate,
+          transactionCount: currentMonthStats.transactionCount,
+          isValidated: validation.isValid,
+          warnings: validation.warnings
+        });
 
-          const totalBalance = totalIncome - totalExpenses;
-          const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+        // Get recent non-transfer transactions for display
+        const recentNonTransfers = processedTransactions
+          .filter(t => !t.isTransfer)
+          .slice(0, 5)
+          .map(t => ({
+            id: t.id,
+            description: t.description,
+            amount: t.isIncome ? t.amount : -t.amount,
+            transaction_date: t.date,
+            is_income: t.isIncome,
+            merchant: t.merchant
+          }));
 
-          setStats({
-            totalBalance,
-            monthlyIncome: totalIncome,
-            monthlyExpenses: totalExpenses,
-            savingsRate,
-            transactionCount: allTransactions.length
-          });
-        }
-
-        setRecentTransactions(transactions || []);
+        setRecentTransactions(recentNonTransfers);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -188,14 +204,6 @@ export const Dashboard = () => {
   // Dashboard with real data
   const statsData = [
     {
-      title: 'Total Balance',
-      value: `$${stats.totalBalance.toLocaleString()}`,
-      change: '+12.5%',
-      trend: 'up',
-      icon: DollarSign,
-      color: 'blue'
-    },
-    {
       title: 'Monthly Income',
       value: `$${stats.monthlyIncome.toLocaleString()}`,
       change: '+5.2%',
@@ -212,10 +220,18 @@ export const Dashboard = () => {
       color: 'purple'
     },
     {
+      title: 'Net Balance',
+      value: `$${stats.totalBalance.toLocaleString()}`,
+      change: stats.totalBalance >= 0 ? '+' : '',
+      trend: stats.totalBalance >= 0 ? 'up' : 'down',
+      icon: DollarSign,
+      color: 'blue'
+    },
+    {
       title: 'Savings Rate',
       value: `${stats.savingsRate.toFixed(1)}%`,
       change: '+2.3%',
-      trend: 'up',
+      trend: stats.savingsRate >= 0 ? 'up' : 'down',
       icon: Target,
       color: 'emerald'
     }
@@ -229,9 +245,26 @@ export const Dashboard = () => {
             Financial Dashboard
           </h2>
           <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
-            Your complete financial overview with AI-powered insights and automated transaction processing
+            Your complete financial overview with AI-powered insights and corrected transaction processing
           </p>
         </div>
+
+        {/* Validation Warnings */}
+        {!stats.isValidated && stats.warnings.length > 0 && (
+          <div className="mb-8 backdrop-blur-xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-400/30 rounded-xl p-4">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-yellow-300 font-medium mb-2">Calculation Warnings</h4>
+                <ul className="text-yellow-200 text-sm space-y-1">
+                  {stats.warnings.map((warning, index) => (
+                    <li key={index}>• {warning}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
