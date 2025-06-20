@@ -1,78 +1,56 @@
 
-import React, { useState } from 'react';
-import { Search, Filter, Download, CreditCard, ArrowUp, ArrowDown, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Download, CreditCard, ArrowUp, ArrowDown, MapPin, Upload } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+
+interface Transaction {
+  id: string;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  is_income: boolean;
+  merchant?: string;
+  categories?: {
+    name: string;
+    color: string;
+  };
+}
 
 export const TransactionHistory = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const transactions = [
-    {
-      id: 1,
-      date: '2024-01-15',
-      description: 'Grocery Store - Whole Foods',
-      category: 'Food & Dining',
-      amount: -127.45,
-      type: 'expense',
-      merchant: 'Whole Foods Market',
-      location: 'Auckland, NZ',
-      status: 'completed'
-    },
-    {
-      id: 2,
-      date: '2024-01-15',
-      description: 'Salary Deposit',
-      category: 'Income',
-      amount: 4250.00,
-      type: 'income',
-      merchant: 'TechCorp Ltd',
-      location: 'Direct Deposit',
-      status: 'completed'
-    },
-    {
-      id: 3,
-      date: '2024-01-14',
-      description: 'Coffee Shop - Local Cafe',
-      category: 'Food & Dining',
-      amount: -4.50,
-      type: 'expense',
-      merchant: 'Brew & Bean',
-      location: 'Auckland CBD',
-      status: 'completed'
-    },
-    {
-      id: 4,
-      date: '2024-01-14',
-      description: 'Gas Station - Shell',
-      category: 'Transportation',
-      amount: -75.30,
-      type: 'expense',
-      merchant: 'Shell Service Station',
-      location: 'Auckland, NZ',
-      status: 'completed'
-    },
-    {
-      id: 5,
-      date: '2024-01-13',
-      description: 'Investment Transfer',
-      category: 'Investments',
-      amount: -500.00,
-      type: 'transfer',
-      merchant: 'Vanguard NZ',
-      location: 'Online Transfer',
-      status: 'completed'
-    },
-    {
-      id: 6,
-      date: '2024-01-13',
-      description: 'Rent Payment',
-      category: 'Housing',
-      amount: -2450.00,
-      type: 'expense',
-      merchant: 'Property Management Co',
-      location: 'Auckland, NZ',
-      status: 'completed'
-    }
-  ];
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            categories(name, color)
+          `)
+          .eq('user_id', user.id)
+          .order('transaction_date', { ascending: false })
+          .limit(50);
+
+        setTransactions(data || []);
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [user]);
 
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
@@ -84,6 +62,74 @@ export const TransactionHistory = () => {
     };
     return colors[category] || 'gray';
   };
+
+  if (loading) {
+    return (
+      <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Empty state for no transactions
+  if (transactions.length === 0) {
+    return (
+      <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Transaction History
+            </h2>
+            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+              Upload your bank transactions to see intelligent categorization and insights
+            </p>
+          </div>
+
+          {/* Empty State */}
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-3xl p-12 shadow-2xl text-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center mx-auto mb-6 opacity-50">
+              <CreditCard className="w-10 h-10 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-4">No Transactions Yet</h3>
+            <p className="text-white/70 mb-8 max-w-2xl mx-auto">
+              Upload your bank CSV file to automatically categorize transactions, track spending patterns, and unlock AI-powered financial insights.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <Upload className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="text-white font-medium mb-1">1. Upload CSV</h4>
+                <p className="text-white/60 text-sm">Import your bank transactions</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <CreditCard className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="text-white font-medium mb-1">2. Auto-Categorize</h4>
+                <p className="text-white/60 text-sm">AI categorizes transactions</p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <ArrowUp className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="text-white font-medium mb-1">3. Get Insights</h4>
+                <p className="text-white/60 text-sm">View patterns and trends</p>
+              </div>
+            </div>
+            <button className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-8 py-4 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto">
+              <Upload className="w-5 h-5" />
+              <span>Upload Your First File</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-16 px-4 sm:px-6 lg:px-8">
@@ -127,52 +173,47 @@ export const TransactionHistory = () => {
         {/* Transactions List */}
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-3xl overflow-hidden shadow-2xl">
           <div className="p-6 border-b border-white/20">
-            <h3 className="text-xl font-bold text-white">Recent Transactions</h3>
-            <p className="text-white/60 text-sm mt-1">Automatically categorized with 95% accuracy</p>
+            <h3 className="text-xl font-bold text-white">Your Transactions</h3>
+            <p className="text-white/60 text-sm mt-1">{transactions.length} transactions loaded</p>
           </div>
           
           <div className="divide-y divide-white/10">
             {transactions.map((transaction) => {
-              const categoryColor = getCategoryColor(transaction.category);
+              const categoryColor = getCategoryColor(transaction.categories?.name || 'Other');
               
               return (
                 <div key={transaction.id} className="p-6 hover:bg-white/5 transition-all duration-200 group">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className={`w-12 h-12 bg-gradient-to-br from-${categoryColor}-400 to-${categoryColor}-500 rounded-xl flex items-center justify-center`}>
-                        {transaction.type === 'income' ? (
+                        {transaction.is_income ? (
                           <ArrowUp className="w-6 h-6 text-white" />
-                        ) : transaction.type === 'expense' ? (
-                          <ArrowDown className="w-6 h-6 text-white" />
                         ) : (
-                          <CreditCard className="w-6 h-6 text-white" />
+                          <ArrowDown className="w-6 h-6 text-white" />
                         )}
                       </div>
                       
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-1">
                           <h4 className="text-white font-medium">{transaction.description}</h4>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${categoryColor}-500/20 text-${categoryColor}-300`}>
-                            {transaction.category}
-                          </span>
+                          {transaction.categories && (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${categoryColor}-500/20 text-${categoryColor}-300`}>
+                              {transaction.categories.name}
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex items-center space-x-4 text-sm text-white/60">
-                          <span>{transaction.merchant}</span>
-                          <div className="flex items-center space-x-1">
-                            <MapPin className="w-3 h-3" />
-                            <span>{transaction.location}</span>
-                          </div>
-                          <span>{new Date(transaction.date).toLocaleDateString()}</span>
+                          <span>{transaction.merchant || 'Unknown Merchant'}</span>
+                          <span>{new Date(transaction.transaction_date).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="text-right">
-                      <div className={`text-lg font-semibold ${transaction.amount > 0 ? 'text-green-400' : 'text-white'}`}>
-                        {transaction.amount > 0 ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
+                      <div className={`text-lg font-semibold ${transaction.is_income ? 'text-green-400' : 'text-white'}`}>
+                        {transaction.is_income ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
                       </div>
-                      <div className="text-sm text-white/60 capitalize">{transaction.status}</div>
                     </div>
                   </div>
                 </div>
@@ -187,7 +228,7 @@ export const TransactionHistory = () => {
           </div>
         </div>
 
-        {/* AI Insights Panel */}
+        {/* Transaction Stats */}
         <div className="mt-8 backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center space-x-3 mb-4">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
@@ -198,16 +239,20 @@ export const TransactionHistory = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-white mb-1">47</div>
-              <div className="text-white/60 text-sm">Transactions this month</div>
+              <div className="text-2xl font-bold text-white mb-1">{transactions.length}</div>
+              <div className="text-white/60 text-sm">Total transactions</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-400 mb-1">$2,340</div>
-              <div className="text-white/60 text-sm">Average monthly spend</div>
+              <div className="text-2xl font-bold text-green-400 mb-1">
+                ${transactions.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+              </div>
+              <div className="text-white/60 text-sm">Total income</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-400 mb-1">8</div>
-              <div className="text-white/60 text-sm">Recurring payments</div>
+              <div className="text-2xl font-bold text-red-400 mb-1">
+                ${transactions.filter(t => !t.is_income).reduce((sum, t) => sum + Math.abs(t.amount), 0).toLocaleString()}
+              </div>
+              <div className="text-white/60 text-sm">Total expenses</div>
             </div>
           </div>
         </div>
