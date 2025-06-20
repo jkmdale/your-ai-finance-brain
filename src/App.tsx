@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,36 +17,60 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { user, session, loading, hasPin, hasBiometric } = useAuth();
+  const { user, session, loading, hasPin, hasBiometric, signOut } = useAuth();
   const [showSecuritySetup, setShowSecuritySetup] = useState(false);
   const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
+  const [authRequired, setAuthRequired] = useState(true);
 
+  // Clear any existing sessions on app start - CRITICAL for security
   useEffect(() => {
-    // Only check for security setup after user is authenticated and we have the auth method info
-    if (user && session && !loading && !hasCheckedSecurity) {
-      // Check if user has completed security setup before
-      const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
+    const clearSessionsOnStart = async () => {
+      console.log('App starting - checking for session persistence');
       
-      // Only show security setup if:
-      // 1. User hasn't completed setup before
-      // 2. User doesn't have PIN or biometric set up
-      // 3. User doesn't have a preferred auth method set
+      // Check if this is a fresh app load (not a navigation within the app)
+      const isAppStart = !sessionStorage.getItem('app_initialized');
+      
+      if (isAppStart) {
+        console.log('Fresh app load detected - clearing sessions for security');
+        sessionStorage.setItem('app_initialized', 'true');
+        
+        // Clear any persisted auth state to force re-authentication
+        if (user || session) {
+          console.log('Clearing existing session - user must re-authenticate');
+          await signOut();
+          setAuthRequired(true);
+          return;
+        }
+      }
+      
+      // If we have a valid session after the security check, allow access
+      if (user && session) {
+        console.log('Valid session found after security check');
+        setAuthRequired(false);
+      }
+    };
+
+    clearSessionsOnStart();
+  }, [user, session, signOut]);
+
+  // Handle security setup after authentication
+  useEffect(() => {
+    if (user && session && !loading && !hasCheckedSecurity && !authRequired) {
+      const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
       const preferredMethod = localStorage.getItem('preferredAuthMethod');
       const needsSecuritySetup = !hasCompletedSetup && !hasPin && !hasBiometric && !preferredMethod;
       
       setShowSecuritySetup(needsSecuritySetup);
       setHasCheckedSecurity(true);
     }
-  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity]);
+  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity, authRequired]);
 
   const handleSecuritySetupComplete = () => {
-    // Mark security setup as completed
     localStorage.setItem('securitySetupCompleted', 'true');
     setShowSecuritySetup(false);
   };
 
   const handleSecuritySetupSkip = () => {
-    // Mark as completed even if skipped to avoid showing again
     localStorage.setItem('securitySetupCompleted', 'true');
     setShowSecuritySetup(false);
   };
@@ -58,11 +83,10 @@ const AppContent = () => {
     );
   }
 
-  // Enhanced security check - always show auth screen if no valid session
-  // This ensures users must authenticate each time they open the app
-  if (!user || !session) {
-    console.log('No valid session detected - redirecting to auth');
-    return <AuthScreen />;
+  // ALWAYS require authentication on app start - no exceptions
+  if (authRequired || !user || !session) {
+    console.log('Authentication required - showing login screen');
+    return <AuthScreen onAuthSuccess={() => setAuthRequired(false)} />;
   }
 
   return (
@@ -88,8 +112,18 @@ const AppContent = () => {
                 </div>
               </div>
               
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center space-x-4">
                 <span className="text-purple-100 text-sm">Welcome back!</span>
+                <button
+                  onClick={async () => {
+                    await signOut();
+                    setAuthRequired(true);
+                    sessionStorage.removeItem('app_initialized');
+                  }}
+                  className="text-purple-200 hover:text-white text-sm bg-purple-800/50 hover:bg-purple-700/50 px-3 py-1 rounded-lg transition-colors"
+                >
+                  Sign Out
+                </button>
               </div>
             </header>
             <div className="flex-1 overflow-auto w-full pt-16">

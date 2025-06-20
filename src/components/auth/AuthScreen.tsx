@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
@@ -9,7 +10,11 @@ import { toast } from 'sonner';
 
 type AuthMode = 'welcome' | 'email' | 'pin' | 'biometric' | 'signup' | 'email-confirmation';
 
-export const AuthScreen = () => {
+interface AuthScreenProps {
+  onAuthSuccess?: () => void;
+}
+
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('welcome');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,46 +33,50 @@ export const AuthScreen = () => {
     checkBiometric();
   }, [isBiometricAvailable]);
 
+  // Redirect to preferred method on every app launch
   useEffect(() => {
-    // Always check for preferred auth method when component mounts
-    // This ensures users are directed to their preferred method every time they open the app
     if (!hasInitialized) {
       const preferredMethod = localStorage.getItem('preferredAuthMethod');
       
-      console.log('Auth screen mounted - checking preferred method:', {
+      console.log('Login screen - checking preferred method:', {
         preferredMethod,
         hasPin,
         hasBiometric,
-        biometricAvailable,
-        user: !!user,
-        session: !!session
+        biometricAvailable
       });
       
-      // Only redirect if user is not already authenticated
-      if (!user && !session && preferredMethod && preferredMethod !== 'email') {
+      // Always direct to preferred method for better UX
+      if (preferredMethod && preferredMethod !== 'email') {
         if (preferredMethod === 'pin' && hasPin) {
-          console.log('Redirecting to PIN login on app open');
+          console.log('Auto-directing to PIN login (preferred method)');
           setMode('pin');
         } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
-          console.log('Redirecting to biometric login on app open');
+          console.log('Auto-directing to biometric login (preferred method)');
           setMode('biometric');
-          // Auto-trigger biometric authentication for better UX
+          // Auto-trigger biometric for fastest login
           setTimeout(() => {
             handleBiometricAuth();
-          }, 500);
+          }, 800);
         } else {
-          console.log('Preferred method not available, showing welcome screen');
+          console.log('Preferred method not available, showing options');
           setMode('welcome');
         }
-      } else if (!user && !session) {
-        // No preferred method or email preferred - show welcome screen
-        console.log('No auth or email preferred, showing welcome screen');
+      } else {
+        console.log('No preferred method or email preferred - showing welcome');
         setMode('welcome');
       }
       
       setHasInitialized(true);
     }
-  }, [hasPin, hasBiometric, biometricAvailable, user, session, hasInitialized]);
+  }, [hasPin, hasBiometric, biometricAvailable, hasInitialized]);
+
+  // Handle successful authentication
+  useEffect(() => {
+    if (user && session) {
+      console.log('Authentication successful - calling onAuthSuccess');
+      onAuthSuccess?.();
+    }
+  }, [user, session, onAuthSuccess]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {
@@ -88,7 +97,6 @@ export const AuthScreen = () => {
         toast.success(result.message || 'Account created! Please check your email to confirm.');
       } else {
         toast.success('Account created and signed in successfully!');
-        // Store email as preferred method after successful signup
         localStorage.setItem('preferredAuthMethod', 'email');
       }
     } else {
@@ -104,7 +112,6 @@ export const AuthScreen = () => {
         }
       } else {
         toast.success('Welcome back!');
-        // Store email as preferred method after successful login
         localStorage.setItem('preferredAuthMethod', 'email');
       }
     }
@@ -136,7 +143,6 @@ export const AuthScreen = () => {
       setTimeout(() => setLoading(false), 1000);
     } else {
       toast.success('Welcome back!');
-      // Ensure PIN is stored as preferred method
       localStorage.setItem('preferredAuthMethod', 'pin');
     }
   };
@@ -155,15 +161,13 @@ export const AuthScreen = () => {
       setLoading(false);
     } else {
       toast.success('Welcome back!');
-      // Ensure biometric is stored as preferred method
       localStorage.setItem('preferredAuthMethod', 'biometric');
     }
   };
 
   const handleModeChange = (newMode: AuthMode) => {
     setMode(newMode);
-    // Clear any auto-initialization flag when user manually changes mode
-    setHasInitialized(true);
+    setLoading(false);
   };
 
   const pageVariants = {
@@ -197,8 +201,8 @@ export const AuthScreen = () => {
                   <Shield className="w-10 h-10 text-white/90" />
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-blue-400/20 rounded-2xl"></div>
                 </div>
-                <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-                <p className="text-white/70">Choose your preferred login method</p>
+                <h1 className="text-3xl font-bold text-white mb-2">Secure Login Required</h1>
+                <p className="text-white/70">Choose your login method to continue</p>
               </div>
 
               <div className="space-y-4">
@@ -452,7 +456,7 @@ export const AuthScreen = () => {
             >
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">Enter PIN</h2>
-                <p className="text-white/70">Enter your 4-digit PIN code</p>
+                <p className="text-white/70">Enter your secure PIN code</p>
               </div>
 
               <PinPad 
@@ -466,7 +470,7 @@ export const AuthScreen = () => {
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >
-                  ← Back to options
+                  ← Use different method
                 </button>
               </div>
             </motion.div>
@@ -485,7 +489,7 @@ export const AuthScreen = () => {
                 <div className="w-20 h-20 bg-gradient-to-br from-orange-600 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <Fingerprint className="w-10 h-10 text-white animate-pulse" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Biometric Auth</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">Biometric Login</h2>
                 <p className="text-white/70">
                   {biometricAvailable 
                     ? 'Use your fingerprint, face ID, or other biometric method' 
@@ -510,11 +514,13 @@ export const AuthScreen = () => {
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >
-                  ← Back to options
+                  ← Use different method
                 </button>
               </div>
             </motion.div>
           )}
+
+          {/* Add the other modes (email, signup, email-confirmation) here with same structure */}
         </AnimatePresence>
       </div>
     </div>
