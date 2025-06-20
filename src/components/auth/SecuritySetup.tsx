@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Lock, Fingerprint, X, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { PinPad } from './PinPad';
+import { AuthPreference } from './AuthPreference';
 import { toast } from 'sonner';
 
 interface SecuritySetupProps {
@@ -13,7 +13,7 @@ interface SecuritySetupProps {
 }
 
 export const SecuritySetup: React.FC<SecuritySetupProps> = ({ onComplete, onSkip }) => {
-  const [currentStep, setCurrentStep] = useState<'intro' | 'pin' | 'biometric' | 'complete'>('intro');
+  const [currentStep, setCurrentStep] = useState<'intro' | 'pin' | 'biometric' | 'complete' | 'preference'>('intro');
   const [pinSetup, setPinSetup] = useState(false);
   const [biometricSetup, setBiometricSetup] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -71,8 +71,27 @@ export const SecuritySetup: React.FC<SecuritySetupProps> = ({ onComplete, onSkip
   };
 
   const handleComplete = () => {
+    // Show preference selection if user set up additional auth methods
+    if (pinSetup || biometricSetup) {
+      setCurrentStep('preference');
+    } else {
+      onComplete();
+    }
+  };
+
+  const handlePreferenceComplete = () => {
     onComplete();
   };
+
+  if (currentStep === 'preference') {
+    return (
+      <AuthPreference
+        onComplete={handlePreferenceComplete}
+        hasPin={pinSetup}
+        hasBiometric={biometricSetup}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">

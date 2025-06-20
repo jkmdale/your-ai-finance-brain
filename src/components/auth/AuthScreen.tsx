@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
@@ -18,7 +17,7 @@ export const AuthScreen = () => {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation } = useAuth();
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric } = useAuth();
 
   useEffect(() => {
     const checkBiometric = async () => {
@@ -27,6 +26,19 @@ export const AuthScreen = () => {
     };
     checkBiometric();
   }, [isBiometricAvailable]);
+
+  useEffect(() => {
+    // Check for preferred authentication method and redirect accordingly
+    const preferredMethod = localStorage.getItem('preferredAuthMethod');
+    
+    if (preferredMethod && preferredMethod !== 'email') {
+      if (preferredMethod === 'pin' && hasPin) {
+        setMode('pin');
+      } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
+        setMode('biometric');
+      }
+    }
+  }, [hasPin, hasBiometric, biometricAvailable]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {
@@ -158,30 +170,34 @@ export const AuthScreen = () => {
                   <ArrowRight className="w-5 h-5" />
                 </Button>
 
-                <Button
-                  onClick={() => setMode('pin')}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Lock className="w-5 h-5" />
-                    <span className="font-medium">PIN Code</span>
-                  </div>
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
+                {hasPin && (
+                  <Button
+                    onClick={() => setMode('pin')}
+                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Lock className="w-5 h-5" />
+                      <span className="font-medium">PIN Code</span>
+                    </div>
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                )}
 
-                <Button
-                  onClick={() => setMode('biometric')}
-                  disabled={!biometricAvailable}
-                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Fingerprint className="w-5 h-5" />
-                    <span className="font-medium">
-                      {biometricAvailable ? 'Biometric' : 'Biometric (Unavailable)'}
-                    </span>
-                  </div>
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
+                {hasBiometric && (
+                  <Button
+                    onClick={() => setMode('biometric')}
+                    disabled={!biometricAvailable}
+                    className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Fingerprint className="w-5 h-5" />
+                      <span className="font-medium">
+                        {biometricAvailable ? 'Biometric' : 'Biometric (Unavailable)'}
+                      </span>
+                    </div>
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                )}
               </div>
 
               <div className="mt-8 text-center">
