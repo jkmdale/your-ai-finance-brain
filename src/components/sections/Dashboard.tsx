@@ -1,8 +1,10 @@
-
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
+import { TransactionCard } from '@/components/ui/transaction-card';
+import { TransactionTable } from '@/components/ui/transaction-table';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -28,6 +30,7 @@ export const Dashboard = () => {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   const getColorClasses = (color: string) => {
     const colorMap = {
@@ -102,7 +105,7 @@ export const Dashboard = () => {
 
   if (loading) {
     return (
-      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
+      <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
@@ -219,47 +222,47 @@ export const Dashboard = () => {
   ];
 
   return (
-    <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
+    <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+        <div className="text-center mb-8 sm:mb-12">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
             Financial Dashboard
           </h2>
-          <p className="text-xl text-white/70 max-w-3xl mx-auto">
+          <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
             Your complete financial overview with AI-powered insights and automated transaction processing
           </p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
           {statsData.map((stat, index) => {
             const IconComponent = stat.icon;
             return (
-              <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses(stat.color)} rounded-xl flex items-center justify-center`}>
-                    <IconComponent className="w-6 h-6 text-white" />
+              <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-xl sm:rounded-2xl p-3 sm:p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl">
+                <div className="flex items-center justify-between mb-2 sm:mb-4">
+                  <div className={`w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${getColorClasses(stat.color)} rounded-lg sm:rounded-xl flex items-center justify-center`}>
+                    <IconComponent className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                   </div>
-                  <div className={`flex items-center space-x-1 text-sm ${
+                  <div className={`flex items-center space-x-1 text-xs sm:text-sm ${
                     stat.trend === 'up' ? 'text-green-400' : 'text-red-400'
                   }`}>
                     {stat.trend === 'up' ? (
-                      <ArrowUpRight className="w-4 h-4" />
+                      <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4" />
                     ) : (
-                      <ArrowDownRight className="w-4 h-4" />
+                      <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4" />
                     )}
-                    <span>{stat.change}</span>
+                    <span className="hidden sm:inline">{stat.change}</span>
                   </div>
                 </div>
-                <h3 className="text-white/70 text-sm font-medium mb-1">{stat.title}</h3>
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
+                <h3 className="text-white/70 text-xs sm:text-sm font-medium mb-1">{stat.title}</h3>
+                <p className="text-lg sm:text-2xl font-bold text-white">{stat.value}</p>
               </div>
             );
           })}
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-12">
           {/* CSV Upload */}
           <CSVUpload />
           
@@ -270,41 +273,26 @@ export const Dashboard = () => {
         </div>
 
         {/* Recent Transactions */}
-        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">Recent Transactions</h3>
+        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl">
+          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/20">
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Recent Transactions</h3>
             <button className="text-purple-400 hover:text-purple-300 font-medium text-sm transition-colors duration-200">
               View All
             </button>
           </div>
 
-          <div className="space-y-3">
-            {recentTransactions.map((transaction) => (
-              <div key={transaction.id} className="flex items-center justify-between py-3 px-4 backdrop-blur-sm bg-white/10 border border-white/20 rounded-xl hover:bg-white/15 transition-colors duration-200">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    transaction.is_income 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {transaction.is_income ? (
-                      <ArrowUpRight className="w-5 h-5" />
-                    ) : (
-                      <ArrowDownRight className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-white font-medium">{transaction.description}</p>
-                    <p className="text-white/60 text-sm">{new Date(transaction.transaction_date).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                <span className={`font-semibold ${
-                  transaction.is_income ? 'text-green-400' : 'text-white'
-                }`}>
-                  {transaction.is_income ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
-                </span>
+          <div className="p-3 sm:p-6">
+            {isMobile ? (
+              // Mobile Card Layout
+              <div className="space-y-3">
+                {recentTransactions.map((transaction) => (
+                  <TransactionCard key={transaction.id} transaction={transaction} />
+                ))}
               </div>
-            ))}
+            ) : (
+              // Desktop Table Layout
+              <TransactionTable transactions={recentTransactions} />
+            )}
           </div>
         </div>
       </div>
