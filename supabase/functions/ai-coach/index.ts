@@ -30,9 +30,9 @@ serve(async (req) => {
       });
     }
 
-    const { message } = await req.json();
+    const { message, type = 'advice' } = await req.json();
 
-    // Get user's financial data
+    // Get comprehensive user's financial data
     const { data: transactions } = await supabaseClient
       .from('transactions')
       .select(`
@@ -40,11 +40,12 @@ serve(async (req) => {
         description,
         transaction_date,
         is_income,
-        categories(name)
+        merchant,
+        categories(name, is_income)
       `)
       .eq('user_id', user.id)
       .order('transaction_date', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     const { data: goals } = await supabaseClient
       .from('financial_goals')
@@ -54,43 +55,147 @@ serve(async (req) => {
 
     const { data: accounts } = await supabaseClient
       .from('bank_accounts')
-      .select('balance, account_name')
+      .select('balance, account_name, bank_name')
       .eq('user_id', user.id);
 
-    // Calculate financial summary
-    const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
-    const monthlyIncome = transactions?.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0) || 0;
-    const monthlyExpenses = transactions?.filter(t => !t.is_income).reduce((sum, t) => sum + t.amount, 0) || 0;
+    const { data: budgets } = await supabaseClient
+      .from('budgets')
+      .select(`
+        *,
+        budget_categories(
+          allocated_amount,
+          spent_amount,
+          categories(name)
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('is_active', true);
 
-    // Categorize expenses
-    const expensesByCategory: Record<string, number> = {};
-    transactions?.filter(t => !t.is_income).forEach(t => {
+    // Calculate detailed financial summary
+    const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+    
+    // Calculate monthly income and expenses from recent transactions (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentTransactions = transactions?.filter(t => 
+      new Date(t.transaction_date) >= thirtyDaysAgo
+    ) || [];
+
+    const monthlyIncome = recentTransactions
+      .filter(t => t.is_income)
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const monthlyExpenses = recentTransactions
+      .filter(t => !t.is_income)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Categorize expenses with detailed breakdown
+    const expensesByCategory: Record<string, { total: number; transactions: number }> = {};
+    recentTransactions?.filter(t => !t.is_income).forEach(t => {
       const category = t.categories?.name || 'Other';
-      expensesByCategory[category] = (expensesByCategory[category] || 0) + t.amount;
+      if (!expensesByCategory[category]) {
+        expensesByCategory[category] = { total: 0, transactions: 0 };
+      }
+      expensesByCategory[category].total += t.amount;
+      expensesByCategory[category].transactions += 1;
     });
 
+    // Top merchants analysis
+    const merchantSpending: Record<string, number> = {};
+    recentTransactions?.filter(t => !t.is_income && t.merchant).forEach(t => {
+      const merchant = t.merchant!;
+      merchantSpending[merchant] = (merchantSpending[merchant] || 0) + t.amount;
+    });
+
+    const topMerchants = Object.entries(merchantSpending)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([merchant, amount]) => ({ merchant, amount }));
+
+    // Budget analysis
+    const budgetAnalysis = budgets?.[0] ? {
+      totalAllocated: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.allocated_amount || 0), 0) || 0,
+      totalSpent: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.spent_amount || 0), 0) || 0,
+      categories: budgets[0].budget_categories?.map((bc: any) => ({
+        name: bc.categories?.name || 'Unknown',
+        allocated: bc.allocated_amount || 0,
+        spent: bc.spent_amount || 0,
+        remaining: (bc.allocated_amount || 0) - (bc.spent_amount || 0)
+      })) || []
+    } : null;
+
     const financialContext = `
-Financial Summary:
+COMPREHENSIVE FINANCIAL PROFILE:
+
+ACCOUNT OVERVIEW:
 - Total Balance: $${totalBalance.toLocaleString()}
+- Active Accounts: ${accounts?.length || 0}
+- Account Details: ${accounts?.map(a => `${a.bank_name} ${a.account_name}: $${a.balance?.toLocaleString()}`).join(', ') || 'None'}
+
+MONTHLY CASH FLOW (Last 30 Days):
 - Monthly Income: $${monthlyIncome.toLocaleString()}
 - Monthly Expenses: $${monthlyExpenses.toLocaleString()}
-- Net Monthly: $${(monthlyIncome - monthlyExpenses).toLocaleString()}
+- Net Monthly Flow: $${(monthlyIncome - monthlyExpenses).toLocaleString()}
+- Savings Rate: ${monthlyIncome > 0 ? Math.round(((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100) : 0}%
 
-Top Expense Categories:
+SPENDING BREAKDOWN BY CATEGORY:
 ${Object.entries(expensesByCategory)
-  .sort(([,a], [,b]) => b - a)
-  .slice(0, 5)
-  .map(([cat, amount]) => `- ${cat}: $${amount.toLocaleString()}`)
+  .sort(([,a], [,b]) => b.total - a.total)
+  .map(([cat, data]) => `- ${cat}: $${data.total.toLocaleString()} (${data.transactions} transactions, avg $${Math.round(data.total/data.transactions)})`)
   .join('\n')}
 
-Active Goals:
-${goals?.map(g => `- ${g.name}: $${g.current_amount}/$${g.target_amount} (${Math.round((g.current_amount/g.target_amount)*100)}% complete)`).join('\n') || 'No active goals'}
+TOP MERCHANTS:
+${topMerchants.map(m => `- ${m.merchant}: $${m.amount.toLocaleString()}`).join('\n')}
 
-Recent Transactions (last 10):
-${transactions?.slice(0, 10).map(t => 
-  `- ${t.transaction_date}: ${t.description} - ${t.is_income ? '+' : '-'}$${t.amount}`
+BUDGET STATUS:
+${budgetAnalysis ? `
+- Total Budget: $${budgetAnalysis.totalAllocated.toLocaleString()}
+- Total Spent: $${budgetAnalysis.totalSpent.toLocaleString()}
+- Budget Remaining: $${(budgetAnalysis.totalAllocated - budgetAnalysis.totalSpent).toLocaleString()}
+- Budget Utilization: ${budgetAnalysis.totalAllocated > 0 ? Math.round((budgetAnalysis.totalSpent / budgetAnalysis.totalAllocated) * 100) : 0}%
+
+Budget Categories:
+${budgetAnalysis.categories.map(c => 
+  `- ${c.name}: $${c.spent}/$${c.allocated} (${c.remaining >= 0 ? `$${c.remaining} remaining` : `$${Math.abs(c.remaining)} over budget`})`
+).join('\n')}` : 'No active budget set up'}
+
+FINANCIAL GOALS:
+${goals?.map(g => {
+  const progress = g.target_amount > 0 ? Math.round((g.current_amount / g.target_amount) * 100) : 0;
+  const remaining = g.target_amount - g.current_amount;
+  const monthsToTarget = g.target_date ? Math.ceil((new Date(g.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24 * 30)) : 'No deadline';
+  return `- ${g.name} (${g.goal_type}): $${g.current_amount.toLocaleString()}/$${g.target_amount.toLocaleString()} (${progress}% complete, $${remaining.toLocaleString()} remaining, Target: ${monthsToTarget} months)`;
+}).join('\n') || 'No active goals'}
+
+RECENT TRANSACTION PATTERNS (Last 20):
+${transactions?.slice(0, 20).map(t => 
+  `${t.transaction_date}: ${t.description}${t.merchant ? ` (${t.merchant})` : ''} - ${t.is_income ? '+' : '-'}$${t.amount.toLocaleString()} [${t.categories?.name || 'Uncategorized'}]`
 ).join('\n') || 'No recent transactions'}
 `;
+
+    let systemPrompt = '';
+    let maxTokens = 600;
+    let temperature = 0.7;
+
+    switch (type) {
+      case 'advice':
+        systemPrompt = `You are SmartFinanceAI, a professional financial advisor and coach. Provide personalized, actionable advice based on the user's comprehensive financial data. Be encouraging but realistic. Focus on practical steps they can take immediately. Reference specific numbers from their data to make advice concrete and actionable.`;
+        break;
+      case 'analysis':
+        systemPrompt = `You are a financial analyst specializing in transaction analysis. Analyze the user's spending patterns and identify trends, potential savings opportunities, unusual transactions, and provide 3-5 specific actionable recommendations. Use their actual data to provide concrete insights.`;
+        maxTokens = 500;
+        temperature = 0.3;
+        break;
+      case 'budget':
+        systemPrompt = `You are a budget optimization expert. Create specific budget recommendations based on their actual spending patterns. Suggest realistic percentage allocations, identify overspending areas, and provide actionable steps to optimize their budget using their real financial data.`;
+        break;
+      case 'goals':
+        systemPrompt = `You are a goal optimization specialist. Help prioritize and accelerate their specific financial goal achievement. Provide concrete allocation recommendations based on their current cash flow and suggest timeline adjustments using their actual financial data.`;
+        break;
+      default:
+        systemPrompt = `You are a helpful financial assistant with access to comprehensive financial data. Provide clear, actionable financial guidance based on their actual financial situation.`;
+    }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -103,31 +208,24 @@ ${transactions?.slice(0, 10).map(t =>
         messages: [
           {
             role: 'system',
-            content: `You are SmartFinanceAI, a professional financial advisor and coach. You provide personalized, actionable financial advice based on the user's actual financial data. 
-
-Key principles:
-- Be encouraging but realistic
-- Provide specific, actionable recommendations
-- Focus on practical steps they can take
-- Use their actual financial data to give personalized advice
-- Be supportive of their financial goals
-- Suggest concrete budgeting and saving strategies
-- Highlight both positive trends and areas for improvement
-
-Always format your responses in a friendly, conversational tone while maintaining professionalism.`
+            content: systemPrompt
           },
           {
             role: 'user',
-            content: `Here's my current financial situation:\n\n${financialContext}\n\nMy question: ${message}`
+            content: `Here's my comprehensive financial situation:\n\n${financialContext}\n\nMy question/request: ${message}`
           }
         ],
-        max_tokens: 500,
-        temperature: 0.7
+        max_tokens: maxTokens,
+        temperature: temperature
       }),
     });
 
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
     const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
+    const aiResponse = data.choices?.[0]?.message?.content || 'Unable to generate response';
 
     return new Response(JSON.stringify({ response: aiResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

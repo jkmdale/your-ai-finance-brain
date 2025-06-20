@@ -1,8 +1,28 @@
 
-import React from 'react';
-import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+
+interface BudgetCategory {
+  name: string;
+  allocated: number;
+  spent: number;
+  color: string;
+  percentage: number;
+}
+
+interface BudgetData {
+  totalBudgeted: number;
+  totalSpent: number;
+  categories: BudgetCategory[];
+}
 
 export const BudgetOverview = () => {
+  const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
   const getColorClasses = (color: string) => {
     const colorMap = {
       blue: { bg: 'bg-blue-400', gradient: 'from-blue-400 to-blue-500' },
@@ -17,20 +37,112 @@ export const BudgetOverview = () => {
     return colorMap[color as keyof typeof colorMap] || { bg: 'bg-gray-400', gradient: 'from-gray-400 to-gray-500' };
   };
 
-  const budgetCategories = [
-    { name: 'Housing', budgeted: 2500, spent: 2450, color: 'blue', percentage: 32 },
-    { name: 'Food & Dining', budgeted: 800, spent: 920, color: 'red', percentage: 15 },
-    { name: 'Transportation', budgeted: 600, spent: 580, color: 'green', percentage: 11 },
-    { name: 'Utilities', budgeted: 300, spent: 285, color: 'yellow', percentage: 6 },
-    { name: 'Entertainment', budgeted: 400, spent: 350, color: 'purple', percentage: 8 },
-    { name: 'Shopping', budgeted: 500, spent: 670, color: 'pink', percentage: 12 },
-    { name: 'Healthcare', budgeted: 200, spent: 180, color: 'cyan', percentage: 4 },
-    { name: 'Savings', budgeted: 1500, spent: 1500, color: 'emerald', percentage: 20 }
-  ];
+  const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'cyan', 'emerald'];
 
-  const totalBudgeted = budgetCategories.reduce((sum, cat) => sum + cat.budgeted, 0);
-  const totalSpent = budgetCategories.reduce((sum, cat) => sum + cat.spent, 0);
-  const remaining = totalBudgeted - totalSpent;
+  useEffect(() => {
+    const fetchBudgetData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Get active budget with categories
+        const { data: budgets } = await supabase
+          .from('budgets')
+          .select(`
+            *,
+            budget_categories(
+              allocated_amount,
+              spent_amount,
+              categories(name, color)
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .limit(1);
+
+        if (!budgets || budgets.length === 0) {
+          // Create demo budget data if no budget exists
+          const demoBudgetData: BudgetData = {
+            totalBudgeted: 6800,
+            totalSpent: 5935,
+            categories: [
+              { name: 'Housing', allocated: 2500, spent: 2450, color: 'blue', percentage: 32 },
+              { name: 'Food & Dining', allocated: 800, spent: 920, color: 'red', percentage: 15 },
+              { name: 'Transportation', allocated: 600, spent: 580, color: 'green', percentage: 11 },
+              { name: 'Utilities', allocated: 300, spent: 285, color: 'yellow', percentage: 6 },
+              { name: 'Entertainment', allocated: 400, spent: 350, color: 'purple', percentage: 8 },
+              { name: 'Shopping', allocated: 500, spent: 670, color: 'pink', percentage: 12 },
+              { name: 'Healthcare', allocated: 200, spent: 180, color: 'cyan', percentage: 4 },
+              { name: 'Savings', allocated: 1500, spent: 1500, color: 'emerald', percentage: 20 }
+            ]
+          };
+          setBudgetData(demoBudgetData);
+          setLoading(false);
+          return;
+        }
+
+        const budget = budgets[0];
+        const categories: BudgetCategory[] = budget.budget_categories?.map((bc: any, index: number) => ({
+          name: bc.categories?.name || 'Unknown',
+          allocated: bc.allocated_amount || 0,
+          spent: bc.spent_amount || 0,
+          color: colorPalette[index % colorPalette.length],
+          percentage: Math.round(((bc.allocated_amount || 0) / (budget.total_income || 1)) * 100)
+        })) || [];
+
+        const totalBudgeted = categories.reduce((sum, cat) => sum + cat.allocated, 0);
+        const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
+
+        setBudgetData({
+          totalBudgeted,
+          totalSpent,
+          categories
+        });
+      } catch (error) {
+        console.error('Error fetching budget data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBudgetData();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <section id="budget" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!budgetData) {
+    return (
+      <section id="budget" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Smart Budget Intelligence
+            </h2>
+            <p className="text-xl text-white/70 max-w-3xl mx-auto mb-8">
+              Upload your transactions to see your personalized budget analysis
+            </p>
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-8 shadow-2xl">
+              <p className="text-white/80">No budget data available. Upload your CSV files to get started!</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const remaining = budgetData.totalBudgeted - budgetData.totalSpent;
 
   return (
     <section id="budget" className="py-16 px-4 sm:px-6 lg:px-8">
@@ -54,7 +166,7 @@ export const BudgetOverview = () => {
               <span className="text-blue-400 text-sm font-medium">Monthly Budget</span>
             </div>
             <h3 className="text-white/70 text-sm font-medium mb-1">Total Budgeted</h3>
-            <p className="text-2xl font-bold text-white">${totalBudgeted.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-white">${budgetData.totalBudgeted.toLocaleString()}</p>
           </div>
 
           <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
@@ -65,7 +177,7 @@ export const BudgetOverview = () => {
               <span className="text-purple-400 text-sm font-medium">Current Spend</span>
             </div>
             <h3 className="text-white/70 text-sm font-medium mb-1">Total Spent</h3>
-            <p className="text-2xl font-bold text-white">${totalSpent.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-white">${budgetData.totalSpent.toLocaleString()}</p>
           </div>
 
           <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
@@ -95,9 +207,9 @@ export const BudgetOverview = () => {
           </div>
 
           <div className="space-y-4">
-            {budgetCategories.map((category, index) => {
-              const isOverBudget = category.spent > category.budgeted;
-              const spentPercentage = (category.spent / category.budgeted) * 100;
+            {budgetData.categories.map((category, index) => {
+              const isOverBudget = category.spent > category.allocated;
+              const spentPercentage = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
               const colors = getColorClasses(category.color);
               
               return (
@@ -110,7 +222,7 @@ export const BudgetOverview = () => {
                     </div>
                     <div className="text-right">
                       <span className={`text-sm font-medium ${isOverBudget ? 'text-red-400' : 'text-white'}`}>
-                        ${category.spent} / ${category.budgeted}
+                        ${category.spent.toLocaleString()} / ${category.allocated.toLocaleString()}
                       </span>
                       <div className="text-xs text-white/60">
                         {spentPercentage.toFixed(0)}% used
@@ -127,7 +239,7 @@ export const BudgetOverview = () => {
                   
                   {isOverBudget && (
                     <div className="mt-2 text-xs text-red-300 bg-red-500/10 rounded-lg px-3 py-1">
-                      Over budget by ${(category.spent - category.budgeted).toLocaleString()}
+                      Over budget by ${(category.spent - category.allocated).toLocaleString()}
                     </div>
                   )}
                 </div>
@@ -143,8 +255,8 @@ export const BudgetOverview = () => {
               <span className="text-purple-300 font-medium">AI Budget Optimization</span>
             </div>
             <p className="text-white/80 text-sm leading-relaxed">
-              Based on your spending patterns, consider reallocating $150 from Shopping to your Emergency Fund. 
-              This adjustment would improve your financial health score by 12 points and help you reach your savings goal 1.5 months earlier.
+              Based on your spending patterns, consider reallocating funds from overspent categories to savings. 
+              Your AI coach can provide personalized recommendations to optimize your budget and reach your financial goals faster.
             </p>
           </div>
         </div>

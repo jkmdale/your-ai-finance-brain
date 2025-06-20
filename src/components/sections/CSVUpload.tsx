@@ -1,13 +1,49 @@
+
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+interface UploadResult {
+  success: boolean;
+  processed: number;
+  transactions: any[];
+  accountBalance: number;
+  analysis?: string;
+  categories?: any[];
+}
 
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
+  const [showTransactions, setShowTransactions] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const { user } = useAuth();
+
+  const analyzeTransactions = async (transactions: any[]) => {
+    if (!transactions.length) return;
+
+    setAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-coach', {
+        body: { 
+          message: `Analyze these newly uploaded transactions and provide insights on spending patterns, budget impact, and recommendations: ${JSON.stringify(transactions.slice(0, 20))}`,
+          type: 'analysis'
+        }
+      });
+
+      if (error) throw error;
+
+      setUploadResults(prev => prev ? { ...prev, analysis: data.response } : null);
+    } catch (error: any) {
+      console.error('Analysis error:', error);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -30,9 +66,11 @@ export const CSVUpload = () => {
 
     setUploading(true);
     setUploadStatus('idle');
+    setUploadResults(null);
 
     try {
       let totalProcessed = 0;
+      const allTransactions: any[] = [];
       const results = [];
 
       for (const file of Array.from(files)) {
@@ -52,6 +90,7 @@ export const CSVUpload = () => {
         } else {
           results.push({ fileName: file.name, success: true, processed: data.processed });
           totalProcessed += data.processed;
+          allTransactions.push(...(data.transactions || []));
         }
       }
 
@@ -61,9 +100,30 @@ export const CSVUpload = () => {
       if (successfulFiles.length === files.length) {
         setUploadStatus('success');
         setUploadMessage(`Successfully processed ${totalProcessed} transactions from ${files.length} file${files.length > 1 ? 's' : ''}`);
+        
+        const uploadResult: UploadResult = {
+          success: true,
+          processed: totalProcessed,
+          transactions: allTransactions,
+          accountBalance: results[0]?.accountBalance || 0
+        };
+        
+        setUploadResults(uploadResult);
+        
+        // Auto-analyze the transactions
+        if (allTransactions.length > 0) {
+          analyzeTransactions(allTransactions);
+        }
       } else if (successfulFiles.length > 0) {
         setUploadStatus('success');
         setUploadMessage(`Processed ${totalProcessed} transactions from ${successfulFiles.length}/${files.length} files. ${failedFiles.length} files failed.`);
+        
+        setUploadResults({
+          success: true,
+          processed: totalProcessed,
+          transactions: allTransactions,
+          accountBalance: 0
+        });
       } else {
         setUploadStatus('error');
         setUploadMessage(`Failed to process any files. Errors: ${failedFiles.map(f => `${f.fileName}: ${f.error}`).join('; ')}`);
@@ -77,6 +137,10 @@ export const CSVUpload = () => {
     } finally {
       setUploading(false);
     }
+  };
+
+  const getCategoryBadgeColor = (isIncome: boolean) => {
+    return isIncome ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300';
   };
 
   return (
@@ -150,6 +214,96 @@ export const CSVUpload = () => {
             }`}>
               {uploadMessage}
             </span>
+          </div>
+        )}
+
+        {uploadResults && (
+          <div className="space-y-4">
+            {/* Transaction Summary */}
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-white font-medium">Upload Summary</h4>
+                <button
+                  onClick={() => setShowTransactions(!showTransactions)}
+                  className="flex items-center space-x-2 text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span className="text-sm">{showTransactions ? 'Hide' : 'View'} Transactions</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-white/70">Transactions Processed:</span>
+                  <p className="text-white font-medium">{uploadResults.processed}</p>
+                </div>
+                <div>
+                  <span className="text-white/70">Account Balance:</span>
+                  <p className="text-white font-medium">${uploadResults.accountBalance?.toLocaleString() || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Analysis */}
+            {analyzing && (
+              <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-4">
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                  <span className="text-purple-300 text-sm">Analyzing transactions with AI...</span>
+                </div>
+              </div>
+            )}
+
+            {uploadResults.analysis && (
+              <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                  <h4 className="text-white font-medium">AI Analysis</h4>
+                </div>
+                <p className="text-white/80 text-sm leading-relaxed">{uploadResults.analysis}</p>
+              </div>
+            )}
+
+            {/* Transactions Table */}
+            {showTransactions && uploadResults.transactions.length > 0 && (
+              <div className="bg-white/10 rounded-lg p-4">
+                <h4 className="text-white font-medium mb-3">Recent Transactions</h4>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/20">
+                        <TableHead className="text-white/70">Date</TableHead>
+                        <TableHead className="text-white/70">Description</TableHead>
+                        <TableHead className="text-white/70">Amount</TableHead>
+                        <TableHead className="text-white/70">Category</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uploadResults.transactions.slice(0, 10).map((transaction, index) => (
+                        <TableRow key={index} className="border-white/10">
+                          <TableCell className="text-white/80 text-sm">
+                            {new Date(transaction.transaction_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-white/80 text-sm">{transaction.description}</TableCell>
+                          <TableCell className={`text-sm font-medium ${transaction.is_income ? 'text-green-400' : 'text-white'}`}>
+                            {transaction.is_income ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 text-xs rounded-full ${getCategoryBadgeColor(transaction.is_income)}`}>
+                              {transaction.categories?.name || 'Other'}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {uploadResults.transactions.length > 10 && (
+                    <p className="text-white/60 text-xs mt-2 text-center">
+                      Showing 10 of {uploadResults.transactions.length} transactions
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
