@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,15 +13,15 @@ export const CSVUpload = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Check if user is authenticated
     if (!user) {
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
       return;
     }
 
-    // Check if all files are CSV
-    const nonCsvFiles = Array.from(files).filter(file => !file.name.endsWith('.csv'));
+    const nonCsvFiles = Array.from(files).filter(
+      file => file.type !== 'text/csv' && file.type !== 'application/vnd.ms-excel' && !file.name.endsWith('.csv')
+    );
     if (nonCsvFiles.length > 0) {
       setUploadStatus('error');
       setUploadMessage(`Please upload only CSV files. Found non-CSV files: ${nonCsvFiles.map(f => f.name).join(', ')}`);
@@ -38,7 +37,12 @@ export const CSVUpload = () => {
 
       for (const file of Array.from(files)) {
         const text = await file.text();
-        
+
+        if (!text.trim()) {
+          results.push({ fileName: file.name, success: false, error: 'File is empty' });
+          continue;
+        }
+
         const { data, error } = await supabase.functions.invoke('process-csv', {
           body: { csvData: text, fileName: file.name }
         });
@@ -64,10 +68,8 @@ export const CSVUpload = () => {
         setUploadStatus('error');
         setUploadMessage(`Failed to process any files. Errors: ${failedFiles.map(f => `${f.fileName}: ${f.error}`).join('; ')}`);
       }
-      
-      // Reset file input
-      event.target.value = '';
-      
+
+      event.target.value = ''; // reset input
     } catch (error: any) {
       console.error('Upload error:', error);
       setUploadStatus('error');
@@ -96,37 +98,40 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
-        <div className="relative">
+        <div className="relative" id="csv-upload-container">
+          <label htmlFor="csv-upload" className="block w-full h-full cursor-pointer">
+            <div
+              className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
+                uploading || !user
+                  ? 'border-white/20 bg-white/5 cursor-not-allowed'
+                  : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60'
+              }`}
+            >
+              <div className="text-center pointer-events-none">
+                {uploading ? (
+                  <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
+                ) : (
+                  <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+                )}
+                <p className="text-white/80 font-medium">
+                  {uploading ? 'Processing...' : !user ? 'Please log in to upload' : 'Click to upload CSV files'}
+                </p>
+                <p className="text-white/50 text-sm mt-1">
+                  {!user ? 'Authentication required' : 'Select multiple files to upload at once'}
+                </p>
+              </div>
+            </div>
+          </label>
           <input
+            id="csv-upload"
             type="file"
-            accept=".csv"
+            accept=".csv,text/csv,application/vnd.ms-excel"
             multiple
             onChange={handleFileUpload}
             disabled={uploading || !user}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-            id="csv-upload"
+            className="absolute inset-0 w-full h-full opacity-0 z-10"
+            aria-label="Upload CSV files"
           />
-          <div
-            className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              uploading || !user
-                ? 'border-white/20 bg-white/5 cursor-not-allowed'
-                : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
-            }`}
-          >
-            <div className="text-center pointer-events-none">
-              {uploading ? (
-                <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
-              ) : (
-                <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
-              )}
-              <p className="text-white/80 font-medium">
-                {uploading ? 'Processing...' : !user ? 'Please log in to upload' : 'Click to upload CSV files'}
-              </p>
-              <p className="text-white/50 text-sm mt-1">
-                {!user ? 'Authentication required' : 'Select multiple files to upload at once'}
-              </p>
-            </div>
-          </div>
         </div>
 
         {uploadStatus !== 'idle' && (
