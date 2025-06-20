@@ -10,7 +10,6 @@ import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecuritySetup } from "@/components/auth/SecuritySetup";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { SmartFinanceIcon } from "@/components/ui/smart-finance-icon";
 import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -78,7 +77,7 @@ const AppContent = () => {
                 <div className="relative w-8 h-8 group cursor-pointer">
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-lg blur-md"></div>
                   <div className="relative w-8 h-8 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
-                    <SmartFinanceIcon size={20} className="text-purple-100" />
+                    <img src="/icon-192.png" alt="Smart Finance AI" className="w-5 h-5" />
                   </div>
                 </div>
                 <div className="flex flex-col">

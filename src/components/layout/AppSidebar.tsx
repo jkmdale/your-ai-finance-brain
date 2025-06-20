@@ -15,7 +15,6 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { SmartFinanceIcon } from '@/components/ui/smart-finance-icon';
 import { useAuth } from '@/hooks/useAuth';
 
 const menuItems = [
@@ -37,7 +36,7 @@ const menuItems = [
   {
     title: 'AI Insights',
     url: '#insights',
-    icon: SmartFinanceIcon,
+    icon: 'ai-icon', // Special case for AI icon
   },
   {
     title: 'Transactions',
@@ -108,7 +107,7 @@ export const AppSidebar = () => {
           <div className="relative w-10 h-10 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
             <div className="relative w-10 h-10 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <SmartFinanceIcon size={20} className="text-purple-100" />
+              <img src="/icon-192.png" alt="Smart Finance AI" className="w-6 h-6" />
             </div>
           </div>
           <div>
@@ -124,14 +123,17 @@ export const AppSidebar = () => {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const IconComponent = item.icon === SmartFinanceIcon ? SmartFinanceIcon : item.icon;
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.url)}
                       className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 cursor-pointer transition-colors duration-200"
                     >
-                      <IconComponent className="w-4 h-4 text-purple-200" size={16} />
+                      {item.icon === 'ai-icon' ? (
+                        <img src="/icon-192.png" alt="AI Insights" className="w-4 h-4" />
+                      ) : (
+                        <item.icon className="w-4 h-4 text-purple-200" />
+                      )}
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
