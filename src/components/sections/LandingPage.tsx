@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { 
   Brain, Globe, Shield, Users, Smartphone, Target,
   TrendingUp, CreditCard, PiggyBank, BarChart3, 
-  Zap, ArrowRight, CheckCircle, Star
+  Zap, ArrowRight, CheckCircle, Star, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
