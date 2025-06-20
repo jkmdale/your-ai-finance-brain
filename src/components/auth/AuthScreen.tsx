@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
@@ -30,14 +29,12 @@ export const AuthScreen = () => {
   }, [isBiometricAvailable]);
 
   useEffect(() => {
-    // Only redirect to preferred auth method when:
-    // 1. User is not authenticated
-    // 2. We have auth method information available
-    // 3. We haven't initialized yet (to prevent loops)
-    if (!user && !session && !hasInitialized && (hasPin || hasBiometric || mode === 'welcome')) {
+    // Always check for preferred auth method when component mounts
+    // This ensures users are directed to their preferred method every time they open the app
+    if (!hasInitialized) {
       const preferredMethod = localStorage.getItem('preferredAuthMethod');
       
-      console.log('Checking preferred auth method:', {
+      console.log('Auth screen mounted - checking preferred method:', {
         preferredMethod,
         hasPin,
         hasBiometric,
@@ -46,25 +43,31 @@ export const AuthScreen = () => {
         session: !!session
       });
       
-      if (preferredMethod && preferredMethod !== 'email') {
+      // Only redirect if user is not already authenticated
+      if (!user && !session && preferredMethod && preferredMethod !== 'email') {
         if (preferredMethod === 'pin' && hasPin) {
-          console.log('Redirecting to PIN login');
+          console.log('Redirecting to PIN login on app open');
           setMode('pin');
         } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
-          console.log('Redirecting to biometric login');
+          console.log('Redirecting to biometric login on app open');
           setMode('biometric');
           // Auto-trigger biometric authentication for better UX
           setTimeout(() => {
             handleBiometricAuth();
           }, 500);
         } else {
-          console.log('Preferred method not available, staying on welcome screen');
+          console.log('Preferred method not available, showing welcome screen');
+          setMode('welcome');
         }
+      } else if (!user && !session) {
+        // No preferred method or email preferred - show welcome screen
+        console.log('No auth or email preferred, showing welcome screen');
+        setMode('welcome');
       }
       
       setHasInitialized(true);
     }
-  }, [hasPin, hasBiometric, biometricAvailable, user, session, hasInitialized, mode]);
+  }, [hasPin, hasBiometric, biometricAvailable, user, session, hasInitialized]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {

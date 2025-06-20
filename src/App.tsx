@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -59,8 +58,10 @@ const AppContent = () => {
     );
   }
 
-  // Show auth screen if user is not authenticated OR if session is null (more secure check)
+  // Enhanced security check - always show auth screen if no valid session
+  // This ensures users must authenticate each time they open the app
   if (!user || !session) {
+    console.log('No valid session detected - redirecting to auth');
     return <AuthScreen />;
   }
 
