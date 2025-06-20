@@ -11,11 +11,20 @@ import { useAuth } from "@/hooks/useAuth";
 const Index = () => {
   const { user } = useAuth();
 
+  // If user is not authenticated, show the landing page
+  if (!user) {
+    return (
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <Hero />
+        <Features />
+      </div>
+    );
+  }
+
+  // If user is authenticated, show the dashboard and other sections
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Hero />
-      {user && <Dashboard />}
-      <Features />
+      <Dashboard />
       <BudgetOverview />
       <GoalTracking />
       <AIInsights />
