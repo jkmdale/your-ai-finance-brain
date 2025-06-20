@@ -5,6 +5,8 @@ import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
 import { TransactionTable } from '@/components/ui/transaction-table';
+import { FinancialHealthCard } from '@/components/ui/financial-health-card';
+import { SpendingInsights } from '@/components/ui/spending-insights';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +35,8 @@ export const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [financialHealth, setFinancialHealth] = useState<any>(null);
+  const [spendingInsights, setSpendingInsights] = useState<any[]>([]);
   const { user } = useAuth();
   const isMobile = useIsMobile();
 
@@ -60,7 +64,7 @@ export const Dashboard = () => {
           .select('*')
           .eq('user_id', user.id)
           .order('transaction_date', { ascending: false })
-          .limit(50);
+          .limit(100);
 
         if (!transactions || transactions.length === 0) {
           setStats(null);
@@ -69,11 +73,17 @@ export const Dashboard = () => {
           return;
         }
 
-        // Process transactions through the new processor
+        // Process transactions through the enhanced processor
         const processedTransactions = transactionProcessor.processTransactions(transactions);
         
         // Calculate current month stats
         const currentMonthStats = transactionProcessor.calculateMonthlyStats(processedTransactions);
+        
+        // Get financial health assessment
+        const healthAssessment = transactionProcessor.assessFinancialHealth(currentMonthStats);
+        
+        // Get spending insights
+        const insights = transactionProcessor.getSpendingInsights(processedTransactions, 3);
         
         // Validate the numbers
         const validation = transactionProcessor.validateRealisticNumbers(currentMonthStats);
@@ -81,8 +91,11 @@ export const Dashboard = () => {
         // Get transfer summary for debugging
         const transferSummary = transactionProcessor.getTransferSummary(processedTransactions);
         
+        console.log('Enhanced Analysis Results:');
         console.log('Transfer Summary:', transferSummary);
         console.log('Processed Stats:', currentMonthStats);
+        console.log('Financial Health:', healthAssessment);
+        console.log('Spending Insights:', insights);
         console.log('Validation:', validation);
 
         setStats({
@@ -94,6 +107,9 @@ export const Dashboard = () => {
           isValidated: validation.isValid,
           warnings: validation.warnings
         });
+
+        setFinancialHealth(healthAssessment);
+        setSpendingInsights(insights);
 
         // Get recent non-transfer transactions for display
         const recentNonTransfers = processedTransactions
@@ -242,10 +258,10 @@ export const Dashboard = () => {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-            Financial Dashboard
+            Financial Intelligence Dashboard
           </h2>
           <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
-            Your complete financial overview with AI-powered insights and corrected transaction processing
+            AI-powered analysis with enhanced transaction categorization and financial health assessment
           </p>
         </div>
 
@@ -292,6 +308,26 @@ export const Dashboard = () => {
               </div>
             );
           })}
+        </div>
+
+        {/* Enhanced Analysis Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-12">
+          {/* Financial Health Assessment */}
+          {financialHealth && (
+            <FinancialHealthCard 
+              metrics={financialHealth}
+              monthlyIncome={stats.monthlyIncome}
+              monthlyExpenses={stats.monthlyExpenses}
+            />
+          )}
+          
+          {/* Spending Insights */}
+          {spendingInsights.length > 0 && (
+            <SpendingInsights 
+              insights={spendingInsights}
+              totalIncome={stats.monthlyIncome}
+            />
+          )}
         </div>
 
         {/* Main Content Grid */}
