@@ -22,14 +22,34 @@ const AppContent = () => {
   const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
 
   useEffect(() => {
-    // Check if user needs security setup after they're authenticated
+    // Only check for security setup after user is authenticated and we have the auth method info
     if (user && !loading && !hasCheckedSecurity) {
-      // Show security setup if user doesn't have PIN or biometric set up
-      const needsSecuritySetup = !hasPin && !hasBiometric;
+      // Check if user has completed security setup before
+      const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
+      
+      // Only show security setup if:
+      // 1. User hasn't completed setup before
+      // 2. User doesn't have PIN or biometric set up
+      // 3. User doesn't have a preferred auth method set
+      const preferredMethod = localStorage.getItem('preferredAuthMethod');
+      const needsSecuritySetup = !hasCompletedSetup && !hasPin && !hasBiometric && !preferredMethod;
+      
       setShowSecuritySetup(needsSecuritySetup);
       setHasCheckedSecurity(true);
     }
   }, [user, loading, hasPin, hasBiometric, hasCheckedSecurity]);
+
+  const handleSecuritySetupComplete = () => {
+    // Mark security setup as completed
+    localStorage.setItem('securitySetupCompleted', 'true');
+    setShowSecuritySetup(false);
+  };
+
+  const handleSecuritySetupSkip = () => {
+    // Mark as completed even if skipped to avoid showing again
+    localStorage.setItem('securitySetupCompleted', 'true');
+    setShowSecuritySetup(false);
+  };
 
   if (loading) {
     return (
@@ -68,8 +88,8 @@ const AppContent = () => {
       
       {showSecuritySetup && (
         <SecuritySetup
-          onComplete={() => setShowSecuritySetup(false)}
-          onSkip={() => setShowSecuritySetup(false)}
+          onComplete={handleSecuritySetupComplete}
+          onSkip={handleSecuritySetupSkip}
         />
       )}
     </BrowserRouter>

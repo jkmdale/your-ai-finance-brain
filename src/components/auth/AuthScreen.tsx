@@ -17,7 +17,7 @@ export const AuthScreen = () => {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric } = useAuth();
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric, user } = useAuth();
 
   useEffect(() => {
     const checkBiometric = async () => {
@@ -28,17 +28,20 @@ export const AuthScreen = () => {
   }, [isBiometricAvailable]);
 
   useEffect(() => {
-    // Check for preferred authentication method and redirect accordingly
-    const preferredMethod = localStorage.getItem('preferredAuthMethod');
-    
-    if (preferredMethod && preferredMethod !== 'email') {
-      if (preferredMethod === 'pin' && hasPin) {
-        setMode('pin');
-      } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
-        setMode('biometric');
+    // Only check for preferred auth method when user is not authenticated
+    // and we have the necessary auth method information
+    if (!user && (hasPin || hasBiometric)) {
+      const preferredMethod = localStorage.getItem('preferredAuthMethod');
+      
+      if (preferredMethod && preferredMethod !== 'email') {
+        if (preferredMethod === 'pin' && hasPin) {
+          setMode('pin');
+        } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
+          setMode('biometric');
+        }
       }
     }
-  }, [hasPin, hasBiometric, biometricAvailable]);
+  }, [hasPin, hasBiometric, biometricAvailable, user]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {
