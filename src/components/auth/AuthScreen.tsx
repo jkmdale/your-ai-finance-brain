@@ -20,61 +20,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [pendingEmail, setPendingEmail] = useState('');
   const [hasInitialized, setHasInitialized] = useState(false);
   const [userCapabilities, setUserCapabilities] = useState({ hasPin: false, hasBiometric: false });
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, getUserCapabilities, user, session } = useAuth();
+  
+  const { 
+    signIn, 
+    signUp, 
+    signInWithPin, 
+    signInWithBiometric, 
+    isBiometricAvailable, 
+    resendConfirmation, 
+    getUserCapabilities, 
+    user, 
+    session 
+  } = useAuth();
+
+  console.log('AuthScreen render:', { mode, email, loading, user: !!user, session: !!session });
 
   // Check biometric availability
   useEffect(() => {
     const checkCapabilities = async () => {
       const available = await isBiometricAvailable();
       setBiometricAvailable(available);
+      console.log('Biometric available:', available);
     };
     checkCapabilities();
   }, [isBiometricAvailable]);
 
-  // Handle initial auth method selection
-  useEffect(() => {
-    if (!hasInitialized && email && mode === 'welcome') {
-      const checkUserCapabilities = async () => {
-        try {
-          const capabilities = await getUserCapabilities(email);
-          setUserCapabilities(capabilities);
-          const preferredMethod = localStorage.getItem('preferredAuthMethod');
-          
-          console.log('Login screen - checking capabilities:', {
-            email,
-            capabilities,
-            preferredMethod,
-            biometricAvailable
-          });
-          
-          // Direct to preferred method if available
-          if (preferredMethod && preferredMethod !== 'email') {
-            if (preferredMethod === 'pin' && capabilities.hasPin) {
-              console.log('Auto-directing to PIN login (preferred method)');
-              setMode('pin');
-            } else if (preferredMethod === 'biometric' && capabilities.hasBiometric && biometricAvailable) {
-              console.log('Auto-directing to biometric login (preferred method)');
-              setMode('biometric');
-              // Auto-trigger biometric after a delay
-              setTimeout(() => {
-                handleBiometricAuth();
-              }, 800);
-            }
-          }
-        } catch (error) {
-          console.error('Error checking user capabilities:', error);
-        }
-      };
-      
-      checkUserCapabilities();
-      setHasInitialized(true);
-    }
-  }, [email, biometricAvailable, hasInitialized, getUserCapabilities, mode]);
-
   // Handle successful authentication
   useEffect(() => {
     if (user && session) {
-      console.log('Authentication successful - calling onAuthSuccess');
+      console.log('Authentication successful in AuthScreen');
       onAuthSuccess?.();
     }
   }, [user, session, onAuthSuccess]);
@@ -85,18 +59,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       return;
     }
 
+    console.log('Attempting email auth:', { email, isSignUp });
     setLoading(true);
     
     if (isSignUp) {
       const result = await signUp(email, password);
       
       if (result.error) {
+        console.log('Sign up error:', result.error);
         toast.error(result.error.message);
       } else if (result.needsConfirmation) {
         setPendingEmail(email);
         setMode('email-confirmation');
         toast.success(result.message || 'Account created! Please check your email to confirm.');
       } else {
+        console.log('Sign up successful');
         toast.success('Account created and signed in successfully!');
         localStorage.setItem('preferredAuthMethod', 'email');
       }
@@ -104,6 +81,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       const { error } = await signIn(email, password);
       
       if (error) {
+        console.log('Sign in error:', error);
         if (error.needsConfirmation) {
           setPendingEmail(email);
           setMode('email-confirmation');
@@ -112,6 +90,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
           toast.error(error.message);
         }
       } else {
+        console.log('Sign in successful');
         toast.success('Welcome back!');
         localStorage.setItem('preferredAuthMethod', 'email');
       }
@@ -141,13 +120,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       return;
     }
 
+    console.log('Attempting PIN authentication');
     setLoading(true);
     const { error } = await signInWithPin(pin, email);
     
     if (error) {
+      console.log('PIN auth error:', error);
       toast.error('Invalid PIN');
       setTimeout(() => setLoading(false), 1000);
     } else {
+      console.log('PIN auth successful');
       toast.success('Welcome back!');
       localStorage.setItem('preferredAuthMethod', 'pin');
     }
@@ -164,19 +146,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       return;
     }
 
+    console.log('Attempting biometric authentication');
     setLoading(true);
     const { error } = await signInWithBiometric(email);
     
     if (error) {
+      console.log('Biometric auth error:', error);
       toast.error(error.message || 'Biometric authentication failed');
       setLoading(false);
     } else {
+      console.log('Biometric auth successful');
       toast.success('Welcome back!');
       localStorage.setItem('preferredAuthMethod', 'biometric');
     }
   };
 
   const handleModeChange = (newMode: AuthMode) => {
+    console.log('Mode change:', newMode);
     setMode(newMode);
     setLoading(false);
   };
@@ -187,10 +173,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       return;
     }
 
+    console.log('Checking user capabilities for email:', email);
     setLoading(true);
     
     try {
       const capabilities = await getUserCapabilities(email);
+      console.log('User capabilities:', capabilities);
       setUserCapabilities(capabilities);
       
       if (capabilities.hasPin || capabilities.hasBiometric) {

@@ -20,42 +20,12 @@ const AppContent = () => {
   const { user, session, loading, hasPin, hasBiometric, signOut } = useAuth();
   const [showSecuritySetup, setShowSecuritySetup] = useState(false);
   const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
-  const [authRequired, setAuthRequired] = useState(true);
 
-  // Clear any existing sessions on app start - CRITICAL for security
-  useEffect(() => {
-    const clearSessionsOnStart = async () => {
-      console.log('App starting - checking for session persistence');
-      
-      // Check if this is a fresh app load (not a navigation within the app)
-      const isAppStart = !sessionStorage.getItem('app_initialized');
-      
-      if (isAppStart) {
-        console.log('Fresh app load detected - clearing sessions for security');
-        sessionStorage.setItem('app_initialized', 'true');
-        
-        // Clear any persisted auth state to force re-authentication
-        if (user || session) {
-          console.log('Clearing existing session - user must re-authenticate');
-          await signOut();
-          setAuthRequired(true);
-          return;
-        }
-      }
-      
-      // If we have a valid session after the security check, allow access
-      if (user && session) {
-        console.log('Valid session found after security check');
-        setAuthRequired(false);
-      }
-    };
-
-    clearSessionsOnStart();
-  }, [user, session, signOut]);
+  console.log('App render state:', { user: !!user, session: !!session, loading });
 
   // Handle security setup after authentication
   useEffect(() => {
-    if (user && session && !loading && !hasCheckedSecurity && !authRequired) {
+    if (user && session && !loading && !hasCheckedSecurity) {
       const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
       const preferredMethod = localStorage.getItem('preferredAuthMethod');
       const needsSecuritySetup = !hasCompletedSetup && !hasPin && !hasBiometric && !preferredMethod;
@@ -63,7 +33,7 @@ const AppContent = () => {
       setShowSecuritySetup(needsSecuritySetup);
       setHasCheckedSecurity(true);
     }
-  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity, authRequired]);
+  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity]);
 
   const handleSecuritySetupComplete = () => {
     localStorage.setItem('securitySetupCompleted', 'true');
@@ -76,6 +46,7 @@ const AppContent = () => {
   };
 
   if (loading) {
+    console.log('App showing loading state');
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
@@ -83,11 +54,13 @@ const AppContent = () => {
     );
   }
 
-  // ALWAYS require authentication on app start - no exceptions
-  if (authRequired || !user || !session) {
-    console.log('Authentication required - showing login screen');
-    return <AuthScreen onAuthSuccess={() => setAuthRequired(false)} />;
+  // Show auth screen if user is not authenticated
+  if (!user || !session) {
+    console.log('User not authenticated - showing auth screen');
+    return <AuthScreen onAuthSuccess={() => console.log('Auth success callback')} />;
   }
+
+  console.log('User authenticated - showing main app');
 
   return (
     <BrowserRouter>
@@ -116,9 +89,8 @@ const AppContent = () => {
                 <span className="text-purple-100 text-sm">Welcome back!</span>
                 <button
                   onClick={async () => {
+                    console.log('Signing out user');
                     await signOut();
-                    setAuthRequired(true);
-                    sessionStorage.removeItem('app_initialized');
                   }}
                   className="text-purple-200 hover:text-white text-sm bg-purple-800/50 hover:bg-purple-700/50 px-3 py-1 rounded-lg transition-colors"
                 >
