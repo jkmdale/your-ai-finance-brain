@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -366,7 +367,7 @@ export const CSVUpload = () => {
           </div>
         )}
 
-        {uploadResults.analysis && (
+        {uploadResults?.analysis && (
           <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-3">
               <TrendingUp className="w-5 h-5 text-purple-400" />
@@ -429,7 +430,7 @@ export const CSVUpload = () => {
         )}
 
         {/* Duplicate Detection Results */}
-        {showDuplicates && uploadResults.duplicates && uploadResults.duplicates.length > 0 && (
+        {showDuplicates && uploadResults?.duplicates && uploadResults.duplicates.length > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
             <h4 className="text-yellow-300 font-medium mb-3">Potential Duplicates Found</h4>
             <div className="space-y-3">
@@ -450,7 +451,7 @@ export const CSVUpload = () => {
                     <div>
                       <p className="text-white/70">Existing Transaction:</p>
                       <p className="text-white">{duplicate.existing.description}</p>
-                      <p className="text-white/60">{duplicate.existing.date} - ${duplicate.existing.amount}</p>
+                      <p className="text-white/60">{duplicate.existing.transaction_date || duplicate.existing.date} - ${duplicate.existing.amount}</p>
                     </div>
                   </div>
                   <div className="mt-2">

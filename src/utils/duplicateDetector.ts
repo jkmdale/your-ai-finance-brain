@@ -2,16 +2,16 @@
 import { Transaction } from './csvProcessor';
 
 export interface DuplicateMatch {
-  existing: Transaction;
-  new: Transaction;
+  existing: any; // Database transaction format
+  new: Transaction; // CSV processor transaction format
   confidence: number;
   reasons: string[];
 }
 
 export class DuplicateDetector {
-  private existingTransactions: Transaction[] = [];
+  private existingTransactions: any[] = [];
 
-  constructor(existingTransactions: Transaction[] = []) {
+  constructor(existingTransactions: any[] = []) {
     this.existingTransactions = existingTransactions;
   }
 
@@ -59,19 +59,25 @@ export class DuplicateDetector {
 
   public findDuplicates(newTransactions: Transaction[]): DuplicateMatch[] {
     const duplicates: DuplicateMatch[] = [];
-    const allTransactions = [...this.existingTransactions, ...newTransactions];
 
     for (const newTxn of newTransactions) {
-      for (const existingTxn of allTransactions) {
+      for (const existingTxn of this.existingTransactions) {
         if (newTxn.id === existingTxn.id) continue;
 
         const reasons: string[] = [];
         let confidence = 0;
 
+        // Convert existing transaction date to comparable format
+        const existingDate = existingTxn.transaction_date || existingTxn.date;
+        const existingDesc = existingTxn.description || '';
+        const existingAmount = existingTxn.amount || 0;
+
+        if (!existingDate || !existingDesc) continue;
+
         // Exact match criteria
-        if (newTxn.date === existingTxn.date && 
-            newTxn.amount === existingTxn.amount && 
-            newTxn.description === existingTxn.description) {
+        if (newTxn.date === existingDate && 
+            newTxn.amount === existingAmount && 
+            newTxn.description === existingDesc) {
           confidence = 1.0;
           reasons.push('Exact match: same date, amount, and description');
         } else {
@@ -79,19 +85,19 @@ export class DuplicateDetector {
           let score = 0;
 
           // Date similarity
-          if (newTxn.date === existingTxn.date) {
+          if (newTxn.date === existingDate) {
             score += 0.4;
             reasons.push('Same date');
-          } else if (this.areDatesClose(newTxn.date, existingTxn.date)) {
+          } else if (this.areDatesClose(newTxn.date, existingDate)) {
             score += 0.2;
             reasons.push('Similar date (within 1 day)');
           }
 
           // Amount similarity
-          if (newTxn.amount === existingTxn.amount) {
+          if (newTxn.amount === existingAmount) {
             score += 0.4;
             reasons.push('Same amount');
-          } else if (this.areAmountsClose(newTxn.amount, existingTxn.amount)) {
+          } else if (this.areAmountsClose(newTxn.amount, existingAmount)) {
             score += 0.2;
             reasons.push('Similar amount (within $0.01)');
           }
@@ -99,7 +105,7 @@ export class DuplicateDetector {
           // Description similarity
           const descSimilarity = this.calculateSimilarity(
             newTxn.description.toLowerCase(),
-            existingTxn.description.toLowerCase()
+            existingDesc.toLowerCase()
           );
           if (descSimilarity >= 0.9) {
             score += 0.3;
