@@ -87,7 +87,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Email content prepared for type:', email_action_type);
 
     const emailPayload = {
-      from: "SmartFinanceAI <onboarding@resend.dev>",
+      from: "SmartFinanceAI <noreply@smartfinanceai.app>",
       to: [to],
       subject: subject,
       html: emailContent,
