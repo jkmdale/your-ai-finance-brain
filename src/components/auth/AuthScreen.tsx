@@ -1,23 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { PinPad } from './PinPad';
 import { toast } from 'sonner';
-
-type AuthMode = 'welcome' | 'email' | 'pin' | 'biometric' | 'signup' | 'email-confirmation';
-
-interface AuthScreenProps {
-  onAuthSuccess?: () => void;
-}
+import { AuthMode, AuthScreenProps } from './types';
+import { EmailEntryForm } from './EmailEntryForm';
+import { EmailPasswordForm } from './EmailPasswordForm';
+import { EmailConfirmationScreen } from './EmailConfirmationScreen';
+import { PinLoginForm } from './PinLoginForm';
+import { BiometricLoginForm } from './BiometricLoginForm';
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
-  const [mode, setMode] = useState<AuthMode>('welcome');
+  const [mode, setMode] = useState<AuthMode>('email-entry');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
@@ -211,12 +207,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     setLoading(false);
   };
 
-  const pageVariants = {
-    initial: { opacity: 0, x: 50 },
-    animate: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: -50 }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Elements */}
@@ -228,315 +218,68 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
       <div className="relative z-10 w-full max-w-md">
         <AnimatePresence mode="wait">
-          {(mode === 'welcome' || mode === 'email-entry') && (
-            <motion.div
-              key="email-entry"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-800 to-blue-800 rounded-2xl flex items-center justify-center mx-auto mb-6 relative">
-                  <Shield className="w-10 h-10 text-white/90" />
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-blue-400/20 rounded-2xl"></div>
-                </div>
-                <h1 className="text-3xl font-bold text-white mb-2">Secure Login Required</h1>
-                <p className="text-white/70">Enter your email to see login options</p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <Input
-                    type="email"
-                    placeholder="Enter your email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleEmailEntry}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
-                >
-                  {loading ? 'Checking...' : 'Continue'}
-                </Button>
-              </div>
-
-              <div className="mt-8 text-center">
-                <button
-                  onClick={() => handleModeChange('signup')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                >
-                  Don't have an account? <span className="text-purple-400 font-medium">Sign up</span>
-                </button>
-              </div>
-            </motion.div>
+          {mode === 'email-entry' && (
+            <EmailEntryForm
+              email={email}
+              setEmail={setEmail}
+              onContinue={handleEmailEntry}
+              onModeChange={handleModeChange}
+              loading={loading}
+            />
           )}
 
           {mode === 'email' && (
-            <motion.div
-              key="email"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Sign In</h2>
-                <p className="text-white/70">Enter your credentials to continue</p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <Input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12 pr-12"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-
-                <Button
-                  onClick={() => handleEmailAuth(false)}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
-                >
-                  {loading ? 'Signing In...' : 'Sign In'}
-                </Button>
-              </div>
-
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => handleModeChange('email-entry')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                >
-                  ← Back
-                </button>
-              </div>
-            </motion.div>
+            <EmailPasswordForm
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              onSubmit={handleEmailAuth}
+              onModeChange={handleModeChange}
+              loading={loading}
+              isSignUp={false}
+            />
           )}
 
           {mode === 'signup' && (
-            <motion.div
-              key="signup"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Create Account</h2>
-                <p className="text-white/70">Join SmartFinanceAI today</p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <Input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12 pr-12"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-
-                <Button
-                  onClick={() => handleEmailAuth(true)}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-12"
-                >
-                  {loading ? 'Creating Account...' : 'Create Account'}
-                </Button>
-              </div>
-
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => handleModeChange('email-entry')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                >
-                  ← Back to login
-                </button>
-              </div>
-            </motion.div>
+            <EmailPasswordForm
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              onSubmit={handleEmailAuth}
+              onModeChange={handleModeChange}
+              loading={loading}
+              isSignUp={true}
+            />
           )}
 
           {mode === 'email-confirmation' && (
-            <motion.div
-              key="email-confirmation"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <Mail className="w-10 h-10 text-white" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
-                <p className="text-white/70 mb-4">
-                  We've sent a confirmation link to:
-                </p>
-                <p className="text-white font-medium">{pendingEmail}</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl p-4">
-                  <div className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-blue-300">
-                      <p className="font-medium mb-1">Next steps:</p>
-                      <ul className="space-y-1 text-blue-200">
-                        <li>1. Check your email inbox (and spam folder)</li>
-                        <li>2. Click the confirmation link</li>
-                        <li>3. Return here to sign in</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleResendConfirmation}
-                  disabled={loading}
-                  variant="outline"
-                  className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
-                >
-                  {loading ? 'Sending...' : 'Resend confirmation email'}
-                </Button>
-
-                <Button
-                  onClick={() => handleModeChange('email')}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
-                >
-                  Back to Sign In
-                </Button>
-              </div>
-
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => handleModeChange('email-entry')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                >
-                  ← Back to options
-                </button>
-              </div>
-            </motion.div>
+            <EmailConfirmationScreen
+              pendingEmail={pendingEmail}
+              onResendConfirmation={handleResendConfirmation}
+              onModeChange={handleModeChange}
+              loading={loading}
+            />
           )}
 
           {mode === 'pin' && (
-            <motion.div
-              key="pin"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Enter PIN</h2>
-                <p className="text-white/70">Enter your secure PIN code for {email}</p>
-              </div>
-
-              <PinPad 
-                onPinComplete={handlePinComplete}
-                loading={loading}
-              />
-
-              <div className="mt-8 text-center">
-                <button
-                  onClick={() => handleModeChange('email-entry')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                  disabled={loading}
-                >
-                  ← Use different method
-                </button>
-              </div>
-            </motion.div>
+            <PinLoginForm
+              email={email}
+              onPinComplete={handlePinComplete}
+              onModeChange={handleModeChange}
+              loading={loading}
+            />
           )}
 
           {mode === 'biometric' && (
-            <motion.div
-              key="biometric"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-orange-600 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <Fingerprint className="w-10 h-10 text-white animate-pulse" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Biometric Login</h2>
-                <p className="text-white/70">
-                  {biometricAvailable 
-                    ? `Use your fingerprint, face ID, or other biometric method for ${email}` 
-                    : 'Biometric authentication is not available on this device'
-                  }
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                <Button
-                  onClick={handleBiometricAuth}
-                  disabled={loading || !biometricAvailable}
-                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-12 disabled:opacity-50"
-                >
-                  {loading ? 'Authenticating...' : 'Authenticate'}
-                </Button>
-              </div>
-
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => handleModeChange('email-entry')}
-                  className="text-white/70 hover:text-white transition-colors duration-200"
-                  disabled={loading}
-                >
-                  ← Use different method
-                </button>
-              </div>
-            </motion.div>
+            <BiometricLoginForm
+              email={email}
+              biometricAvailable={biometricAvailable}
+              onBiometricAuth={handleBiometricAuth}
+              onModeChange={handleModeChange}
+              loading={loading}
+            />
           )}
         </AnimatePresence>
       </div>
