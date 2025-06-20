@@ -104,10 +104,10 @@ export const AppSidebar = () => {
     <Sidebar className="w-64 max-w-64 border-r border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 sticky top-0 h-screen">
       <SidebarHeader className="border-b border-purple-700/30 p-6 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 sticky top-0 z-10">
         <div className="flex items-center space-x-3">
-          <div className="relative h-12 w-12 group cursor-pointer">
+          <div className="relative h-16 w-16 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
-            <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <img src="/icon-192.png" alt="Smart Finance AI" className="h-10 w-10 object-contain" />
+            <div className="relative h-16 w-16 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+              <img src="/icon_96x96.png" alt="Smart Finance AI" className="h-16 w-16 object-contain" />
             </div>
           </div>
           <div>
@@ -130,7 +130,7 @@ export const AppSidebar = () => {
                       className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 cursor-pointer transition-colors duration-200"
                     >
                       {item.icon === 'ai-icon' ? (
-                        <img src="/icon-192.png" alt="AI Insights" className="w-4 h-4 object-contain" />
+                        <img src="/icon_96x96.png" alt="AI Insights" className="w-4 h-4 object-contain" />
                       ) : (
                         <item.icon className="w-4 h-4 text-purple-200" />
                       )}

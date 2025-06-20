@@ -77,7 +77,7 @@ const AppContent = () => {
                 <div className="relative h-12 w-12 group cursor-pointer">
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-lg blur-md"></div>
                   <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
-                    <img src="/icon-192.png" alt="Smart Finance AI" className="h-10 w-10 object-contain" />
+                    <img src="/icon_48x48.png" alt="Smart Finance AI" className="h-12 w-12 object-contain" />
                   </div>
                 </div>
                 <div className="flex flex-col">
