@@ -14,6 +14,35 @@ interface Transaction {
   merchant?: string;
 }
 
+const parseDate = (dateString: string): string => {
+  console.log('Parsing date:', dateString);
+  
+  // Handle different date formats
+  if (dateString.includes('/')) {
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      // Check if it's DD/MM/YYYY or MM/DD/YYYY format
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const year = parseInt(parts[2]);
+      
+      // If day > 12, it's likely DD/MM/YYYY
+      if (day > 12) {
+        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      } else {
+        // Could be MM/DD/YYYY or DD/MM/YYYY, assume DD/MM/YYYY for now
+        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      }
+    }
+  } else if (dateString.includes('-')) {
+    // Already in YYYY-MM-DD format
+    return dateString;
+  }
+  
+  // If we can't parse it, return today's date
+  return new Date().toISOString().split('T')[0];
+};
+
 const categorizeTransaction = (description: string, amount: number): { category: string, isIncome: boolean } => {
   const desc = description.toLowerCase();
   
@@ -79,20 +108,37 @@ serve(async (req) => {
     const { csvData } = await req.json();
     console.log('Processing CSV data for user:', user.id);
 
-    // Parse CSV data
+    // Parse CSV data - handle different CSV formats
     const lines = csvData.trim().split('\n');
-    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/"/g, ''));
+    
+    console.log('CSV Headers:', headers);
     
     const transactions: Transaction[] = [];
     
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map((v: string) => v.trim().replace(/"/g, ''));
       
+      // Skip empty lines
+      if (values.length < 3 || values.every(v => !v)) continue;
+      
+      const dateIndex = headers.findIndex(h => h.includes('date')) || 0;
+      const descIndex = headers.findIndex(h => h.includes('description') || h.includes('detail')) || 1;
+      const amountIndex = headers.findIndex(h => h.includes('amount') || h.includes('value')) || 2;
+      const merchantIndex = headers.findIndex(h => h.includes('merchant') || h.includes('payee'));
+      
+      const rawDate = values[dateIndex] || values[0];
+      const description = values[descIndex] || values[1];
+      const rawAmount = values[amountIndex] || values[2];
+      
+      // Skip if essential data is missing
+      if (!rawDate || !description || !rawAmount) continue;
+      
       const transaction: Transaction = {
-        date: values[headers.indexOf('date')] || values[0],
-        description: values[headers.indexOf('description')] || values[1],
-        amount: parseFloat(values[headers.indexOf('amount')] || values[2]) || 0,
-        merchant: values[headers.indexOf('merchant')] || ''
+        date: parseDate(rawDate),
+        description: description,
+        amount: parseFloat(rawAmount.replace(/[,$]/g, '')) || 0,
+        merchant: merchantIndex >= 0 ? values[merchantIndex] : ''
       };
       
       if (transaction.description && !isNaN(transaction.amount)) {
@@ -148,7 +194,7 @@ serve(async (req) => {
         category_id: categoryId,
         amount: Math.abs(transaction.amount),
         description: transaction.description,
-        merchant: transaction.merchant,
+        merchant: transaction.merchant || null,
         transaction_date: transaction.date,
         is_income: isIncome,
         imported_from: 'csv'
@@ -157,18 +203,25 @@ serve(async (req) => {
       processedTransactions.push(transactionData);
     }
 
-    // Insert transactions
-    const { data: insertedTransactions, error: insertError } = await supabaseClient
-      .from('transactions')
-      .insert(processedTransactions)
-      .select();
+    // Insert transactions in batches to avoid timeout
+    const batchSize = 100;
+    const insertedTransactions = [];
+    
+    for (let i = 0; i < processedTransactions.length; i += batchSize) {
+      const batch = processedTransactions.slice(i, i + batchSize);
+      const { data, error } = await supabaseClient
+        .from('transactions')
+        .insert(batch)
+        .select();
 
-    if (insertError) {
-      console.error('Error inserting transactions:', insertError);
-      return new Response(JSON.stringify({ error: 'Failed to insert transactions' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      if (error) {
+        console.error('Error inserting batch:', error);
+        throw error;
+      }
+      
+      if (data) {
+        insertedTransactions.push(...data);
+      }
     }
 
     // Update account balance
@@ -176,20 +229,59 @@ serve(async (req) => {
       sum + (t.is_income ? t.amount : -t.amount), 0
     );
 
+    // Get current balance
+    const { data: currentAccount } = await supabaseClient
+      .from('bank_accounts')
+      .select('balance')
+      .eq('id', accountId)
+      .single();
+
+    const newBalance = (currentAccount?.balance || 0) + totalAmount;
+
     await supabaseClient
       .from('bank_accounts')
       .update({ 
-        balance: totalAmount,
+        balance: newBalance,
         updated_at: new Date().toISOString()
       })
       .eq('id', accountId);
+
+    // Update budget if exists
+    const { data: activeBudget } = await supabaseClient
+      .from('budgets')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (activeBudget) {
+      // Calculate total expenses and income from new transactions
+      const totalExpenses = processedTransactions
+        .filter(t => !t.is_income)
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalIncome = processedTransactions
+        .filter(t => t.is_income)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      // Update budget totals
+      await supabaseClient
+        .from('budgets')
+        .update({
+          total_expenses: totalExpenses,
+          total_income: totalIncome,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', activeBudget.id);
+    }
 
     console.log(`Successfully processed ${processedTransactions.length} transactions`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       processed: processedTransactions.length,
-      transactions: insertedTransactions 
+      transactions: insertedTransactions,
+      accountBalance: newBalance
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
