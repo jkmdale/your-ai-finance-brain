@@ -60,6 +60,7 @@ export type Database = {
           id: string
           last_used: string | null
           public_key: string
+          user_email: string | null
           user_id: string
         }
         Insert: {
@@ -70,6 +71,7 @@ export type Database = {
           id?: string
           last_used?: string | null
           public_key: string
+          user_email?: string | null
           user_id: string
         }
         Update: {
@@ -80,6 +82,7 @@ export type Database = {
           id?: string
           last_used?: string | null
           public_key?: string
+          user_email?: string | null
           user_id?: string
         }
         Relationships: []
@@ -332,6 +335,7 @@ export type Database = {
           id: string
           pin_hash: string
           updated_at: string | null
+          user_email: string | null
           user_id: string | null
         }
         Insert: {
@@ -339,6 +343,7 @@ export type Database = {
           id?: string
           pin_hash: string
           updated_at?: string | null
+          user_email?: string | null
           user_id?: string | null
         }
         Update: {
@@ -346,6 +351,7 @@ export type Database = {
           id?: string
           pin_hash?: string
           updated_at?: string | null
+          user_email?: string | null
           user_id?: string | null
         }
         Relationships: []
