@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
@@ -17,7 +18,8 @@ export const AuthScreen = () => {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric, user } = useAuth();
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric, user, session } = useAuth();
 
   useEffect(() => {
     const checkBiometric = async () => {
@@ -28,20 +30,41 @@ export const AuthScreen = () => {
   }, [isBiometricAvailable]);
 
   useEffect(() => {
-    // Only check for preferred auth method when user is not authenticated
-    // and we have the necessary auth method information
-    if (!user && (hasPin || hasBiometric)) {
+    // Only redirect to preferred auth method when:
+    // 1. User is not authenticated
+    // 2. We have auth method information available
+    // 3. We haven't initialized yet (to prevent loops)
+    if (!user && !session && !hasInitialized && (hasPin || hasBiometric || mode === 'welcome')) {
       const preferredMethod = localStorage.getItem('preferredAuthMethod');
+      
+      console.log('Checking preferred auth method:', {
+        preferredMethod,
+        hasPin,
+        hasBiometric,
+        biometricAvailable,
+        user: !!user,
+        session: !!session
+      });
       
       if (preferredMethod && preferredMethod !== 'email') {
         if (preferredMethod === 'pin' && hasPin) {
+          console.log('Redirecting to PIN login');
           setMode('pin');
         } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
+          console.log('Redirecting to biometric login');
           setMode('biometric');
+          // Auto-trigger biometric authentication for better UX
+          setTimeout(() => {
+            handleBiometricAuth();
+          }, 500);
+        } else {
+          console.log('Preferred method not available, staying on welcome screen');
         }
       }
+      
+      setHasInitialized(true);
     }
-  }, [hasPin, hasBiometric, biometricAvailable, user]);
+  }, [hasPin, hasBiometric, biometricAvailable, user, session, hasInitialized, mode]);
 
   const handleEmailAuth = async (isSignUp: boolean = false) => {
     if (!email || !password) {
@@ -62,6 +85,8 @@ export const AuthScreen = () => {
         toast.success(result.message || 'Account created! Please check your email to confirm.');
       } else {
         toast.success('Account created and signed in successfully!');
+        // Store email as preferred method after successful signup
+        localStorage.setItem('preferredAuthMethod', 'email');
       }
     } else {
       const { error } = await signIn(email, password);
@@ -76,6 +101,8 @@ export const AuthScreen = () => {
         }
       } else {
         toast.success('Welcome back!');
+        // Store email as preferred method after successful login
+        localStorage.setItem('preferredAuthMethod', 'email');
       }
     }
     
@@ -106,6 +133,8 @@ export const AuthScreen = () => {
       setTimeout(() => setLoading(false), 1000);
     } else {
       toast.success('Welcome back!');
+      // Ensure PIN is stored as preferred method
+      localStorage.setItem('preferredAuthMethod', 'pin');
     }
   };
 
@@ -120,10 +149,18 @@ export const AuthScreen = () => {
     
     if (error) {
       toast.error(error.message || 'Biometric authentication failed');
+      setLoading(false);
     } else {
       toast.success('Welcome back!');
+      // Ensure biometric is stored as preferred method
+      localStorage.setItem('preferredAuthMethod', 'biometric');
     }
-    setLoading(false);
+  };
+
+  const handleModeChange = (newMode: AuthMode) => {
+    setMode(newMode);
+    // Clear any auto-initialization flag when user manually changes mode
+    setHasInitialized(true);
   };
 
   const pageVariants = {
@@ -163,7 +200,7 @@ export const AuthScreen = () => {
 
               <div className="space-y-4">
                 <Button
-                  onClick={() => setMode('email')}
+                  onClick={() => handleModeChange('email')}
                   className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
                 >
                   <div className="flex items-center space-x-3">
@@ -175,7 +212,7 @@ export const AuthScreen = () => {
 
                 {hasPin && (
                   <Button
-                    onClick={() => setMode('pin')}
+                    onClick={() => handleModeChange('pin')}
                     className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
                   >
                     <div className="flex items-center space-x-3">
@@ -188,7 +225,7 @@ export const AuthScreen = () => {
 
                 {hasBiometric && (
                   <Button
-                    onClick={() => setMode('biometric')}
+                    onClick={() => handleModeChange('biometric')}
                     disabled={!biometricAvailable}
                     className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -205,7 +242,7 @@ export const AuthScreen = () => {
 
               <div className="mt-8 text-center">
                 <button
-                  onClick={() => setMode('signup')}
+                  onClick={() => handleModeChange('signup')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
                   Don't have an account? <span className="text-purple-400 font-medium">Sign up</span>
@@ -267,7 +304,7 @@ export const AuthScreen = () => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => setMode('welcome')}
+                  onClick={() => handleModeChange('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
                   ← Back to options
@@ -329,7 +366,7 @@ export const AuthScreen = () => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => setMode('welcome')}
+                  onClick={() => handleModeChange('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
                   ← Back to options
@@ -383,7 +420,7 @@ export const AuthScreen = () => {
                 </Button>
 
                 <Button
-                  onClick={() => setMode('email')}
+                  onClick={() => handleModeChange('email')}
                   className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
                 >
                   Back to Sign In
@@ -392,7 +429,7 @@ export const AuthScreen = () => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => setMode('welcome')}
+                  onClick={() => handleModeChange('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
                   ← Back to options
@@ -422,7 +459,7 @@ export const AuthScreen = () => {
 
               <div className="mt-8 text-center">
                 <button
-                  onClick={() => setMode('welcome')}
+                  onClick={() => handleModeChange('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >
@@ -466,7 +503,7 @@ export const AuthScreen = () => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => setMode('welcome')}
+                  onClick={() => handleModeChange('welcome')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >

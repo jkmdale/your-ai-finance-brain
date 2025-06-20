@@ -17,13 +17,13 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { user, loading, hasPin, hasBiometric } = useAuth();
+  const { user, session, loading, hasPin, hasBiometric } = useAuth();
   const [showSecuritySetup, setShowSecuritySetup] = useState(false);
   const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
 
   useEffect(() => {
     // Only check for security setup after user is authenticated and we have the auth method info
-    if (user && !loading && !hasCheckedSecurity) {
+    if (user && session && !loading && !hasCheckedSecurity) {
       // Check if user has completed security setup before
       const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
       
@@ -37,7 +37,7 @@ const AppContent = () => {
       setShowSecuritySetup(needsSecuritySetup);
       setHasCheckedSecurity(true);
     }
-  }, [user, loading, hasPin, hasBiometric, hasCheckedSecurity]);
+  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity]);
 
   const handleSecuritySetupComplete = () => {
     // Mark security setup as completed
@@ -59,7 +59,8 @@ const AppContent = () => {
     );
   }
 
-  if (!user) {
+  // Show auth screen if user is not authenticated OR if session is null (more secure check)
+  if (!user || !session) {
     return <AuthScreen />;
   }
 
