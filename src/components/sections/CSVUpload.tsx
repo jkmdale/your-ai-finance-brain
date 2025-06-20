@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
+import { budgetCreator } from '@/services/budgetCreator';
 
 interface UploadResult {
   success: boolean;
