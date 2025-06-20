@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Fingerprint, Shield, Eye, EyeOff, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
@@ -23,52 +22,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [hasInitialized, setHasInitialized] = useState(false);
-  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, hasPin, hasBiometric, user, session } = useAuth();
+  const { signIn, signUp, signInWithPin, signInWithBiometric, isBiometricAvailable, resendConfirmation, getUserCapabilities, user, session } = useAuth();
 
+  // Check user capabilities and biometric availability
   useEffect(() => {
-    const checkBiometric = async () => {
+    const checkCapabilities = async () => {
       const available = await isBiometricAvailable();
       setBiometricAvailable(available);
     };
-    checkBiometric();
+    checkCapabilities();
   }, [isBiometricAvailable]);
 
-  // Redirect to preferred method on every app launch
+  // Handle initial auth method selection
   useEffect(() => {
-    if (!hasInitialized) {
-      const preferredMethod = localStorage.getItem('preferredAuthMethod');
-      
-      console.log('Login screen - checking preferred method:', {
-        preferredMethod,
-        hasPin,
-        hasBiometric,
-        biometricAvailable
-      });
-      
-      // Always direct to preferred method for better UX
-      if (preferredMethod && preferredMethod !== 'email') {
-        if (preferredMethod === 'pin' && hasPin) {
-          console.log('Auto-directing to PIN login (preferred method)');
-          setMode('pin');
-        } else if (preferredMethod === 'biometric' && hasBiometric && biometricAvailable) {
-          console.log('Auto-directing to biometric login (preferred method)');
-          setMode('biometric');
-          // Auto-trigger biometric for fastest login
-          setTimeout(() => {
-            handleBiometricAuth();
-          }, 800);
+    if (!hasInitialized && email) {
+      const checkUserCapabilities = async () => {
+        const capabilities = await getUserCapabilities(email);
+        const preferredMethod = localStorage.getItem('preferredAuthMethod');
+        
+        console.log('Login screen - checking capabilities:', {
+          email,
+          capabilities,
+          preferredMethod,
+          biometricAvailable
+        });
+        
+        // Direct to preferred method if available
+        if (preferredMethod && preferredMethod !== 'email') {
+          if (preferredMethod === 'pin' && capabilities.hasPin) {
+            console.log('Auto-directing to PIN login (preferred method)');
+            setMode('pin');
+          } else if (preferredMethod === 'biometric' && capabilities.hasBiometric && biometricAvailable) {
+            console.log('Auto-directing to biometric login (preferred method)');
+            setMode('biometric');
+            // Auto-trigger biometric for fastest login
+            setTimeout(() => {
+              handleBiometricAuth();
+            }, 800);
+          } else {
+            console.log('Preferred method not available, showing options');
+            setMode('welcome');
+          }
         } else {
-          console.log('Preferred method not available, showing options');
+          console.log('No preferred method or email preferred - showing welcome');
           setMode('welcome');
         }
-      } else {
-        console.log('No preferred method or email preferred - showing welcome');
-        setMode('welcome');
-      }
+      };
       
+      checkUserCapabilities();
       setHasInitialized(true);
     }
-  }, [hasPin, hasBiometric, biometricAvailable, hasInitialized]);
+  }, [email, biometricAvailable, hasInitialized, getUserCapabilities]);
 
   // Handle successful authentication
   useEffect(() => {
@@ -135,8 +139,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   };
 
   const handlePinComplete = async (pin: string) => {
+    if (!email) {
+      toast.error('Please enter your email first');
+      return;
+    }
+
     setLoading(true);
-    const { error } = await signInWithPin(pin);
+    const { error } = await signInWithPin(pin, email);
     
     if (error) {
       toast.error('Invalid PIN');
@@ -148,13 +157,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   };
 
   const handleBiometricAuth = async () => {
+    if (!email) {
+      toast.error('Please enter your email first');
+      return;
+    }
+
     if (!biometricAvailable) {
       toast.error('Biometric authentication is not available on this device');
       return;
     }
 
     setLoading(true);
-    const { error } = await signInWithBiometric();
+    const { error } = await signInWithBiometric(email);
     
     if (error) {
       toast.error(error.message || 'Biometric authentication failed');
@@ -167,6 +181,33 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
   const handleModeChange = (newMode: AuthMode) => {
     setMode(newMode);
+    setLoading(false);
+  };
+
+  const handleEmailEntry = async () => {
+    if (!email) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const capabilities = await getUserCapabilities(email);
+      
+      if (capabilities.hasPin || capabilities.hasBiometric) {
+        // User has alternative auth methods, show options
+        setMode('welcome');
+      } else {
+        // User only has email/password, go directly to email auth
+        setMode('email');
+      }
+    } catch (error) {
+      console.error('Error checking user capabilities:', error);
+      // If we can't check capabilities, default to email auth
+      setMode('email');
+    }
+    
     setLoading(false);
   };
 
@@ -187,9 +228,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
       <div className="relative z-10 w-full max-w-md">
         <AnimatePresence mode="wait">
-          {mode === 'welcome' && (
+          {(mode === 'welcome' || mode === 'email-entry') && (
             <motion.div
-              key="welcome"
+              key="email-entry"
               variants={pageVariants}
               initial="initial"
               animate="animate"
@@ -202,49 +243,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-blue-400/20 rounded-2xl"></div>
                 </div>
                 <h1 className="text-3xl font-bold text-white mb-2">Secure Login Required</h1>
-                <p className="text-white/70">Choose your login method to continue</p>
+                <p className="text-white/70">Enter your email to see login options</p>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
+                <div>
+                  <Input
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+                  />
+                </div>
+
                 <Button
-                  onClick={() => handleModeChange('email')}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
+                  onClick={handleEmailEntry}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
                 >
-                  <div className="flex items-center space-x-3">
-                    <Mail className="w-5 h-5" />
-                    <span className="font-medium">Email & Password</span>
-                  </div>
-                  <ArrowRight className="w-5 h-5" />
+                  {loading ? 'Checking...' : 'Continue'}
                 </Button>
-
-                {hasPin && (
-                  <Button
-                    onClick={() => handleModeChange('pin')}
-                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-14 flex items-center justify-between px-6"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Lock className="w-5 h-5" />
-                      <span className="font-medium">PIN Code</span>
-                    </div>
-                    <ArrowRight className="w-5 h-5" />
-                  </Button>
-                )}
-
-                {hasBiometric && (
-                  <Button
-                    onClick={() => handleModeChange('biometric')}
-                    disabled={!biometricAvailable}
-                    className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-14 flex items-center justify-between px-6 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Fingerprint className="w-5 h-5" />
-                      <span className="font-medium">
-                        {biometricAvailable ? 'Biometric' : 'Biometric (Unavailable)'}
-                      </span>
-                    </div>
-                    <ArrowRight className="w-5 h-5" />
-                  </Button>
-                )}
               </div>
 
               <div className="mt-8 text-center">
@@ -311,10 +330,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => handleModeChange('welcome')}
+                  onClick={() => handleModeChange('email-entry')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
-                  ← Back to options
+                  ← Back
                 </button>
               </div>
             </motion.div>
@@ -373,10 +392,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => handleModeChange('welcome')}
+                  onClick={() => handleModeChange('email-entry')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
-                  ← Back to options
+                  ← Back to login
                 </button>
               </div>
             </motion.div>
@@ -436,7 +455,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => handleModeChange('welcome')}
+                  onClick={() => handleModeChange('email-entry')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                 >
                   ← Back to options
@@ -456,7 +475,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             >
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">Enter PIN</h2>
-                <p className="text-white/70">Enter your secure PIN code</p>
+                <p className="text-white/70">Enter your secure PIN code for {email}</p>
               </div>
 
               <PinPad 
@@ -466,7 +485,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
               <div className="mt-8 text-center">
                 <button
-                  onClick={() => handleModeChange('welcome')}
+                  onClick={() => handleModeChange('email-entry')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >
@@ -492,7 +511,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
                 <h2 className="text-2xl font-bold text-white mb-2">Biometric Login</h2>
                 <p className="text-white/70">
                   {biometricAvailable 
-                    ? 'Use your fingerprint, face ID, or other biometric method' 
+                    ? `Use your fingerprint, face ID, or other biometric method for ${email}` 
                     : 'Biometric authentication is not available on this device'
                   }
                 </p>
@@ -510,7 +529,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => handleModeChange('welcome')}
+                  onClick={() => handleModeChange('email-entry')}
                   className="text-white/70 hover:text-white transition-colors duration-200"
                   disabled={loading}
                 >
@@ -519,8 +538,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               </div>
             </motion.div>
           )}
-
-          {/* Add the other modes (email, signup, email-confirmation) here with same structure */}
         </AnimatePresence>
       </div>
     </div>
