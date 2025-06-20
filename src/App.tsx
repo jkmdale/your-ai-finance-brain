@@ -10,6 +10,7 @@ import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecuritySetup } from "@/components/auth/SecuritySetup";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { SmartFinanceIcon } from "@/components/ui/smart-finance-icon";
 import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -71,6 +72,21 @@ const AppContent = () => {
           <SidebarInset className="flex-1 min-w-0">
             <header className="fixed top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 backdrop-blur-lg">
               <SidebarTrigger className="text-purple-100 hover:bg-purple-700/30" />
+              
+              {/* Smart Finance AI Logo and Brand */}
+              <div className="flex items-center space-x-3 ml-4">
+                <div className="relative w-8 h-8 group cursor-pointer">
+                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-lg blur-md"></div>
+                  <div className="relative w-8 h-8 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
+                    <SmartFinanceIcon size={20} className="text-purple-100" />
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-purple-100 font-bold text-lg">Smart Finance AI</span>
+                  <span className="text-purple-200 text-xs font-medium tracking-wide">INTELLIGENT FINANCIAL OS</span>
+                </div>
+              </div>
+              
               <div className="ml-auto">
                 <span className="text-purple-100 text-sm">Welcome back!</span>
               </div>
