@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -146,7 +145,34 @@ export const CSVUpload = () => {
         setUploadStatus('success');
         setUploadMessage(`Successfully processed ${totalProcessed} transactions with enhanced bank format detection`);
         
-        const uploadResult: UploadResult = {
+        // Auto-create budget from transactions
+        try {
+          const budgetResult = await budgetCreator.createBudgetFromTransactions(
+            user.id,
+            allTransactions,
+            `Budget from ${new Date().toLocaleDateString()}`
+          );
+          
+          console.log('Auto-created budget:', budgetResult);
+          
+          // Update success message to include budget creation
+          setUploadMessage(
+            `Successfully processed ${totalProcessed} transactions and created budget with ${budgetResult.categoriesCreated} categories`
+          );
+
+          // Notify other components that budget was created
+          localStorage.setItem('csv-upload-complete', Date.now().toString());
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: 'csv-upload-complete',
+            newValue: Date.now().toString()
+          }));
+          
+        } catch (budgetError) {
+          console.error('Error creating budget:', budgetError);
+          allWarnings.push('Transactions processed but budget creation failed');
+        }
+        
+        setUploadResults({
           success: true,
           processed: totalProcessed,
           transactions: allTransactions,
@@ -155,9 +181,7 @@ export const CSVUpload = () => {
           duplicates: allDuplicates,
           errors: allErrors,
           warnings: allWarnings
-        };
-        
-        setUploadResults(uploadResult);
+        });
         
         // Auto-analyze the transactions
         if (allTransactions.length > 0) {

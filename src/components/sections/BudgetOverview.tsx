@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign, Loader2, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +20,7 @@ interface BudgetData {
 export const BudgetOverview = () => {
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { user } = useAuth();
 
   const getColorClasses = (color: string) => {
@@ -60,10 +60,10 @@ export const BudgetOverview = () => {
           `)
           .eq('user_id', user.id)
           .eq('is_active', true)
+          .order('created_at', { ascending: false })
           .limit(1);
 
         if (!budgets || budgets.length === 0) {
-          // No budget data - show clean state
           setBudgetData(null);
           setLoading(false);
           return;
@@ -94,7 +94,22 @@ export const BudgetOverview = () => {
     };
 
     fetchBudgetData();
-  }, [user]);
+  }, [user, refreshKey]);
+
+  // Listen for CSV uploads to refresh budget data
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'csv-upload-complete') {
+        // Refresh budget data after CSV upload
+        setTimeout(() => {
+          setRefreshKey(prev => prev + 1);
+        }, 2000); // Give time for budget creation to complete
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   if (loading) {
     return (
@@ -131,7 +146,10 @@ export const BudgetOverview = () => {
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                  <button className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2">
+                  <button 
+                    onClick={() => document.getElementById('csv-upload-container')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+                  >
                     <Upload className="w-5 h-5" />
                     <span>Upload Transactions</span>
                   </button>
