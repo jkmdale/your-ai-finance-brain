@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -299,7 +300,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             attestationObject: Array.from(new Uint8Array(response.attestationObject))
           }
         }),
-        device_name: navigator.userAgent.substring(0, 100)
+        device_info: {
+          userAgent: navigator.userAgent.substring(0, 100),
+          platform: navigator.platform,
+          timestamp: new Date().toISOString()
+        }
       };
 
       const { error } = await supabase
