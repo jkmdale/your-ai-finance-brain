@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -73,20 +72,16 @@ const AppContent = () => {
               
               {/* Smart Finance AI Logo and Brand */}
               <div className="flex items-center space-x-3 ml-4">
-                <div className="relative h-12 w-12 group cursor-pointer">
-                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-lg blur-md"></div>
-                  <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
-                    <img src="/icon_48x48.png" alt="Smart Finance AI" className="h-12 w-12 object-contain" />
-                  </div>
+                <div className="h-10 w-10">
+                  <img src="/icon_48x48.png" alt="Smart Finance AI" className="h-10 w-10 object-contain" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-purple-100 font-bold text-lg">Smart Finance AI</span>
-                  <span className="text-purple-200 text-xs font-medium tracking-wide">INTELLIGENT FINANCIAL OS</span>
+                  <span className="text-purple-100 font-bold text-lg leading-tight">Smart Finance AI</span>
+                  <span className="text-purple-200 text-xs font-medium tracking-wide leading-tight">INTELLIGENT FINANCE OS</span>
                 </div>
               </div>
               
               <div className="ml-auto flex items-center space-x-4">
-                <span className="text-purple-100 text-sm">Welcome back!</span>
                 <button
                   onClick={async () => {
                     console.log('Signing out user');
