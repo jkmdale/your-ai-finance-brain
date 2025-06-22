@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -52,6 +53,7 @@ const AppContent = () => {
     localStorage.setItem('securitySetupCompleted', 'true');
   };
 
+  // Only show loading spinner if we're actually loading an existing session
   if (loading) {
     console.log('App showing loading state');
     return (
