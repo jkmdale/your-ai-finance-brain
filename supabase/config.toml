@@ -51,6 +51,7 @@ additional_redirect_urls = ["https://127.0.0.1:3000"]
 jwt_expiry = 3600
 enable_signup = true
 enable_confirmations = true
+# Updated to use your SmartFinanceAI email function
 hook_send_email_enabled = true
 hook_send_email_uri = "https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/send-auth-email"
 
@@ -58,6 +59,7 @@ hook_send_email_uri = "https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/sen
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
+# Custom email templates will be handled by the edge function
 
 [edge_functions]
 enabled = true
@@ -66,7 +68,7 @@ port = 54321
 [functions.process-csv]
 verify_jwt = true
 
-[functions.ai-coach]
+[functions.claude-ai-coach]
 verify_jwt = true
 
 [functions.send-auth-email]
