@@ -52,21 +52,27 @@ const handler = async (req: Request): Promise<Response> => {
     const gmailUser = "support@smartfinanceai.app";
     const gmailPassword = Deno.env.get("GMAIL_APP_PASSWORD");
     
+    console.log('Environment check:', {
+      gmailUser,
+      hasGmailPassword: !!gmailPassword,
+      gmailPasswordLength: gmailPassword ? gmailPassword.length : 0
+    });
+    
     if (!gmailPassword) {
       console.error('GMAIL_APP_PASSWORD environment variable not set');
-      return new Response(JSON.stringify({ error: 'Email configuration error' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Email configuration error - Gmail App Password not configured',
+        debug: 'Please set GMAIL_APP_PASSWORD in Supabase secrets'
+      }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
-    console.log('Using Gmail SMTP:', {
-      user: gmailUser,
-      hasPassword: !!gmailPassword
-    });
+    console.log('Using Gmail SMTP configuration');
 
-    // Build confirmation URL - handle both localhost and production
-    const baseUrl = site_url.includes('localhost') ? site_url : site_url;
+    // Build confirmation URL
+    const baseUrl = site_url;
     const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirect_to || baseUrl)}`;
     console.log('Confirmation URL generated:', confirmationUrl);
 
@@ -189,49 +195,76 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Email template prepared for:', email_action_type);
     console.log('Email subject:', emailSubject);
 
-    // Create SMTP client
-    const client = new SMTPClient({
-      connection: {
-        hostname: "smtp.gmail.com",
-        port: 587,
-        tls: true,
-        auth: {
-          username: gmailUser,
-          password: gmailPassword,
+    try {
+      // Create SMTP client
+      const client = new SMTPClient({
+        connection: {
+          hostname: "smtp.gmail.com",
+          port: 587,
+          tls: true,
+          auth: {
+            username: gmailUser,
+            password: gmailPassword,
+          },
         },
-      },
-    });
+      });
 
-    console.log('Attempting to send email...');
+      console.log('SMTP client created, attempting to send email...');
 
-    // Send email
-    await client.send({
-      from: `SmartFinanceAI <${gmailUser}>`,
-      to: to,
-      subject: emailSubject,
-      content: "auto",
-      html: emailContent,
-    });
+      // Send email
+      const emailResult = await client.send({
+        from: `SmartFinanceAI <${gmailUser}>`,
+        to: to,
+        subject: emailSubject,
+        content: "auto",
+        html: emailContent,
+      });
 
-    await client.close();
+      console.log('Email send result:', emailResult);
 
-    console.log("✅ Email sent successfully via SmartFinanceAI Gmail");
+      await client.close();
+      console.log('SMTP client closed');
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Authentication email sent successfully',
-      email_sent_to: to,
-      action_type: email_action_type
-    }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      },
-    });
+      console.log("✅ Email sent successfully via SmartFinanceAI Gmail");
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Authentication email sent successfully',
+        email_sent_to: to,
+        action_type: email_action_type,
+        debug: {
+          smtp_server: 'smtp.gmail.com',
+          from_email: gmailUser
+        }
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      });
+
+    } catch (smtpError: any) {
+      console.error("❌ SMTP ERROR ❌");
+      console.error("SMTP Error details:", smtpError);
+      console.error("SMTP Error message:", smtpError.message);
+      
+      return new Response(JSON.stringify({ 
+        error: 'Failed to send email via SMTP',
+        details: smtpError.message,
+        debug: {
+          smtp_server: 'smtp.gmail.com',
+          from_email: gmailUser,
+          error_type: 'SMTP_ERROR'
+        }
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
 
   } catch (error: any) {
-    console.error("❌ ERROR IN SMARTFINANCEAI AUTH EMAIL FUNCTION ❌");
+    console.error("❌ GENERAL ERROR IN SMARTFINANCEAI AUTH EMAIL FUNCTION ❌");
     console.error("Error details:", error);
     console.error("Error message:", error.message);
     console.error("Error stack:", error.stack);
