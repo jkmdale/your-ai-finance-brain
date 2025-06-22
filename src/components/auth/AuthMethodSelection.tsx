@@ -5,6 +5,7 @@ import { Mail, Hash, Fingerprint, ArrowRight, Shield, Zap, Lock } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthMethodSelectionProps {
   onComplete: () => void;
@@ -14,7 +15,7 @@ interface AuthMethodSelectionProps {
 export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComplete, onSkip }) => {
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { setupPin, setupBiometric, isBiometricAvailable } = useAuth();
+  const { setupPin, setupBiometric, isBiometricAvailable, user } = useAuth();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   React.useEffect(() => {
@@ -24,6 +25,31 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
     };
     checkBiometric();
   }, [isBiometricAvailable]);
+
+  const saveUserPreference = async (method: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { 
+          login_preference: method,
+          setup_completed: true
+        }
+      });
+      
+      if (error) {
+        console.error('Error saving user preference:', error);
+        toast.error('Failed to save preference');
+        return false;
+      }
+      
+      localStorage.setItem('preferredAuthMethod', method);
+      return true;
+    } catch (error) {
+      console.error('Error updating user metadata:', error);
+      return false;
+    }
+  };
 
   const methods = [
     {
@@ -55,8 +81,11 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
 
   const handleMethodSelect = async (methodId: string) => {
     if (methodId === 'email') {
-      localStorage.setItem('preferredAuthMethod', 'email');
-      onComplete();
+      const success = await saveUserPreference('email');
+      if (success) {
+        toast.success('Email authentication selected');
+        onComplete();
+      }
       return;
     }
 
@@ -75,9 +104,15 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
           setSelectedMethod(null);
           return;
         }
-        localStorage.setItem('preferredAuthMethod', 'biometric');
-        toast.success('Biometric authentication set up successfully!');
-        onComplete();
+        
+        const success = await saveUserPreference('biometric');
+        if (success) {
+          toast.success('Biometric authentication set up successfully!');
+          onComplete();
+        } else {
+          setLoading(false);
+          setSelectedMethod(null);
+        }
       }
     } catch (error) {
       toast.error('Failed to set up authentication method');
@@ -94,10 +129,23 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
       setSelectedMethod(null);
       return;
     }
-    localStorage.setItem('preferredAuthMethod', 'pin');
-    toast.success('PIN set up successfully!');
-    setLoading(false);
-    onComplete();
+    
+    const success = await saveUserPreference('pin');
+    if (success) {
+      toast.success('PIN set up successfully!');
+      setLoading(false);
+      onComplete();
+    } else {
+      setLoading(false);
+      setSelectedMethod(null);
+    }
+  };
+
+  const handleSkip = async () => {
+    const success = await saveUserPreference('email');
+    if (success) {
+      onSkip();
+    }
   };
 
   if (selectedMethod === 'pin') {
@@ -156,7 +204,7 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
               }`}
               whileHover={method.disabled ? {} : { scale: 1.02 }}
               whileTap={method.disabled ? {} : { scale: 0.98 }}
-              onClick={() => !method.disabled && handleMethodSelect(method.id)}
+              onClick={() => !method.disabled && !loading && handleMethodSelect(method.id)}
             >
               <div className={`w-16 h-16 bg-gradient-to-br ${method.color} rounded-2xl flex items-center justify-center mb-6 mx-auto`}>
                 <method.icon className="w-8 h-8 text-white" />
@@ -179,13 +227,19 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
                   <span className="text-white/60 text-sm font-medium">Not Available</span>
                 </div>
               )}
+
+              {loading && selectedMethod === method.id && (
+                <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                </div>
+              )}
             </motion.div>
           ))}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <Button
-            onClick={onSkip}
+            onClick={handleSkip}
             variant="outline"
             className="border-white/20 text-white hover:bg-white/10"
             disabled={loading}
@@ -254,6 +308,8 @@ const PinSetup: React.FC<{ onPinComplete: (pin: string) => void; loading: boolea
           <button
             key={index}
             onClick={() => {
+              if (loading) return;
+              
               if (num === '⌫') {
                 if (step === 'create') {
                   setPin(pin.slice(0, -1));

@@ -14,6 +14,7 @@ interface WelcomeScreenProps {
   onPinAuth: () => void;
   onBiometricAuth: () => void;
   loading: boolean;
+  userPreference?: string | null;
 }
 
 const pageVariants = {
@@ -30,13 +31,45 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onModeChange,
   onPinAuth,
   onBiometricAuth,
-  loading
+  loading,
+  userPreference
 }) => {
   const availableMethods = [];
   
   if (hasPin) availableMethods.push('pin');
   if (hasBiometric && biometricAvailable) availableMethods.push('biometric');
   availableMethods.push('email');
+
+  // Determine the primary method based on user preference
+  const primaryMethod = userPreference || 'email';
+
+  const getMethodInfo = (method: string) => {
+    switch (method) {
+      case 'pin':
+        return {
+          title: 'Use PIN',
+          icon: Hash,
+          color: 'from-green-600 to-emerald-600',
+          action: onPinAuth
+        };
+      case 'biometric':
+        return {
+          title: 'Use Biometric',
+          icon: Fingerprint,
+          color: 'from-orange-600 to-red-600',
+          action: onBiometricAuth
+        };
+      default:
+        return {
+          title: 'Use Email & Password',
+          icon: Shield,
+          color: 'from-blue-600 to-purple-600',
+          action: () => onModeChange('email')
+        };
+    }
+  };
+
+  const primaryMethodInfo = getMethodInfo(primaryMethod);
 
   return (
     <motion.div
@@ -54,39 +87,82 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         <h2 className="text-2xl font-bold text-white mb-2">Welcome Back!</h2>
         <p className="text-white/70 mb-2">Choose your preferred sign-in method for</p>
         <p className="text-purple-300 font-medium">{email}</p>
+        {userPreference && (
+          <p className="text-white/50 text-sm mt-2">
+            Your preferred method: {userPreference.charAt(0).toUpperCase() + userPreference.slice(1)}
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
-        {hasPin && (
+        {/* Primary preferred method */}
+        {(primaryMethod === 'pin' && hasPin) && (
+          <Button
+            onClick={primaryMethodInfo.action}
+            disabled={loading}
+            className={`w-full bg-gradient-to-r ${primaryMethodInfo.color} hover:opacity-90 text-white rounded-xl h-12 flex items-center justify-center space-x-3`}
+          >
+            <primaryMethodInfo.icon className="w-5 h-5" />
+            <span>{loading ? 'Authenticating...' : `${primaryMethodInfo.title} (Preferred)`}</span>
+          </Button>
+        )}
+
+        {(primaryMethod === 'biometric' && hasBiometric && biometricAvailable) && (
+          <Button
+            onClick={primaryMethodInfo.action}
+            disabled={loading}
+            className={`w-full bg-gradient-to-r ${primaryMethodInfo.color} hover:opacity-90 text-white rounded-xl h-12 flex items-center justify-center space-x-3`}
+          >
+            <primaryMethodInfo.icon className="w-5 h-5" />
+            <span>{loading ? 'Authenticating...' : `${primaryMethodInfo.title} (Preferred)`}</span>
+          </Button>
+        )}
+
+        {/* Alternative methods */}
+        {hasPin && primaryMethod !== 'pin' && (
           <Button
             onClick={onPinAuth}
             disabled={loading}
-            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl h-12 flex items-center justify-center space-x-3"
+            variant="outline"
+            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-3"
           >
             <Hash className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : 'Use PIN'}</span>
           </Button>
         )}
 
-        {hasBiometric && biometricAvailable && (
+        {hasBiometric && biometricAvailable && primaryMethod !== 'biometric' && (
           <Button
             onClick={onBiometricAuth}
             disabled={loading}
-            className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl h-12 flex items-center justify-center space-x-3"
+            variant="outline"
+            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-3"
           >
             <Fingerprint className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : 'Use Biometric'}</span>
           </Button>
         )}
 
-        <Button
-          onClick={() => onModeChange('email')}
-          disabled={loading}
-          variant="outline"
-          className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
-        >
-          Use Email & Password
-        </Button>
+        {primaryMethod !== 'email' && (
+          <Button
+            onClick={() => onModeChange('email')}
+            disabled={loading}
+            variant="outline"
+            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
+          >
+            Use Email & Password
+          </Button>
+        )}
+
+        {primaryMethod === 'email' && (
+          <Button
+            onClick={() => onModeChange('email')}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white rounded-xl h-12"
+          >
+            {loading ? 'Authenticating...' : 'Use Email & Password (Preferred)'}
+          </Button>
+        )}
       </div>
 
       <div className="mt-6 text-center">

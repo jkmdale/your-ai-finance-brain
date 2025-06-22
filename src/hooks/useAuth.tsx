@@ -16,6 +16,7 @@ interface AuthContextType {
   signInWithBiometric: (email: string) => Promise<{ error: any }>;
   isBiometricAvailable: () => Promise<boolean>;
   getUserCapabilities: (email: string) => Promise<{ hasPin: boolean; hasBiometric: boolean }>;
+  getUserPreference: (email: string) => Promise<string | null>;
   hasPin: boolean;
   hasBiometric: boolean;
 }
@@ -115,6 +116,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.log('Error checking user capabilities:', error);
       return { hasPin: false, hasBiometric: false };
+    }
+  };
+
+  const getUserPreference = async (email: string): Promise<string | null> => {
+    try {
+      // First try to get from auth metadata
+      const { data: { users }, error } = await supabase.auth.admin.listUsers();
+      if (error) throw error;
+      
+      const user = users.find(u => u.email === email);
+      if (user?.user_metadata?.login_preference) {
+        return user.user_metadata.login_preference as string;
+      }
+      
+      // Fallback to localStorage if available
+      return localStorage.getItem('preferredAuthMethod');
+    } catch (error) {
+      console.log('Error getting user preference:', error);
+      return localStorage.getItem('preferredAuthMethod');
     }
   };
 
@@ -510,6 +530,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signInWithBiometric,
       isBiometricAvailable,
       getUserCapabilities,
+      getUserPreference,
       hasPin,
       hasBiometric
     }}>

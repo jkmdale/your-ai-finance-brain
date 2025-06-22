@@ -20,6 +20,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [pendingEmail, setPendingEmail] = useState('');
   const [hasInitialized, setHasInitialized] = useState(false);
   const [userCapabilities, setUserCapabilities] = useState({ hasPin: false, hasBiometric: false });
+  const [userPreference, setUserPreference] = useState<string | null>(null);
   
   const { 
     signIn, 
@@ -28,7 +29,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     signInWithBiometric, 
     isBiometricAvailable, 
     resendConfirmation, 
-    getUserCapabilities, 
+    getUserCapabilities,
+    getUserPreference,
     user, 
     session 
   } = useAuth();
@@ -178,8 +180,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     
     try {
       const capabilities = await getUserCapabilities(email);
+      const preference = await getUserPreference(email);
+      
       console.log('User capabilities:', capabilities);
+      console.log('User preference:', preference);
+      
       setUserCapabilities(capabilities);
+      setUserPreference(preference);
       
       if (capabilities.hasPin || capabilities.hasBiometric) {
         // User has alternative auth methods, show options
@@ -228,6 +235,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               onPinAuth={() => setMode('pin')}
               onBiometricAuth={handleBiometricAuth}
               loading={loading}
+              userPreference={userPreference}
             />
           )}
 
