@@ -46,20 +46,18 @@ image_transformation = { enabled = true }
 [auth]
 enabled = true
 port = 54321
-site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+site_url = "https://a29b8699-11a7-4b06-985f-e3c27ee69b05.lovableproject.com"
+additional_redirect_urls = ["http://localhost:3000", "https://a29b8699-11a7-4b06-985f-e3c27ee69b05.lovableproject.com"]
 jwt_expiry = 3600
 enable_signup = true
 enable_confirmations = true
-# Updated to use your SmartFinanceAI email function
 hook_send_email_enabled = true
 hook_send_email_uri = "https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/send-auth-email"
 
 [auth.email]
 enable_signup = true
-double_confirm_changes = true
+double_confirm_changes = false
 enable_confirmations = true
-# Custom email templates will be handled by the edge function
 
 [edge_functions]
 enabled = true

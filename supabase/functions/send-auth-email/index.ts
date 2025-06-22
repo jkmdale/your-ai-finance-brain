@@ -14,6 +14,7 @@ interface AuthEmailRequest {
   redirect_to: string;
   email_action_type: string;
   site_url: string;
+  token?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -22,37 +23,55 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION ===');
+    console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION START ===');
     console.log('Request method:', req.method);
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
     
     const requestBody = await req.json();
     console.log('Email request received:', {
       to: requestBody.to,
       subject: requestBody.subject,
-      email_action_type: requestBody.email_action_type
+      email_action_type: requestBody.email_action_type,
+      site_url: requestBody.site_url,
+      redirect_to: requestBody.redirect_to,
+      token_hash: requestBody.token_hash ? 'present' : 'missing'
     });
     
     const { to, subject, token_hash, redirect_to, email_action_type, site_url }: AuthEmailRequest = requestBody;
 
-    // Use your Gmail SMTP credentials
-    const gmailUser = "support@smartfinanceai.app"; // Your main Gmail account
-    const gmailPassword = Deno.env.get("GMAIL_APP_PASSWORD") || "momjzmvbcpkhwwri";
+    // Validate required fields
+    if (!to || !token_hash || !email_action_type || !site_url) {
+      console.error('Missing required fields:', { to: !!to, token_hash: !!token_hash, email_action_type: !!email_action_type, site_url: !!site_url });
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Gmail SMTP configuration
+    const gmailUser = "support@smartfinanceai.app";
+    const gmailPassword = Deno.env.get("GMAIL_APP_PASSWORD");
     
+    if (!gmailPassword) {
+      console.error('GMAIL_APP_PASSWORD environment variable not set');
+      return new Response(JSON.stringify({ error: 'Email configuration error' }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     console.log('Using Gmail SMTP:', {
       user: gmailUser,
       hasPassword: !!gmailPassword
     });
 
-    const confirmationUrl = `${site_url}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${redirect_to}`;
+    // Build confirmation URL - handle both localhost and production
+    const baseUrl = site_url.includes('localhost') ? site_url : site_url;
+    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirect_to || baseUrl)}`;
     console.log('Confirmation URL generated:', confirmationUrl);
 
-    let emailContent = '';
-    let emailSubject = subject;
-    
-    // Enhanced email templates with SmartFinanceAI branding
-    const logoUrl = 'https://your-app-domain.com/logo.png'; // Update with your actual logo URL
-    
-    const emailTemplate = (title: string, content: string, buttonText: string, buttonUrl: string, description: string) => `
+    // Email template function
+    const createEmailTemplate = (title: string, content: string, buttonText: string, buttonUrl: string, description: string) => `
       <!DOCTYPE html>
       <html>
         <head>
@@ -90,8 +109,7 @@ const handler = async (req: Request): Promise<Response> => {
                           border-radius: 8px; 
                           font-weight: 600; 
                           font-size: 16px;
-                          box-shadow: 0 4px 14px 0 rgba(102, 126, 234, 0.4);
-                          transition: all 0.3s ease;">
+                          box-shadow: 0 4px 14px 0 rgba(102, 126, 234, 0.4);">
                   ${buttonText}
                 </a>
               </div>
@@ -126,9 +144,13 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
     
+    // Generate email content based on action type
+    let emailContent = '';
+    let emailSubject = subject || 'SmartFinanceAI Authentication';
+    
     if (email_action_type === 'signup') {
       emailSubject = 'Welcome to SmartFinanceAI - Confirm Your Account';
-      emailContent = emailTemplate(
+      emailContent = createEmailTemplate(
         'Welcome to SmartFinanceAI!',
         'Confirm Your Email Address',
         'Confirm Email Address',
@@ -137,7 +159,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     } else if (email_action_type === 'magiclink') {
       emailSubject = 'Your SmartFinanceAI Magic Link';
-      emailContent = emailTemplate(
+      emailContent = createEmailTemplate(
         'Sign In to SmartFinanceAI',
         'Your Secure Login Link',
         'Sign In Securely',
@@ -146,7 +168,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     } else if (email_action_type === 'recovery') {
       emailSubject = 'Reset Your SmartFinanceAI Password';
-      emailContent = emailTemplate(
+      emailContent = createEmailTemplate(
         'Password Reset Request',
         'Reset Your Password',
         'Reset Password',
@@ -154,9 +176,8 @@ const handler = async (req: Request): Promise<Response> => {
         'We received a request to reset your SmartFinanceAI password. Click the button below to create a new secure password for your account.'
       );
     } else {
-      // Fallback for other email types
-      emailSubject = `SmartFinanceAI - ${subject}`;
-      emailContent = emailTemplate(
+      emailSubject = `SmartFinanceAI - ${subject || 'Account Action Required'}`;
+      emailContent = createEmailTemplate(
         'Account Action Required',
         'Complete Your Action',
         'Continue',
@@ -166,8 +187,9 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log('Email template prepared for:', email_action_type);
+    console.log('Email subject:', emailSubject);
 
-    // Create SMTP client for Gmail
+    // Create SMTP client
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
@@ -180,10 +202,11 @@ const handler = async (req: Request): Promise<Response> => {
       },
     });
 
-    console.log('Sending email via Gmail SMTP...');
+    console.log('Attempting to send email...');
 
+    // Send email
     await client.send({
-      from: `SmartFinanceAI <noreply@smartfinanceai.app>`, // Using your noreply alias
+      from: `SmartFinanceAI <${gmailUser}>`,
       to: to,
       subject: emailSubject,
       content: "auto",
@@ -196,8 +219,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: 'SmartFinanceAI authentication email sent successfully',
-      from: 'noreply@smartfinanceai.app'
+      message: 'Authentication email sent successfully',
+      email_sent_to: to,
+      action_type: email_action_type
     }), {
       status: 200,
       headers: {
@@ -205,6 +229,7 @@ const handler = async (req: Request): Promise<Response> => {
         ...corsHeaders,
       },
     });
+
   } catch (error: any) {
     console.error("❌ ERROR IN SMARTFINANCEAI AUTH EMAIL FUNCTION ❌");
     console.error("Error details:", error);
@@ -213,7 +238,7 @@ const handler = async (req: Request): Promise<Response> => {
     
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error.message || 'Unknown error occurred',
         details: error.toString(),
         timestamp: new Date().toISOString(),
         service: 'SmartFinanceAI Auth Email'
