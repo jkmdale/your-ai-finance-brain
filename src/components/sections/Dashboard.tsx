@@ -1,15 +1,17 @@
-
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle, Shield } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
 import { TransactionTable } from '@/components/ui/transaction-table';
 import { FinancialHealthCard } from '@/components/ui/financial-health-card';
 import { SpendingInsights } from '@/components/ui/spending-insights';
+import { EncryptionSetup } from '@/components/auth/EncryptionSetup';
+import { EncryptionUnlock } from '@/components/auth/EncryptionUnlock';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useEncryption } from '@/hooks/useEncryption';
+import { encryptedDataService } from '@/services/encryptedDataService';
 import { transactionProcessor } from '@/services/transactionProcessor';
 
 interface DashboardStats {
@@ -38,6 +40,7 @@ export const Dashboard = () => {
   const [financialHealth, setFinancialHealth] = useState<any>(null);
   const [spendingInsights, setSpendingInsights] = useState<any[]>([]);
   const { user } = useAuth();
+  const { isEncryptionReady, hasEncryptionKeys, isLoading: encryptionLoading, error: encryptionError } = useEncryption();
   const isMobile = useIsMobile();
 
   const getColorClasses = (color: string) => {
@@ -52,19 +55,14 @@ export const Dashboard = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user) {
+      if (!user || !isEncryptionReady) {
         setLoading(false);
         return;
       }
 
       try {
-        // Fetch user's transactions
-        const { data: transactions } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('transaction_date', { ascending: false })
-          .limit(100);
+        // Fetch encrypted transactions
+        const transactions = await encryptedDataService.getTransactions(user.id);
 
         if (!transactions || transactions.length === 0) {
           setStats(null);
@@ -133,7 +131,84 @@ export const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, [user]);
+  }, [user, isEncryptionReady]);
+
+  // Show encryption loading state
+  if (encryptionLoading) {
+    return (
+      <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mb-4"></div>
+              <p className="text-white/70">Loading encryption...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Show encryption setup for new users
+  if (user && !hasEncryptionKeys) {
+    return (
+      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Secure Your Financial Data
+            </h2>
+            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+              Enable end-to-end encryption to protect your financial information with bank-level security
+            </p>
+          </div>
+          <EncryptionSetup onComplete={() => window.location.reload()} />
+        </div>
+      </section>
+    );
+  }
+
+  // Show encryption unlock for existing users
+  if (user && hasEncryptionKeys && !isEncryptionReady) {
+    return (
+      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Welcome Back
+            </h2>
+            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+              Your data is encrypted and secure. Please unlock to continue.
+            </p>
+          </div>
+          <EncryptionUnlock onUnlock={() => window.location.reload()} />
+        </div>
+      </section>
+    );
+  }
+
+  // Show encryption error state
+  if (encryptionError) {
+    return (
+      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-red-400 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-white" />
+            </div>
+            <h3 className="text-xl font-semibold text-white mb-2">Encryption Error</h3>
+            <p className="text-white/70 mb-6">{encryptionError}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (loading) {
     return (
@@ -217,7 +292,7 @@ export const Dashboard = () => {
     );
   }
 
-  // Dashboard with real data
+  // Dashboard with real data - add encryption indicator
   const statsData = [
     {
       title: 'Monthly Income',
@@ -257,11 +332,17 @@ export const Dashboard = () => {
     <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-            Financial Intelligence Dashboard
-          </h2>
+          <div className="flex items-center justify-center mb-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mr-3">
+              Financial Intelligence Dashboard
+            </h2>
+            <div className="flex items-center bg-green-500/20 border border-green-500/30 rounded-lg px-3 py-1">
+              <Shield className="w-4 h-4 text-green-400 mr-2" />
+              <span className="text-green-300 text-sm font-medium">End-to-End Encrypted</span>
+            </div>
+          </div>
           <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
-            AI-powered analysis with enhanced transaction categorization and financial health assessment
+            AI-powered analysis with bank-level security and enhanced transaction categorization
           </p>
         </div>
 

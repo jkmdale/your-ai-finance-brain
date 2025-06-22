@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { encryptedDataService } from './encryptedDataService';
 
 interface TransactionSummary {
   category: string;
@@ -33,18 +33,29 @@ export class BudgetCreator {
       // Create or get categories for this user
       const categoryMap = await this.ensureUserCategories(userId, transactions);
 
-      // Create the budget
+      // Encrypt budget data
+      const budgetData = {
+        name: periodName,
+        total_income: 0,
+        total_expenses: 0
+      };
+
+      const { encryptedData, metadata } = await encryptedDataService.encryptForStorage(budgetData);
+
+      // Create the budget with encrypted data
       const { data: budget, error: budgetError } = await supabase
         .from('budgets')
         .insert({
           user_id: userId,
-          name: periodName,
+          name: '[ENCRYPTED]', // Placeholder for search/display
           start_date: startDate.toISOString().split('T')[0],
           end_date: endDate.toISOString().split('T')[0],
           period_type: 'custom',
           is_active: true,
-          total_income: 0, // Will be calculated
-          total_expenses: 0 // Will be calculated
+          total_income: 0, // Encrypted separately
+          total_expenses: 0, // Encrypted separately
+          encrypted_data: encryptedData,
+          encryption_metadata: metadata
         })
         .select()
         .single();
@@ -82,12 +93,21 @@ export class BudgetCreator {
         categoriesCreated++;
       }
 
-      // Update budget totals
+      // Update budget totals with encrypted data
+      const updatedBudgetData = {
+        name: periodName,
+        total_income: totalIncome,
+        total_expenses: totalExpenses
+      };
+
+      const { encryptedData: updatedEncrypted, metadata: updatedMetadata } = 
+        await encryptedDataService.encryptForStorage(updatedBudgetData);
+
       await supabase
         .from('budgets')
         .update({
-          total_income: totalIncome,
-          total_expenses: totalExpenses
+          encrypted_data: updatedEncrypted,
+          encryption_metadata: updatedMetadata
         })
         .eq('id', budget.id);
 

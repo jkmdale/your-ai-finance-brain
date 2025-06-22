@@ -18,6 +18,8 @@ export type Database = {
           bank_name: string
           created_at: string | null
           currency: string
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           id: string
           is_active: boolean | null
           updated_at: string | null
@@ -31,6 +33,8 @@ export type Database = {
           bank_name: string
           created_at?: string | null
           currency?: string
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           id?: string
           is_active?: boolean | null
           updated_at?: string | null
@@ -44,6 +48,8 @@ export type Database = {
           bank_name?: string
           created_at?: string | null
           currency?: string
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           id?: string
           is_active?: boolean | null
           updated_at?: string | null
@@ -135,6 +141,8 @@ export type Database = {
       budgets: {
         Row: {
           created_at: string | null
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           end_date: string | null
           id: string
           is_active: boolean | null
@@ -148,6 +156,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           end_date?: string | null
           id?: string
           is_active?: boolean | null
@@ -161,6 +171,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           end_date?: string | null
           id?: string
           is_active?: boolean | null
@@ -178,6 +190,8 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string | null
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           icon: string | null
           id: string
           is_income: boolean | null
@@ -188,6 +202,8 @@ export type Database = {
         Insert: {
           color?: string | null
           created_at?: string | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           icon?: string | null
           id?: string
           is_income?: boolean | null
@@ -198,6 +214,8 @@ export type Database = {
         Update: {
           color?: string | null
           created_at?: string | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           icon?: string | null
           id?: string
           is_income?: boolean | null
@@ -219,6 +237,8 @@ export type Database = {
         Row: {
           created_at: string | null
           current_amount: number | null
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           goal_type: string
           id: string
           is_active: boolean | null
@@ -232,6 +252,8 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_amount?: number | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           goal_type: string
           id?: string
           is_active?: boolean | null
@@ -245,6 +267,8 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_amount?: number | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           goal_type?: string
           id?: string
           is_active?: boolean | null
@@ -264,6 +288,8 @@ export type Database = {
           category_id: string | null
           created_at: string | null
           description: string
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           external_id: string | null
           id: string
           imported_from: string | null
@@ -282,6 +308,8 @@ export type Database = {
           category_id?: string | null
           created_at?: string | null
           description: string
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           external_id?: string | null
           id?: string
           imported_from?: string | null
@@ -300,6 +328,8 @@ export type Database = {
           category_id?: string | null
           created_at?: string | null
           description?: string
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           external_id?: string | null
           id?: string
           imported_from?: string | null
@@ -328,6 +358,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_encryption_keys: {
+        Row: {
+          created_at: string | null
+          encrypted_private_key: string
+          id: string
+          key_derivation_salt: string
+          public_key: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted_private_key: string
+          id?: string
+          key_derivation_salt: string
+          public_key: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          encrypted_private_key?: string
+          id?: string
+          key_derivation_salt?: string
+          public_key?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       user_pins: {
         Row: {
@@ -362,6 +422,8 @@ export type Database = {
           created_at: string | null
           currency: string
           emergency_fund_months: number | null
+          encrypted_data: string | null
+          encryption_metadata: Json | null
           first_name: string | null
           id: string
           last_name: string | null
@@ -373,6 +435,8 @@ export type Database = {
           created_at?: string | null
           currency?: string
           emergency_fund_months?: number | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           first_name?: string | null
           id: string
           last_name?: string | null
@@ -384,6 +448,8 @@ export type Database = {
           created_at?: string | null
           currency?: string
           emergency_fund_months?: number | null
+          encrypted_data?: string | null
+          encryption_metadata?: Json | null
           first_name?: string | null
           id?: string
           last_name?: string | null
