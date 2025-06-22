@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { PWAInstall } from "@/components/PWAInstall";
-import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecuritySetup } from "@/components/auth/SecuritySetup";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
@@ -63,12 +62,6 @@ const AppContent = () => {
     );
   }
 
-  // Show auth screen if user is not authenticated
-  if (!user || !session) {
-    console.log('User not authenticated - showing auth screen');
-    return <AuthScreen onAuthSuccess={() => console.log('Auth success callback')} />;
-  }
-
   // Show method selection for new users
   if (showMethodSelection) {
     return (
@@ -79,49 +72,56 @@ const AppContent = () => {
     );
   }
 
-  console.log('User authenticated - showing main app');
+  console.log('Rendering main app with router');
 
   return (
     <BrowserRouter>
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full max-w-full overflow-x-hidden bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
-          <AppSidebar />
-          <SidebarInset className="flex-1 min-w-0">
-            <header className="fixed top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 backdrop-blur-lg">
-              <SidebarTrigger className="text-purple-100 hover:bg-purple-700/30" />
-              
-              {/* Smart Finance AI Logo and Brand */}
-              <div className="flex items-center space-x-3 ml-4">
-                <div className="h-10 w-10">
-                  <img src="/icon_48x48.png" alt="Smart Finance AI" className="h-10 w-10 object-contain" />
+      {user && session ? (
+        <SidebarProvider>
+          <div className="min-h-screen flex w-full max-w-full overflow-x-hidden bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
+            <AppSidebar />
+            <SidebarInset className="flex-1 min-w-0">
+              <header className="fixed top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 px-4 border-b border-purple-700/30 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 backdrop-blur-lg">
+                <SidebarTrigger className="text-purple-100 hover:bg-purple-700/30" />
+                
+                {/* Smart Finance AI Logo and Brand */}
+                <div className="flex items-center space-x-3 ml-4">
+                  <div className="h-10 w-10">
+                    <img src="/icon_48x48.png" alt="Smart Finance AI" className="h-10 w-10 object-contain" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-purple-100 font-bold text-lg leading-tight">Smart Finance AI</span>
+                    <span className="text-purple-200 text-xs font-medium tracking-wide leading-tight">INTELLIGENT FINANCE OS</span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-purple-100 font-bold text-lg leading-tight">Smart Finance AI</span>
-                  <span className="text-purple-200 text-xs font-medium tracking-wide leading-tight">INTELLIGENT FINANCE OS</span>
+                
+                <div className="ml-auto flex items-center space-x-4">
+                  <button
+                    onClick={async () => {
+                      console.log('Signing out user');
+                      await signOut();
+                    }}
+                    className="text-purple-200 hover:text-white text-sm bg-purple-800/50 hover:bg-purple-700/50 px-3 py-1 rounded-lg transition-colors"
+                  >
+                    Sign Out
+                  </button>
                 </div>
+              </header>
+              <div className="flex-1 overflow-auto w-full pt-16">
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
               </div>
-              
-              <div className="ml-auto flex items-center space-x-4">
-                <button
-                  onClick={async () => {
-                    console.log('Signing out user');
-                    await signOut();
-                  }}
-                  className="text-purple-200 hover:text-white text-sm bg-purple-800/50 hover:bg-purple-700/50 px-3 py-1 rounded-lg transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            </header>
-            <div className="flex-1 overflow-auto w-full pt-16">
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </div>
-          </SidebarInset>
-        </div>
-      </SidebarProvider>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      ) : (
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      )}
       <PWAInstall />
       
       {showSecuritySetup && (
