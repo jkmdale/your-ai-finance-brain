@@ -9,6 +9,10 @@ import { PWAInstall } from "@/components/PWAInstall";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useState, useEffect } from "react";
+import { useEncryption } from "@/hooks/useEncryption";
+import { EncryptionSetup } from "@/components/auth/EncryptionSetup";
+import { EncryptionUnlock } from "@/components/auth/EncryptionUnlock";
+import { AlertTriangle } from "lucide-react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { AuthMethodSelection } from "@/components/auth/AuthMethodSelection";
@@ -17,10 +21,11 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { user, session, loading, signOut } = useAuth();
+  const { isEncryptionReady, hasEncryptionKeys, isLoading: encryptionLoading, error: encryptionError } = useEncryption();
   const [showMethodSelection, setShowMethodSelection] = useState(false);
   const [hasCheckedMethodSelection, setHasCheckedMethodSelection] = useState(false);
 
-  console.log('App render state:', { user: !!user, session: !!session, loading });
+  console.log('App render state:', { user: !!user, session: !!session, loading, encryptionReady: isEncryptionReady, hasKeys: hasEncryptionKeys });
 
   // Handle authentication method selection for new users
   useEffect(() => {
@@ -59,16 +64,91 @@ const AppContent = () => {
   // Show method selection for new users who just signed up
   if (showMethodSelection && user && session) {
     return (
-      <AuthMethodSelection
-        onComplete={handleMethodSelectionComplete}
-        onSkip={handleMethodSelectionSkip}
-      />
+      <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
+        <AuthMethodSelection
+          onComplete={handleMethodSelectionComplete}
+          onSkip={handleMethodSelectionSkip}
+        />
+      </div>
     );
   }
 
-  return (
-    <BrowserRouter>
-      {user && session ? (
+  // For authenticated users, handle encryption flow before showing main app
+  if (user && session) {
+    // Show encryption loading state
+    if (encryptionLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mb-4"></div>
+            <p className="text-white/70">Loading encryption...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show encryption error state
+    if (encryptionError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-red-400 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-white" />
+            </div>
+            <h3 className="text-xl font-semibold text-white mb-2">Encryption Error</h3>
+            <p className="text-white/70 mb-6">{encryptionError}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Show encryption setup for new users
+    if (!hasEncryptionKeys) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Secure Your Financial Data
+              </h2>
+              <p className="text-xl text-white/70">
+                Enable end-to-end encryption to protect your financial information with bank-level security
+              </p>
+            </div>
+            <EncryptionSetup onComplete={() => window.location.reload()} />
+          </div>
+        </div>
+      );
+    }
+
+    // Show encryption unlock for existing users
+    if (hasEncryptionKeys && !isEncryptionReady) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Welcome Back
+              </h2>
+              <p className="text-xl text-white/70">
+                Your data is encrypted and secure. Please unlock to continue.
+              </p>
+            </div>
+            <EncryptionUnlock onUnlock={() => window.location.reload()} />
+          </div>
+        </div>
+      );
+    }
+
+    // All encryption checks passed, show main authenticated app
+    return (
+      <BrowserRouter>
         <SidebarProvider>
           <div className="min-h-screen flex w-full max-w-full overflow-x-hidden bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950">
             <AppSidebar />
@@ -111,12 +191,18 @@ const AppContent = () => {
             </SidebarInset>
           </div>
         </SidebarProvider>
-      ) : (
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      )}
+        <PWAInstall />
+      </BrowserRouter>
+    );
+  }
+
+  // Unauthenticated users see the landing page
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
       <PWAInstall />
     </BrowserRouter>
   );

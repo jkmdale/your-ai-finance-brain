@@ -1,13 +1,12 @@
+
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle, Shield } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, Shield } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
 import { TransactionTable } from '@/components/ui/transaction-table';
 import { FinancialHealthCard } from '@/components/ui/financial-health-card';
 import { SpendingInsights } from '@/components/ui/spending-insights';
-import { EncryptionSetup } from '@/components/auth/EncryptionSetup';
-import { EncryptionUnlock } from '@/components/auth/EncryptionUnlock';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useEncryption } from '@/hooks/useEncryption';
@@ -40,7 +39,7 @@ export const Dashboard = () => {
   const [financialHealth, setFinancialHealth] = useState<any>(null);
   const [spendingInsights, setSpendingInsights] = useState<any[]>([]);
   const { user } = useAuth();
-  const { isEncryptionReady, hasEncryptionKeys, isLoading: encryptionLoading, error: encryptionError } = useEncryption();
+  const { isEncryptionReady } = useEncryption();
   const isMobile = useIsMobile();
 
   const getColorClasses = (color: string) => {
@@ -132,83 +131,6 @@ export const Dashboard = () => {
 
     fetchDashboardData();
   }, [user, isEncryptionReady]);
-
-  // Show encryption loading state
-  if (encryptionLoading) {
-    return (
-      <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white mb-4"></div>
-              <p className="text-white/70">Loading encryption...</p>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  // Show encryption setup for new users
-  if (user && !hasEncryptionKeys) {
-    return (
-      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Secure Your Financial Data
-            </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
-              Enable end-to-end encryption to protect your financial information with bank-level security
-            </p>
-          </div>
-          <EncryptionSetup onComplete={() => window.location.reload()} />
-        </div>
-      </section>
-    );
-  }
-
-  // Show encryption unlock for existing users
-  if (user && hasEncryptionKeys && !isEncryptionReady) {
-    return (
-      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Welcome Back
-            </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
-              Your data is encrypted and secure. Please unlock to continue.
-            </p>
-          </div>
-          <EncryptionUnlock onUnlock={() => window.location.reload()} />
-        </div>
-      </section>
-    );
-  }
-
-  // Show encryption error state
-  if (encryptionError) {
-    return (
-      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-red-400 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Encryption Error</h3>
-            <p className="text-white/70 mb-6">{encryptionError}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   if (loading) {
     return (
