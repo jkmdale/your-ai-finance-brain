@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -200,7 +201,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </section>
 
       {/* AI Intelligence Preview */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 to-slate-800">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             className="text-center mb-16"
@@ -209,17 +210,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             transition={{ duration: 0.6 }}
             viewport={{ once: true }}
           >
-            <div className="inline-block bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-sm font-semibold mb-4">
+            <div className="inline-block bg-green-500/10 text-green-600 px-4 py-2 rounded-full text-sm font-semibold mb-4">
               🤖 AI-Powered Intelligence
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
               Your Personal Financial
               <br />
-              <span className="bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
                 AI Coach
               </span>
             </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+            <p className="text-xl text-slate-700 max-w-3xl mx-auto">
               Experience financial intelligence that learns from your spending patterns, 
               predicts future needs, and guides you to financial wellness.
             </p>
@@ -248,7 +249,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             ].map((feature, index) => (
               <motion.div
                 key={index}
-                className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl group"
+                className="backdrop-blur-xl bg-white/50 border border-slate-200 rounded-2xl p-6 hover:bg-white/70 transition-all duration-300 shadow-lg group"
                 initial={{ opacity: 0, y: 60 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
@@ -257,8 +258,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 <div className={`w-16 h-16 bg-gradient-to-br from-${feature.color}-400 to-${feature.color}-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
                   <feature.icon className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">{feature.title}</h3>
-                <p className="text-white/70 leading-relaxed">{feature.description}</p>
+                <h3 className="text-xl font-semibold text-slate-900 mb-3">{feature.title}</h3>
+                <p className="text-slate-700 leading-relaxed">{feature.description}</p>
               </motion.div>
             ))}
           </div>
@@ -266,7 +267,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </section>
 
       {/* Global Platform */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             className="text-center mb-16"
@@ -345,7 +346,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </section>
 
       {/* Security & Trust */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-800 to-slate-900">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="max-w-5xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 60 }}
@@ -353,17 +354,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             transition={{ duration: 0.6 }}
             viewport={{ once: true }}
           >
-            <div className="inline-block bg-green-500/10 text-green-400 px-4 py-2 rounded-full text-sm font-semibold mb-4">
+            <div className="inline-block bg-green-500/10 text-green-600 px-4 py-2 rounded-full text-sm font-semibold mb-4">
               🔒 Bank-Level Security
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
               Your Data is
               <br />
-              <span className="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                 Fort Knox Secure
               </span>
             </h2>
-            <p className="text-xl text-white/70 mb-12">
+            <p className="text-xl text-slate-700 mb-12">
               Zero-knowledge architecture means we never see your sensitive data. 
               End-to-end encryption with the same security standards as major banks.
             </p>
@@ -377,14 +378,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
               ].map((item, index) => (
                 <motion.div
                   key={index}
-                  className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-xl p-4"
+                  className="backdrop-blur-sm bg-white/50 border border-slate-200 rounded-xl p-4"
                   initial={{ opacity: 0, scale: 0.8 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   viewport={{ once: true }}
                 >
                   <div className="text-3xl mb-2">{item.icon}</div>
-                  <div className="text-white/80 text-sm font-medium">{item.title}</div>
+                  <div className="text-slate-800 text-sm font-medium">{item.title}</div>
                 </motion.div>
               ))}
             </div>
@@ -393,7 +394,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </section>
 
       {/* Social Proof */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <div className="max-w-6xl mx-auto">
           <motion.div 
             className="text-center mb-16"
@@ -462,7 +463,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </section>
 
       {/* Final CTA */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-3xl p-12 shadow-2xl"

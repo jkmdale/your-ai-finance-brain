@@ -63,7 +63,7 @@ export const EmailConfirmationScreen: React.FC<EmailConfirmationScreenProps> = (
           onClick={onResendConfirmation}
           disabled={loading}
           variant="outline"
-          className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
+          className="w-full border-white/20 text-slate-900 bg-white/90 hover:bg-white hover:text-slate-900 rounded-xl h-12"
         >
           {loading ? 'Sending...' : 'Resend confirmation email'}
         </Button>
