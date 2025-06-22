@@ -10,8 +10,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
 const Index = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
+      </div>
+    );
+  }
 
   const handleGetStarted = () => {
     setShowAuth(true);
@@ -26,11 +35,11 @@ const Index = () => {
   };
 
   // Show auth screen if requested
-  if (showAuth) {
+  if (showAuth && !user) {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
-  // If user is not authenticated, show the landing page
+  // If user is not authenticated, always show the landing page first
   if (!user) {
     return (
       <LandingPage 
@@ -40,7 +49,7 @@ const Index = () => {
     );
   }
 
-  // If user is authenticated, show the dashboard and other sections
+  // If user is authenticated, show the main dashboard
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <Dashboard />

@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { PWAInstall } from "@/components/PWAInstall";
-import { SecuritySetup } from "@/components/auth/SecuritySetup";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useState, useEffect } from "react";
@@ -17,29 +16,34 @@ import { AuthMethodSelection } from "@/components/auth/AuthMethodSelection";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { user, session, loading, hasPin, hasBiometric, signOut } = useAuth();
-  const [showSecuritySetup, setShowSecuritySetup] = useState(false);
+  const { user, session, loading, signOut } = useAuth();
   const [showMethodSelection, setShowMethodSelection] = useState(false);
-  const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
+  const [hasCheckedMethodSelection, setHasCheckedMethodSelection] = useState(false);
 
   console.log('App render state:', { user: !!user, session: !!session, loading });
 
-  // Handle authentication method selection after signup
+  // Handle authentication method selection for new users
   useEffect(() => {
-    if (user && session && !loading && !hasCheckedSecurity) {
+    if (user && session && !loading && !hasCheckedMethodSelection) {
       const hasCompletedMethodSelection = localStorage.getItem('preferredAuthMethod');
       const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
       
-      // Show method selection if user hasn't chosen a preferred method yet
+      // Show method selection only if user hasn't chosen a preferred method yet
       if (!hasCompletedMethodSelection && !hasCompletedSetup) {
-        setShowMethodSelection(true);
-      } else if (!hasCompletedSetup && !hasPin && !hasBiometric && !hasCompletedMethodSelection) {
-        setShowSecuritySetup(true);
+        // Check if this is a new signup by looking at user creation time
+        const userCreatedAt = new Date(user.created_at);
+        const now = new Date();
+        const timeDiff = now.getTime() - userCreatedAt.getTime();
+        const isNewUser = timeDiff < 5 * 60 * 1000; // 5 minutes
+        
+        if (isNewUser) {
+          setShowMethodSelection(true);
+        }
       }
       
-      setHasCheckedSecurity(true);
+      setHasCheckedMethodSelection(true);
     }
-  }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity]);
+  }, [user, session, loading, hasCheckedMethodSelection]);
 
   const handleMethodSelectionComplete = () => {
     setShowMethodSelection(false);
@@ -52,18 +56,8 @@ const AppContent = () => {
     localStorage.setItem('securitySetupCompleted', 'true');
   };
 
-  // Only show loading spinner if we're actually loading an existing session
-  if (loading) {
-    console.log('App showing loading state');
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
-      </div>
-    );
-  }
-
-  // Show method selection for new users
-  if (showMethodSelection) {
+  // Show method selection for new users who just signed up
+  if (showMethodSelection && user && session) {
     return (
       <AuthMethodSelection
         onComplete={handleMethodSelectionComplete}
@@ -71,8 +65,6 @@ const AppContent = () => {
       />
     );
   }
-
-  console.log('Rendering main app with router');
 
   return (
     <BrowserRouter>
@@ -99,6 +91,9 @@ const AppContent = () => {
                   <button
                     onClick={async () => {
                       console.log('Signing out user');
+                      // Clear stored preferences on sign out
+                      localStorage.removeItem('preferredAuthMethod');
+                      localStorage.removeItem('securitySetupCompleted');
                       await signOut();
                     }}
                     className="text-purple-200 hover:text-white text-sm bg-purple-800/50 hover:bg-purple-700/50 px-3 py-1 rounded-lg transition-colors"
@@ -123,19 +118,6 @@ const AppContent = () => {
         </Routes>
       )}
       <PWAInstall />
-      
-      {showSecuritySetup && (
-        <SecuritySetup
-          onComplete={() => {
-            localStorage.setItem('securitySetupCompleted', 'true');
-            setShowSecuritySetup(false);
-          }}
-          onSkip={() => {
-            localStorage.setItem('securitySetupCompleted', 'true');
-            setShowSecuritySetup(false);
-          }}
-        />
-      )}
     </BrowserRouter>
   );
 };

@@ -18,7 +18,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
-  const [hasInitialized, setHasInitialized] = useState(false);
   const [userCapabilities, setUserCapabilities] = useState({ hasPin: false, hasBiometric: false });
   const [userPreference, setUserPreference] = useState<string | null>(null);
   
@@ -76,7 +75,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
         toast.success(result.message || 'Account created! Please check your email to confirm.');
       } else {
         console.log('Sign up successful');
-        toast.success('Account created and signed in successfully!');
+        toast.success('Welcome to SmartFinanceAI! Account created successfully.');
         localStorage.setItem('preferredAuthMethod', 'email');
       }
     } else {
@@ -93,7 +92,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
         }
       } else {
         console.log('Sign in successful');
-        toast.success('Welcome back!');
+        toast.success('Welcome back to SmartFinanceAI!');
         localStorage.setItem('preferredAuthMethod', 'email');
       }
     }
@@ -132,7 +131,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       setTimeout(() => setLoading(false), 1000);
     } else {
       console.log('PIN auth successful');
-      toast.success('Welcome back!');
+      toast.success('Welcome back to SmartFinanceAI!');
       localStorage.setItem('preferredAuthMethod', 'pin');
     }
   };
@@ -158,7 +157,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       setLoading(false);
     } else {
       console.log('Biometric auth successful');
-      toast.success('Welcome back!');
+      toast.success('Welcome back to SmartFinanceAI!');
       localStorage.setItem('preferredAuthMethod', 'biometric');
     }
   };
