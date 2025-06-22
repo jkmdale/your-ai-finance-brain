@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Hash, Fingerprint, ArrowRight, Shield, Zap, Lock } from 'lucide-react';
+import { Mail, Hash, Fingerprint, Shield, Zap, Lock, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -54,28 +54,32 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
   const methods = [
     {
       id: 'email',
-      title: 'Email + Password',
-      description: 'Classic and reliable authentication',
+      title: 'Email & Password',
+      subtitle: 'Reliable & Universal',
+      description: 'Works everywhere, always available',
       icon: Mail,
-      color: 'from-slate-500 to-slate-600',
-      benefits: ['Always available', 'Works everywhere', 'Easy to remember']
+      color: 'from-blue-500 to-blue-600',
+      benefits: ['Works on any device', 'Always available', 'No setup required']
     },
     {
       id: 'pin',
       title: '4-6 Digit PIN',
-      description: 'Quick and secure numeric code',
+      subtitle: 'Quick & Secure',
+      description: 'Fast numeric authentication',
       icon: Hash,
       color: 'from-green-500 to-emerald-600',
-      benefits: ['Lightning fast', 'Easy to type', 'Highly secure']
+      benefits: ['Lightning fast', 'Easy to remember', 'Works offline']
     },
     {
       id: 'biometric',
-      title: 'Biometric',
-      description: 'Fingerprint or Face ID',
+      title: 'Biometric Login',
+      subtitle: 'Fingerprint/Face ID',
+      description: 'Most secure, instant access',
       icon: Fingerprint,
       color: 'from-orange-500 to-red-500',
-      benefits: ['Most secure', 'Instant access', 'No passwords to remember'],
-      disabled: !biometricAvailable
+      benefits: ['Most secure', 'Instant unlock', 'Passwordless'],
+      disabled: !biometricAvailable,
+      tooltip: !biometricAvailable ? 'Not available on this device' : undefined
     }
   ];
 
@@ -83,7 +87,7 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
     if (methodId === 'email') {
       const success = await saveUserPreference('email');
       if (success) {
-        toast.success('Email authentication selected');
+        toast.success('Email authentication selected as your preferred method');
         onComplete();
       }
       return;
@@ -141,117 +145,116 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({ onComp
     }
   };
 
-  const handleSkip = async () => {
-    const success = await saveUserPreference('email');
-    if (success) {
-      onSkip();
-    }
-  };
-
   if (selectedMethod === 'pin') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-        <motion.div
-          className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl max-w-md w-full"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Hash className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Create Your PIN</h2>
-            <p className="text-white/70">Choose a 4-6 digit PIN for quick access</p>
+      <motion.div
+        className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl max-w-md w-full"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+      >
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Hash className="w-8 h-8 text-white" />
           </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Create Your PIN</h2>
+          <p className="text-white/70">Choose a 4-6 digit PIN for quick access</p>
+        </div>
 
-          <PinSetup onPinComplete={handlePinSetup} loading={loading} />
+        <PinSetup onPinComplete={handlePinSetup} loading={loading} />
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setSelectedMethod(null)}
-              className="text-white/70 hover:text-white transition-colors"
-              disabled={loading}
-            >
-              ← Back to options
-            </button>
-          </div>
-        </motion.div>
-      </div>
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => setSelectedMethod(null)}
+            className="text-white/70 hover:text-white transition-colors"
+            disabled={loading}
+          >
+            ← Back to options
+          </button>
+        </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-      <motion.div
-        className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl max-w-4xl w-full"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-      >
-        <div className="text-center mb-12">
-          <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Shield className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-4">Choose Your Login Method</h1>
-          <p className="text-white/70 text-lg">How would you like to sign in next time? You can change this later in settings.</p>
+    <motion.div
+      className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl max-w-4xl w-full"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <div className="text-center mb-8">
+        <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <CheckCircle className="w-8 h-8 text-white" />
         </div>
+        <h1 className="text-3xl font-bold text-white mb-2">Welcome to Smart Finance AI!</h1>
+        <h2 className="text-xl font-semibold text-white/90 mb-3">How would you like to sign in next time?</h2>
+        <p className="text-white/70 text-lg">Choose your preferred authentication method. You can always change this later in settings.</p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {methods.map((method) => (
-            <motion.div
-              key={method.id}
-              className={`relative backdrop-blur-xl bg-white/5 border border-white/20 rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:bg-white/10 hover:border-white/30 ${
-                method.disabled ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              whileHover={method.disabled ? {} : { scale: 1.02 }}
-              whileTap={method.disabled ? {} : { scale: 0.98 }}
-              onClick={() => !method.disabled && !loading && handleMethodSelect(method.id)}
-            >
-              <div className={`w-16 h-16 bg-gradient-to-br ${method.color} rounded-2xl flex items-center justify-center mb-6 mx-auto`}>
-                <method.icon className="w-8 h-8 text-white" />
-              </div>
-              
-              <h3 className="text-xl font-semibold text-white mb-2 text-center">{method.title}</h3>
-              <p className="text-white/70 text-center mb-4">{method.description}</p>
-              
-              <div className="space-y-2">
-                {method.benefits.map((benefit, index) => (
-                  <div key={index} className="flex items-center space-x-2 text-sm text-white/60">
-                    <div className="w-1.5 h-1.5 bg-white/40 rounded-full"></div>
-                    <span>{benefit}</span>
-                  </div>
-                ))}
-              </div>
-
-              {method.disabled && (
-                <div className="absolute inset-0 bg-black/20 rounded-2xl flex items-center justify-center">
-                  <span className="text-white/60 text-sm font-medium">Not Available</span>
-                </div>
-              )}
-
-              {loading && selectedMethod === method.id && (
-                <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button
-            onClick={handleSkip}
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/10"
-            disabled={loading}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {methods.map((method) => (
+          <motion.div
+            key={method.id}
+            className={`relative backdrop-blur-xl bg-white/5 border border-white/20 rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:bg-white/10 hover:border-white/30 ${
+              method.disabled ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            whileHover={method.disabled ? {} : { scale: 1.02 }}
+            whileTap={method.disabled ? {} : { scale: 0.98 }}
+            onClick={() => !method.disabled && !loading && handleMethodSelect(method.id)}
+            title={method.tooltip}
           >
-            Skip for Now
-          </Button>
-          <div className="text-white/60 text-sm text-center">
-            💡 Choose PIN or Biometric for the fastest, most secure experience
-          </div>
-        </div>
-      </motion.div>
-    </div>
+            <div className={`w-14 h-14 bg-gradient-to-br ${method.color} rounded-2xl flex items-center justify-center mb-4 mx-auto`}>
+              <method.icon className="w-7 h-7 text-white" />
+            </div>
+            
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold text-white mb-1">{method.title}</h3>
+              <p className="text-purple-300 text-sm font-medium mb-2">{method.subtitle}</p>
+              <p className="text-white/70 text-sm">{method.description}</p>
+            </div>
+            
+            <div className="space-y-2">
+              {method.benefits.map((benefit, index) => (
+                <div key={index} className="flex items-center space-x-2 text-xs text-white/60">
+                  <div className="w-1.5 h-1.5 bg-white/40 rounded-full flex-shrink-0"></div>
+                  <span>{benefit}</span>
+                </div>
+              ))}
+            </div>
+
+            {method.disabled && (
+              <div className="absolute inset-0 bg-black/20 rounded-2xl flex items-center justify-center">
+                <span className="text-white/60 text-sm font-medium">Not Available</span>
+              </div>
+            )}
+
+            {loading && selectedMethod === method.id && (
+              <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="text-center">
+        <Button
+          onClick={async () => {
+            const success = await saveUserPreference('email');
+            if (success) {
+              onSkip();
+            }
+          }}
+          variant="outline"
+          className="border-white/20 text-white hover:bg-white/10"
+          disabled={loading}
+        >
+          I'll choose later (default to Email & Password)
+        </Button>
+        <p className="text-white/50 text-sm mt-3">
+          💡 Tip: PIN and Biometric logins are faster and more secure than passwords
+        </p>
+      </div>
+    </motion.div>
   );
 };
 
@@ -286,24 +289,24 @@ const PinSetup: React.FC<{ onPinComplete: (pin: string) => void; loading: boolea
     <div className="max-w-xs mx-auto">
       <div className="text-center mb-6">
         <p className="text-white/70 text-sm">
-          {step === 'create' ? 'Enter your new PIN' : 'Confirm your PIN'}
+          {step === 'create' ? 'Enter your new PIN (4-6 digits)' : 'Confirm your PIN'}
         </p>
       </div>
 
-      <div className="flex justify-center space-x-4 mb-8">
+      <div className="flex justify-center space-x-3 mb-8">
         {[...Array(6)].map((_, index) => (
           <div
             key={index}
-            className={`w-4 h-4 rounded-full border-2 ${
+            className={`w-3 h-3 rounded-full border-2 transition-all ${
               index < (step === 'create' ? pin.length : confirmPin.length)
-                ? 'bg-white border-white' 
+                ? 'bg-green-400 border-green-400 scale-110' 
                 : 'border-white/30'
             }`}
           />
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '⌫'].map((num, index) => (
           <button
             key={index}
@@ -324,7 +327,7 @@ const PinSetup: React.FC<{ onPinComplete: (pin: string) => void; loading: boolea
               }
             }}
             disabled={loading || num === ''}
-            className="w-16 h-16 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center text-white text-xl font-semibold transition-colors duration-200"
+            className="w-14 h-14 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl flex items-center justify-center text-white text-lg font-semibold transition-colors duration-200"
           >
             {num}
           </button>

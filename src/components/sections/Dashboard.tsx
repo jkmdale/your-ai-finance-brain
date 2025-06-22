@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, Shield } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
 import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
@@ -9,9 +9,6 @@ import { FinancialHealthCard } from '@/components/ui/financial-health-card';
 import { SpendingInsights } from '@/components/ui/spending-insights';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
-import { useEncryption } from '@/hooks/useEncryption';
-import { encryptedDataService } from '@/services/encryptedDataService';
-import { transactionProcessor } from '@/services/transactionProcessor';
 
 interface DashboardStats {
   totalBalance: number;
@@ -39,7 +36,6 @@ export const Dashboard = () => {
   const [financialHealth, setFinancialHealth] = useState<any>(null);
   const [spendingInsights, setSpendingInsights] = useState<any[]>([]);
   const { user } = useAuth();
-  const { isEncryptionReady } = useEncryption();
   const isMobile = useIsMobile();
 
   const getColorClasses = (color: string) => {
@@ -54,74 +50,16 @@ export const Dashboard = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user || !isEncryptionReady) {
+      if (!user) {
         setLoading(false);
         return;
       }
 
       try {
-        // Fetch encrypted transactions
-        const transactions = await encryptedDataService.getTransactions(user.id);
-
-        if (!transactions || transactions.length === 0) {
-          setStats(null);
-          setRecentTransactions([]);
-          setLoading(false);
-          return;
-        }
-
-        // Process transactions through the enhanced processor
-        const processedTransactions = transactionProcessor.processTransactions(transactions);
-        
-        // Calculate current month stats
-        const currentMonthStats = transactionProcessor.calculateMonthlyStats(processedTransactions);
-        
-        // Get financial health assessment
-        const healthAssessment = transactionProcessor.assessFinancialHealth(currentMonthStats);
-        
-        // Get spending insights
-        const insights = transactionProcessor.getSpendingInsights(processedTransactions, 3);
-        
-        // Validate the numbers
-        const validation = transactionProcessor.validateRealisticNumbers(currentMonthStats);
-        
-        // Get transfer summary for debugging
-        const transferSummary = transactionProcessor.getTransferSummary(processedTransactions);
-        
-        console.log('Enhanced Analysis Results:');
-        console.log('Transfer Summary:', transferSummary);
-        console.log('Processed Stats:', currentMonthStats);
-        console.log('Financial Health:', healthAssessment);
-        console.log('Spending Insights:', insights);
-        console.log('Validation:', validation);
-
-        setStats({
-          totalBalance: currentMonthStats.balance,
-          monthlyIncome: currentMonthStats.income,
-          monthlyExpenses: currentMonthStats.expenses,
-          savingsRate: currentMonthStats.savingsRate,
-          transactionCount: currentMonthStats.transactionCount,
-          isValidated: validation.isValid,
-          warnings: validation.warnings
-        });
-
-        setFinancialHealth(healthAssessment);
-        setSpendingInsights(insights);
-
-        // Get recent non-transfer transactions for display
-        const recentNonTransfers = processedTransactions
-          .filter(t => !t.isTransfer)
-          .slice(0, 5)
-          .map(t => ({
-            id: t.id,
-            description: t.description,
-            amount: t.isIncome ? t.amount : -t.amount,
-            transaction_date: t.date,
-            is_income: t.isIncome,
-            merchant: t.merchant
-          }));
-
-        setRecentTransactions(recentNonTransfers);
+        // For now, we'll show empty state since we removed encryption logic
+        // This will be updated when we implement proper data storage
+        setStats(null);
+        setRecentTransactions([]);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -130,7 +68,7 @@ export const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, [user, isEncryptionReady]);
+  }, [user]);
 
   if (loading) {
     return (
@@ -214,158 +152,22 @@ export const Dashboard = () => {
     );
   }
 
-  // Dashboard with real data - add encryption indicator
-  const statsData = [
-    {
-      title: 'Monthly Income',
-      value: `$${stats.monthlyIncome.toLocaleString()}`,
-      change: '+5.2%',
-      trend: 'up',
-      icon: TrendingUp,
-      color: 'green'
-    },
-    {
-      title: 'Monthly Expenses',
-      value: `$${stats.monthlyExpenses.toLocaleString()}`,
-      change: '-3.1%',
-      trend: 'down',
-      icon: PieChart,
-      color: 'purple'
-    },
-    {
-      title: 'Net Balance',
-      value: `$${stats.totalBalance.toLocaleString()}`,
-      change: stats.totalBalance >= 0 ? '+' : '',
-      trend: stats.totalBalance >= 0 ? 'up' : 'down',
-      icon: DollarSign,
-      color: 'blue'
-    },
-    {
-      title: 'Savings Rate',
-      value: `${stats.savingsRate.toFixed(1)}%`,
-      change: '+2.3%',
-      trend: stats.savingsRate >= 0 ? 'up' : 'down',
-      icon: Target,
-      color: 'emerald'
-    }
-  ];
-
+  // Dashboard with real data (placeholder for when data storage is implemented)
   return (
     <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8 sm:mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mr-3">
-              Financial Intelligence Dashboard
-            </h2>
-            <div className="flex items-center bg-green-500/20 border border-green-500/30 rounded-lg px-3 py-1">
-              <Shield className="w-4 h-4 text-green-400 mr-2" />
-              <span className="text-green-300 text-sm font-medium">End-to-End Encrypted</span>
-            </div>
-          </div>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+            Financial Intelligence Dashboard
+          </h2>
           <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
-            AI-powered analysis with bank-level security and enhanced transaction categorization
+            AI-powered analysis with secure authentication and smart insights
           </p>
         </div>
 
-        {/* Validation Warnings */}
-        {!stats.isValidated && stats.warnings.length > 0 && (
-          <div className="mb-8 backdrop-blur-xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-400/30 rounded-xl p-4">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-yellow-300 font-medium mb-2">Calculation Warnings</h4>
-                <ul className="text-yellow-200 text-sm space-y-1">
-                  {stats.warnings.map((warning, index) => (
-                    <li key={index}>• {warning}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
-          {statsData.map((stat, index) => {
-            const IconComponent = stat.icon;
-            return (
-              <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-xl sm:rounded-2xl p-3 sm:p-6 hover:from-white/25 hover:to-white/15 transition-all duration-300 shadow-2xl">
-                <div className="flex items-center justify-between mb-2 sm:mb-4">
-                  <div className={`w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${getColorClasses(stat.color)} rounded-lg sm:rounded-xl flex items-center justify-center`}>
-                    <IconComponent className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-                  </div>
-                  <div className={`flex items-center space-x-1 text-xs sm:text-sm ${
-                    stat.trend === 'up' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {stat.trend === 'up' ? (
-                      <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                    ) : (
-                      <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                    )}
-                    <span className="hidden sm:inline">{stat.change}</span>
-                  </div>
-                </div>
-                <h3 className="text-white/70 text-xs sm:text-sm font-medium mb-1">{stat.title}</h3>
-                <p className="text-lg sm:text-2xl font-bold text-white">{stat.value}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Enhanced Analysis Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-12">
-          {/* Financial Health Assessment */}
-          {financialHealth && (
-            <FinancialHealthCard 
-              metrics={financialHealth}
-              monthlyIncome={stats.monthlyIncome}
-              monthlyExpenses={stats.monthlyExpenses}
-            />
-          )}
-          
-          {/* Spending Insights */}
-          {spendingInsights.length > 0 && (
-            <SpendingInsights 
-              insights={spendingInsights}
-              totalIncome={stats.monthlyIncome}
-            />
-          )}
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-12">
-          {/* CSV Upload */}
-          <CSVUpload />
-          
-          {/* AI Coach */}
-          <div id="insights">
-            <AICoach />
-          </div>
-        </div>
-
-        {/* Recent Transactions */}
-        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/20">
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Recent Transactions</h3>
-            <button className="text-purple-400 hover:text-purple-300 font-medium text-sm transition-colors duration-200">
-              View All
-            </button>
-          </div>
-
-          <div className="p-3 sm:p-6">
-            {isMobile ? (
-              // Mobile Card Layout
-              <div className="space-y-3">
-                {recentTransactions.map((transaction) => (
-                  <TransactionCard key={transaction.id} transaction={transaction} />
-                ))}
-              </div>
-            ) : (
-              // Desktop Table Layout
-              <TransactionTable transactions={recentTransactions} />
-            )}
-          </div>
+        {/* This section will be populated when we implement proper data storage */}
+        <div className="text-center py-12">
+          <p className="text-white/70">Dashboard functionality will be restored once data storage is reimplemented.</p>
         </div>
       </div>
     </section>
