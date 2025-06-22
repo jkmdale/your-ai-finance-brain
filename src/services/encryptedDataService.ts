@@ -167,9 +167,9 @@ class EncryptedDataService {
     }
   }
 
-  // Generic method to encrypt and update any record
+  // Generic method to encrypt and update any record - simplified to avoid type inference issues
   async updateEncryptedRecord(
-    tableName: 'budgets' | 'categories' | 'bank_accounts' | 'financial_goals' | 'transactions' | 'user_profiles',
+    tableName: string,
     recordId: string,
     userId: string,
     sensitiveData: any,
@@ -178,14 +178,40 @@ class EncryptedDataService {
     try {
       const { encryptedData, metadata } = await keyManagerService.encryptForStorage(sensitiveData);
 
-      const { data, error } = await supabase
-        .from(tableName)
-        .update({
-          ...otherData,
-          encrypted_data: encryptedData,
-          encryption_metadata: metadata,
-          updated_at: new Date().toISOString()
-        })
+      // Use a more direct approach to avoid complex type inference
+      const updateData = {
+        ...otherData,
+        encrypted_data: encryptedData,
+        encryption_metadata: metadata,
+        updated_at: new Date().toISOString()
+      };
+
+      let query;
+      switch (tableName) {
+        case 'budgets':
+          query = supabase.from('budgets');
+          break;
+        case 'categories':
+          query = supabase.from('categories');
+          break;
+        case 'bank_accounts':
+          query = supabase.from('bank_accounts');
+          break;
+        case 'financial_goals':
+          query = supabase.from('financial_goals');
+          break;
+        case 'transactions':
+          query = supabase.from('transactions');
+          break;
+        case 'user_profiles':
+          query = supabase.from('user_profiles');
+          break;
+        default:
+          throw new Error(`Unsupported table: ${tableName}`);
+      }
+
+      const { data, error } = await query
+        .update(updateData)
         .eq('id', recordId)
         .eq('user_id', userId)
         .select()
