@@ -122,12 +122,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const getUserPreference = async (email: string): Promise<string | null> => {
     try {
       // First try to get from auth metadata
-      const { data: { users }, error } = await supabase.auth.admin.listUsers();
+      const { data, error } = await supabase.auth.admin.listUsers();
       if (error) throw error;
       
-      const user = users.find(u => u.email === email);
-      if (user?.user_metadata?.login_preference) {
-        return user.user_metadata.login_preference as string;
+      const targetUser = data.users?.find((u: any) => u.email === email);
+      if (targetUser?.user_metadata?.login_preference) {
+        return targetUser.user_metadata.login_preference as string;
       }
       
       // Fallback to localStorage if available
