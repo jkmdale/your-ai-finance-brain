@@ -1,5 +1,6 @@
+
 import { supabase } from '@/integrations/supabase/client';
-import { encryptedDataService } from './encryptedDataService';
+import { keyManagerService } from './keyManagerService';
 
 interface TransactionSummary {
   category: string;
@@ -40,7 +41,7 @@ export class BudgetCreator {
         total_expenses: 0
       };
 
-      const { encryptedData, metadata } = await encryptedDataService.encryptForStorage(budgetData);
+      const { encryptedData, metadata } = await keyManagerService.encryptForStorage(budgetData);
 
       // Create the budget with encrypted data
       const { data: budget, error: budgetError } = await supabase
@@ -101,7 +102,7 @@ export class BudgetCreator {
       };
 
       const { encryptedData: updatedEncrypted, metadata: updatedMetadata } = 
-        await encryptedDataService.encryptForStorage(updatedBudgetData);
+        await keyManagerService.encryptForStorage(updatedBudgetData);
 
       await supabase
         .from('budgets')

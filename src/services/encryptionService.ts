@@ -142,8 +142,8 @@ class EncryptionService {
     );
   }
 
-  // Utility methods
-  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+  // Public utility methods - made public to be accessible from other services
+  arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
@@ -152,7 +152,7 @@ class EncryptionService {
     return btoa(binary);
   }
 
-  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+  base64ToArrayBuffer(base64: string): ArrayBuffer {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {

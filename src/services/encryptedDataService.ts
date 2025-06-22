@@ -169,7 +169,7 @@ class EncryptedDataService {
 
   // Generic method to encrypt and update any record
   async updateEncryptedRecord(
-    table: string,
+    tableName: 'budgets' | 'categories' | 'bank_accounts' | 'financial_goals' | 'transactions' | 'user_profiles',
     recordId: string,
     userId: string,
     sensitiveData: any,
@@ -179,7 +179,7 @@ class EncryptedDataService {
       const { encryptedData, metadata } = await keyManagerService.encryptForStorage(sensitiveData);
 
       const { data, error } = await supabase
-        .from(table)
+        .from(tableName)
         .update({
           ...otherData,
           encrypted_data: encryptedData,
@@ -194,7 +194,7 @@ class EncryptedDataService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error(`Error updating encrypted ${table} record:`, error);
+      console.error(`Error updating encrypted ${tableName} record:`, error);
       throw error;
     }
   }
