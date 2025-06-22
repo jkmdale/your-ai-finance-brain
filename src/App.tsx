@@ -12,36 +12,44 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import { AuthMethodSelection } from "@/components/auth/AuthMethodSelection";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { user, session, loading, hasPin, hasBiometric, signOut } = useAuth();
   const [showSecuritySetup, setShowSecuritySetup] = useState(false);
+  const [showMethodSelection, setShowMethodSelection] = useState(false);
   const [hasCheckedSecurity, setHasCheckedSecurity] = useState(false);
 
   console.log('App render state:', { user: !!user, session: !!session, loading });
 
-  // Handle security setup after authentication
+  // Handle authentication method selection after signup
   useEffect(() => {
     if (user && session && !loading && !hasCheckedSecurity) {
+      const hasCompletedMethodSelection = localStorage.getItem('preferredAuthMethod');
       const hasCompletedSetup = localStorage.getItem('securitySetupCompleted');
-      const preferredMethod = localStorage.getItem('preferredAuthMethod');
-      const needsSecuritySetup = !hasCompletedSetup && !hasPin && !hasBiometric && !preferredMethod;
       
-      setShowSecuritySetup(needsSecuritySetup);
+      // Show method selection if user hasn't chosen a preferred method yet
+      if (!hasCompletedMethodSelection && !hasCompletedSetup) {
+        setShowMethodSelection(true);
+      } else if (!hasCompletedSetup && !hasPin && !hasBiometric && !hasCompletedMethodSelection) {
+        setShowSecuritySetup(true);
+      }
+      
       setHasCheckedSecurity(true);
     }
   }, [user, session, loading, hasPin, hasBiometric, hasCheckedSecurity]);
 
-  const handleSecuritySetupComplete = () => {
+  const handleMethodSelectionComplete = () => {
+    setShowMethodSelection(false);
     localStorage.setItem('securitySetupCompleted', 'true');
-    setShowSecuritySetup(false);
   };
 
-  const handleSecuritySetupSkip = () => {
+  const handleMethodSelectionSkip = () => {
+    setShowMethodSelection(false);
+    localStorage.setItem('preferredAuthMethod', 'email');
     localStorage.setItem('securitySetupCompleted', 'true');
-    setShowSecuritySetup(false);
   };
 
   if (loading) {
@@ -57,6 +65,16 @@ const AppContent = () => {
   if (!user || !session) {
     console.log('User not authenticated - showing auth screen');
     return <AuthScreen onAuthSuccess={() => console.log('Auth success callback')} />;
+  }
+
+  // Show method selection for new users
+  if (showMethodSelection) {
+    return (
+      <AuthMethodSelection
+        onComplete={handleMethodSelectionComplete}
+        onSkip={handleMethodSelectionSkip}
+      />
+    );
   }
 
   console.log('User authenticated - showing main app');
@@ -106,8 +124,14 @@ const AppContent = () => {
       
       {showSecuritySetup && (
         <SecuritySetup
-          onComplete={handleSecuritySetupComplete}
-          onSkip={handleSecuritySetupSkip}
+          onComplete={() => {
+            localStorage.setItem('securitySetupCompleted', 'true');
+            setShowSecuritySetup(false);
+          }}
+          onSkip={() => {
+            localStorage.setItem('securitySetupCompleted', 'true');
+            setShowSecuritySetup(false);
+          }}
         />
       )}
     </BrowserRouter>

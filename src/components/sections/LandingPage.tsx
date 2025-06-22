@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   Brain, Globe, Shield, Users, Smartphone, Target,
   TrendingUp, CreditCard, PiggyBank, BarChart3, 
-  Zap, ArrowRight, CheckCircle, Star, Sparkles
+  Zap, ArrowRight, CheckCircle, Star, Sparkles, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -40,9 +39,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center">
-                <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-8 h-8" />
-              </div>
+              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-10 h-10" />
               <span className="text-white font-bold text-xl">SmartFinanceAI</span>
             </div>
             
@@ -52,13 +49,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 variant="ghost"
                 className="text-white hover:bg-white/10 border-white/20"
               >
-                Sign In
+                Log In
               </Button>
               <Button
                 onClick={onGetStarted}
                 className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
               >
-                Get Started Free
+                Sign Up Free
               </Button>
             </div>
           </div>
@@ -83,37 +80,103 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           >
             <motion.div variants={fadeInUp} className="mb-8">
               <div className="inline-flex items-center space-x-2 bg-black/20 backdrop-blur-sm rounded-full px-6 py-3 border border-white/10 mb-6">
-                <Sparkles className="w-5 h-5 text-yellow-400" />
-                <span className="text-white/90 text-sm font-medium">AI-Powered Financial Intelligence</span>
+                <Brain className="w-5 h-5 text-blue-400" />
+                <span className="text-white/90 text-sm font-medium">Your AI-Powered Finance Brain</span>
               </div>
               
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-                Your Intelligent
+                Insights & Planning
                 <br />
                 <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                  Financial OS
+                  Made Simple
                 </span>
               </h1>
               
               <p className="text-xl md:text-2xl text-white/80 mb-8 max-w-4xl mx-auto leading-relaxed">
-                Transform your financial life with AI-powered automation, global multi-currency support, 
-                and premium glassmorphism design. Replace dozens of apps with one intelligent platform.
+                Transform your financial life with AI-powered automation, smart categorization, 
+                and personalized insights that help you achieve your goals faster.
               </p>
+            </motion.div>
+
+            {/* Subscription Tiers */}
+            <motion.div variants={fadeInUp} className="mb-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                {/* Free Tier */}
+                <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 text-left">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">Free</h3>
+                    <span className="text-2xl font-bold text-white">$0</span>
+                  </div>
+                  <ul className="space-y-3 text-white/80">
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-green-400" />
+                      <span>Basic expense tracking</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-green-400" />
+                      <span>Manual categorization</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-green-400" />
+                      <span>Simple budgets</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Premium Tier */}
+                <div className="backdrop-blur-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-2 border-purple-400/50 rounded-2xl p-6 text-left relative">
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <span className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                      LIMITED TIME: FREE TRIAL
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-4 mt-2">
+                    <h3 className="text-xl font-bold text-white">Premium</h3>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-white">$9</span>
+                      <span className="text-white/60">/month</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-3 text-white/90">
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-purple-400" />
+                      <span>AI-powered categorization</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-purple-400" />
+                      <span>Predictive analytics</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-purple-400" />
+                      <span>Personal AI coach</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-purple-400" />
+                      <span>Multi-currency support</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-purple-400" />
+                      <span>Bank integrations</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </motion.div>
 
             <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <Button
                 onClick={onGetStarted}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-full hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-2xl hover:shadow-purple-500/25 text-lg font-semibold"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-10 py-4 rounded-full hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-2xl hover:shadow-purple-500/25 text-lg font-semibold"
               >
-                Start Your Financial Journey
+                Start Free Premium Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
+                onClick={onSignIn}
                 variant="outline"
-                className="backdrop-blur-sm bg-black/20 border border-white/10 text-white px-8 py-4 rounded-full hover:bg-black/30 transition-all duration-200 text-lg font-semibold"
+                className="backdrop-blur-sm bg-black/20 border border-white/10 text-white px-10 py-4 rounded-full hover:bg-black/30 transition-all duration-200 text-lg font-semibold"
               >
-                Watch 2-Min Demo
+                Log In
               </Button>
             </motion.div>
 
@@ -458,54 +521,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       {/* Footer */}
       <footer className="py-12 px-4 sm:px-6 lg:px-8 bg-slate-900/80 border-t border-white/10">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-white/60">
-                <li><a href="#" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Integrations</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-white/60">
-                <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Press</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-white/60">
-                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Status</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Community</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-white/60">
-                <li><a href="#" className="hover:text-white transition-colors">Privacy</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Terms</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Licenses</a></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="border-t border-white/10 pt-8 text-center">
+          <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-6 h-6" />
-              </div>
+              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-8 h-8" />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
             <p className="text-white/60 text-sm">
-              © 2024 SmartFinanceAI. All rights reserved. Your Intelligent Financial OS.
+              © 2024 SmartFinanceAI. All rights reserved. Your AI-Powered Finance Brain.
             </p>
           </div>
         </div>
