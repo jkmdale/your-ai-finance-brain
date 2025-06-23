@@ -60,7 +60,7 @@ export const PWAInstall = () => {
   if (!showInstallBanner) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 backdrop-blur-xl bg-black/80 border border-white/20 rounded-2xl p-4 shadow-2xl z-50 animate-in slide-in-from-bottom duration-300">
+    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 backdrop-blur-xl bg-black/80 border border-white/20 rounded-2xl p-4 shadow-2xl z-[9999] animate-in slide-in-from-bottom duration-300">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
