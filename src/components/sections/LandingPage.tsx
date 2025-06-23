@@ -6,6 +6,7 @@ import {
   Zap, ArrowRight, CheckCircle, Star, Sparkles, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PWAInstall } from '@/components/PWAInstall';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -533,6 +534,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           </div>
         </div>
       </footer>
+
+      {/* PWA Install Banner */}
+      <PWAInstall />
     </div>
   );
 };
