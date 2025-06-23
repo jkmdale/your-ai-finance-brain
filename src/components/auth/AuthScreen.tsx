@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
@@ -54,17 +53,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     }
   }, [user, session, onAuthSuccess]);
 
-  const handleEmailAuth = async (isSignUp: boolean = false) => {
+  const handleEmailAuth = async (isSignUp: boolean = false, additionalData?: { firstName?: string; lastName?: string; country?: string }) => {
     if (!email || !password) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    console.log('Attempting email auth:', { email, isSignUp });
+    if (isSignUp && (!additionalData?.firstName || !additionalData?.lastName || !additionalData?.country)) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    console.log('Attempting email auth:', { email, isSignUp, additionalData });
     setLoading(true);
     
     if (isSignUp) {
-      const result = await signUp(email, password);
+      const result = await signUp(email, password, additionalData);
       
       if (result.error) {
         console.log('Sign up error:', result.error);

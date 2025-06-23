@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AuthMode } from './types';
 
 interface EmailPasswordFormProps {
@@ -11,7 +12,7 @@ interface EmailPasswordFormProps {
   setEmail: (email: string) => void;
   password: string;
   setPassword: (password: string) => void;
-  onSubmit: (isSignUp: boolean) => void;
+  onSubmit: (isSignUp: boolean, additionalData?: { firstName?: string; lastName?: string; country?: string }) => void;
   onModeChange: (mode: AuthMode) => void;
   loading: boolean;
   isSignUp?: boolean;
@@ -22,6 +23,25 @@ const pageVariants = {
   animate: { opacity: 1, x: 0 },
   exit: { opacity: 0, x: -50 }
 };
+
+const countries = [
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'US', name: 'United States' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'ZA', name: 'South Africa' }
+];
 
 export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
   email,
@@ -34,6 +54,17 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
   isSignUp = false
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [country, setCountry] = useState('');
+
+  const handleSubmit = () => {
+    if (isSignUp) {
+      onSubmit(isSignUp, { firstName, lastName, country });
+    } else {
+      onSubmit(isSignUp);
+    }
+  };
 
   return (
     <motion.div
@@ -54,6 +85,40 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
       </div>
 
       <div className="space-y-6">
+        {isSignUp && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                type="text"
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+              />
+              <Input
+                type="text"
+                placeholder="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+              />
+            </div>
+
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12">
+                <SelectValue placeholder="Select your country" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                {countries.map((country) => (
+                  <SelectItem key={country.code} value={country.code} className="text-white hover:bg-gray-800">
+                    {country.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
         <div>
           <Input
             type="email"
@@ -82,7 +147,7 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
         </div>
 
         <Button
-          onClick={() => onSubmit(isSignUp)}
+          onClick={handleSubmit}
           disabled={loading}
           className={`w-full ${
             isSignUp 
