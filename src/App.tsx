@@ -14,13 +14,16 @@ const App = () => {
   const { user, session } = useAuth();
 
   return (
-    <div style={{ transform: 'scale(0.9)', transformOrigin: 'top left', width: '111.11%', height: '111.11%' }}>
+    <div style={{ transform: 'scale(0.9)', transformOrigin: 'top left', width: '111.11%', height: '111.11%' }} className="flex items-center justify-center min-h-screen">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
           <BrowserRouter>
             {user && session && (
-              <AuthMethodSelection />
+              <AuthMethodSelection 
+                onComplete={() => {}} 
+                onSkip={() => {}} 
+              />
             )}
             <Routes>
               <Route path="/" element={<Index />} />
