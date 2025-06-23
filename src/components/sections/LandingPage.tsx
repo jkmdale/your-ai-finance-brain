@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -127,8 +126,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 {/* Premium Tier */}
                 <div className="backdrop-blur-xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-2 border-purple-400/50 rounded-2xl p-6 text-left relative">
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                      LIMITED TIME: FREE TRIAL
+                    <span className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-3 sm:px-4 py-1 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap">
+                      <span className="hidden sm:inline">LIMITED TIME: FREE TRIAL</span>
+                      <span className="sm:hidden">FREE TRIAL</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between mb-4 mt-2">
