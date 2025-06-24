@@ -219,33 +219,13 @@ export const Dashboard = () => {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* CSV Upload */}
             <CSVUpload />
             
             {/* AI Coach */}
             <div id="insights">
               <AICoach />
-            </div>
-          </div>
-
-          {/* Empty Transactions */}
-          <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-8 shadow-2xl">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 opacity-50">
-                <ArrowUpRight className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No Transactions Yet</h3>
-              <p className="text-white/70 mb-6">
-                Upload your bank CSV file to see your transaction history and start tracking your financial patterns
-              </p>
-              <button 
-                onClick={() => document.getElementById('csv-upload-container')?.scrollIntoView({ behavior: 'smooth' })}
-                className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto"
-              >
-                <Upload className="w-5 h-5" />
-                <span>Upload Your First File</span>
-              </button>
             </div>
           </div>
         </div>
@@ -327,29 +307,29 @@ export const Dashboard = () => {
         </div>
 
         {/* Recent Transactions */}
-        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl shadow-2xl">
-          <div className="p-4 sm:p-6 border-b border-white/20">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg sm:text-xl font-bold text-white">Recent Transactions</h3>
-              <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
-            </div>
-          </div>
-          
-          <div className="p-3 sm:p-6">
-            {isMobile ? (
-              // Mobile Card Layout
-              <div className="space-y-3">
-                {recentTransactions.slice(0, 5).map((transaction) => (
-                  <TransactionCard key={transaction.id} transaction={transaction} />
-                ))}
+        {recentTransactions.length > 0 && (
+          <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl shadow-2xl">
+            <div className="p-4 sm:p-6 border-b border-white/20">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg sm:text-xl font-bold text-white">Recent Transactions</h3>
+                <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
               </div>
-            ) : (
-              // Desktop Table Layout
-              <TransactionTable transactions={recentTransactions.slice(0, 10)} />
-            )}
-          </div>
-          
-          {recentTransactions.length > 0 && (
+            </div>
+            
+            <div className="p-3 sm:p-6">
+              {isMobile ? (
+                // Mobile Card Layout
+                <div className="space-y-3">
+                  {recentTransactions.slice(0, 5).map((transaction) => (
+                    <TransactionCard key={transaction.id} transaction={transaction} />
+                  ))}
+                </div>
+              ) : (
+                // Desktop Table Layout
+                <TransactionTable transactions={recentTransactions.slice(0, 10)} />
+              )}
+            </div>
+            
             <div className="p-4 sm:p-6 border-t border-white/20 text-center">
               <button 
                 onClick={() => document.getElementById('transactions')?.scrollIntoView({ behavior: 'smooth' })}
@@ -358,8 +338,8 @@ export const Dashboard = () => {
                 View All Transactions
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
