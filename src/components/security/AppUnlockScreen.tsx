@@ -14,6 +14,7 @@ export const AppUnlockScreen: React.FC = () => {
   const { preferredUnlockMethod, unlockApp } = useAppSecurity();
   const { signInWithPin, signInWithBiometric, signOut, user, isBiometricAvailable } = useAuth();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricAttempted, setBiometricAttempted] = useState(false);
 
   React.useEffect(() => {
     const checkBiometric = async () => {
@@ -23,12 +24,13 @@ export const AppUnlockScreen: React.FC = () => {
     checkBiometric();
   }, [isBiometricAvailable]);
 
-  // Auto-attempt biometric unlock if it's the preferred method
+  // Auto-attempt biometric unlock if it's the preferred method and hasn't been attempted yet
   React.useEffect(() => {
-    if (preferredUnlockMethod === 'biometric' && biometricAvailable) {
+    if (preferredUnlockMethod === 'biometric' && biometricAvailable && !biometricAttempted) {
+      setBiometricAttempted(true);
       handleBiometricUnlock();
     }
-  }, [preferredUnlockMethod, biometricAvailable]);
+  }, [preferredUnlockMethod, biometricAvailable, biometricAttempted]);
 
   const handlePinUnlock = async () => {
     if (pin.length !== 4) {
@@ -59,13 +61,18 @@ export const AppUnlockScreen: React.FC = () => {
     setIsUnlocking(true);
     
     try {
-      // For the unlock flow, we'll simulate biometric success
-      // In production, you'd use the actual biometric verification
-      setTimeout(() => {
-        unlockApp();
-        toast.success('App unlocked!');
+      // Use the actual biometric authentication
+      const { error } = await signInWithBiometric(user.email);
+      
+      if (error) {
+        toast.error('Biometric authentication failed');
         setIsUnlocking(false);
-      }, 1000);
+        return;
+      }
+      
+      unlockApp();
+      toast.success('App unlocked!');
+      setIsUnlocking(false);
     } catch (error) {
       toast.error('Biometric unlock failed');
       setIsUnlocking(false);

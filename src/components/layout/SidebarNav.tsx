@@ -15,7 +15,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { SmartFinanceIcon } from '@/components/ui/smart-finance-icon';
 import { useAuth } from '@/hooks/useAuth';
 
 const navigationItems = [
@@ -69,30 +68,30 @@ export function AppSidebar() {
   const appVersion = "1.0.0";
 
   return (
-    <Sidebar className="border-r border-white/10 bg-black/40 backdrop-blur-xl">
-      <SidebarHeader className="border-b border-white/10">
-        <div className="flex items-center space-x-3 p-2">
-          <div className="relative w-10 h-10 group cursor-pointer">
+    <Sidebar className="border-r border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
+      <SidebarHeader className="border-b border-purple-700/30 p-6">
+        <div className="flex items-center space-x-3">
+          <div className="relative w-12 h-12 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
-            <div className="relative w-10 h-10 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-xl">
-              <SmartFinanceIcon size={24} className="text-white" />
+            <div className="relative w-12 h-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-xl">
+              <img src="/icon_96x96.png" alt="SmartFinanceAI" className="w-8 h-8 object-contain" />
             </div>
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-white">SmartFinanceAI</span>
-            <span className="text-xs text-white/70 font-medium">FINANCIAL OS</span>
+            <span className="text-xs text-purple-200 font-medium">FINANCIAL OS</span>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-white/70">Main</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-purple-200">Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="text-white/80 hover:text-white hover:bg-white/10">
+                  <SidebarMenuButton asChild className="text-white hover:text-white hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40">
                     <a href={item.url}>
                       <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>
@@ -105,12 +104,12 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-white/70">Account</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-purple-200">Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {secondaryItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="text-white/80 hover:text-white hover:bg-white/10">
+                  <SidebarMenuButton asChild className="text-white hover:text-white hover:bg-purple-700/30">
                     <a href={item.url}>
                       <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>
@@ -134,15 +133,15 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/10">
+      <SidebarFooter className="border-t border-purple-700/30 bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
         <div className="p-4 space-y-2">
           {user && (
-            <div className="flex items-center space-x-2 text-white/70 text-sm">
+            <div className="flex items-center space-x-2 text-purple-200 text-sm">
               <User className="w-4 h-4" />
               <span>{user.email?.split('@')[0] || 'User'}</span>
             </div>
           )}
-          <div className="text-white/50 text-xs">
+          <div className="text-purple-300 text-xs">
             Version {appVersion}
           </div>
         </div>
