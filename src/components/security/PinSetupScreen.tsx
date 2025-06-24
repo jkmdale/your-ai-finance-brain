@@ -12,7 +12,7 @@ export const PinSetupScreen: React.FC = () => {
   const [step, setStep] = useState<'setup' | 'confirm'>('setup');
   const [isSettingUp, setIsSettingUp] = useState(false);
   const { setupPin } = useAuth();
-  const { setPreferredUnlockMethod, setSetupComplete, setIsPinSetup } = useAppSecurity();
+  const { setIsPinSetup } = useAppSecurity();
 
   const handleNumberClick = (number: string) => {
     if (isSettingUp) return;
@@ -75,9 +75,8 @@ export const PinSetupScreen: React.FC = () => {
         return;
       }
       
-      setPreferredUnlockMethod('pin');
+      // Only mark PIN as set up - don't complete full setup yet
       setIsPinSetup(true);
-      setSetupComplete(true);
       toast.success('PIN set up successfully!');
     } catch (error) {
       toast.error('Failed to set up PIN. Please try again.');
