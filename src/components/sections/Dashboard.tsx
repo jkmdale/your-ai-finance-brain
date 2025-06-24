@@ -9,6 +9,7 @@ import { FinancialHealthCard } from '@/components/ui/financial-health-card';
 import { SpendingInsights } from '@/components/ui/spending-insights';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DashboardStats {
   totalBalance: number;
@@ -27,14 +28,17 @@ interface Transaction {
   transaction_date: string;
   is_income: boolean;
   merchant?: string;
+  categories?: {
+    name: string;
+    color: string;
+  };
 }
 
 export const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [financialHealth, setFinancialHealth] = useState<any>(null);
-  const [spendingInsights, setSpendingInsights] = useState<any[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { user } = useAuth();
   const isMobile = useIsMobile();
 
@@ -48,27 +52,119 @@ export const Dashboard = () => {
     return colorMap[color as keyof typeof colorMap] || 'from-gray-400 to-gray-500';
   };
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  const fetchDashboardData = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        // For now, we'll show empty state since we removed encryption logic
-        // This will be updated when we implement proper data storage
+    try {
+      console.log('Fetching dashboard data for user:', user.id);
+
+      // Fetch recent transactions with categories
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          categories(name, color)
+        `)
+        .eq('user_id', user.id)
+        .order('transaction_date', { ascending: false })
+        .limit(10);
+
+      console.log('Fetched transactions:', transactions);
+
+      // Fetch bank accounts for balance
+      const { data: accounts } = await supabase
+        .from('bank_accounts')
+        .select('balance')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      console.log('Fetched accounts:', accounts);
+
+      if (transactions && transactions.length > 0) {
+        // Calculate current month's income and expenses
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        const currentMonthTransactions = transactions.filter(t => {
+          const transactionDate = new Date(t.transaction_date);
+          return transactionDate.getMonth() === currentMonth && 
+                 transactionDate.getFullYear() === currentYear;
+        });
+
+        const monthlyIncome = currentMonthTransactions
+          .filter(t => t.is_income)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const monthlyExpenses = currentMonthTransactions
+          .filter(t => !t.is_income)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+        const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
+
+        const dashboardStats: DashboardStats = {
+          totalBalance,
+          monthlyIncome,
+          monthlyExpenses,
+          savingsRate,
+          transactionCount: transactions.length,
+          isValidated: true,
+          warnings: []
+        };
+
+        console.log('Calculated stats:', dashboardStats);
+
+        setStats(dashboardStats);
+        setRecentTransactions(transactions);
+      } else {
+        console.log('No transactions found, setting stats to null');
         setStats(null);
         setRecentTransactions([]);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setStats(null);
+      setRecentTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [user, refreshKey]);
+
+  // Listen for CSV uploads to refresh dashboard data
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'csv-upload-complete') {
+        console.log('CSV upload detected, refreshing dashboard...');
+        // Refresh dashboard data after CSV upload
+        setTimeout(() => {
+          setRefreshKey(prev => prev + 1);
+        }, 1000); // Give time for data to be processed
       }
     };
 
-    fetchDashboardData();
-  }, [user]);
+    // Listen for custom event from CSV upload
+    const handleCustomEvent = () => {
+      console.log('Custom CSV upload event detected, refreshing dashboard...');
+      setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+      }, 1000);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('csv-upload-complete', handleCustomEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('csv-upload-complete', handleCustomEvent);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -141,7 +237,10 @@ export const Dashboard = () => {
               <p className="text-white/70 mb-6">
                 Upload your bank CSV file to see your transaction history and start tracking your financial patterns
               </p>
-              <button className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto">
+              <button 
+                onClick={() => document.getElementById('csv-upload-container')?.scrollIntoView({ behavior: 'smooth' })}
+                className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto"
+              >
                 <Upload className="w-5 h-5" />
                 <span>Upload Your First File</span>
               </button>
@@ -152,7 +251,7 @@ export const Dashboard = () => {
     );
   }
 
-  // Dashboard with real data (placeholder for when data storage is implemented)
+  // Dashboard with real data
   return (
     <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -165,9 +264,99 @@ export const Dashboard = () => {
           </p>
         </div>
 
-        {/* This section will be populated when we implement proper data storage */}
-        <div className="text-center py-12">
-          <p className="text-white/70">Dashboard functionality will be restored once data storage is reimplemented.</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('blue')} rounded-xl flex items-center justify-center`}>
+                <DollarSign className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <h3 className="text-white/70 text-sm font-medium mb-1">Total Balance</h3>
+            <p className="text-xl font-bold text-white">${stats.totalBalance.toLocaleString()}</p>
+            <p className="text-xs text-green-400 mt-1">+2.5% this month</p>
+          </div>
+
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('green')} rounded-xl flex items-center justify-center`}>
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Income</h3>
+            <p className="text-xl font-bold text-white">${stats.monthlyIncome.toLocaleString()}</p>
+            <p className="text-xs text-green-400 mt-1">This month</p>
+          </div>
+
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('purple')} rounded-xl flex items-center justify-center`}>
+                <PieChart className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Expenses</h3>
+            <p className="text-xl font-bold text-white">${stats.monthlyExpenses.toLocaleString()}</p>
+            <p className="text-xs text-red-400 mt-1">This month</p>
+          </div>
+
+          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('emerald')} rounded-xl flex items-center justify-center`}>
+                <Target className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <h3 className="text-white/70 text-sm font-medium mb-1">Savings Rate</h3>
+            <p className="text-xl font-bold text-white">{stats.savingsRate.toFixed(1)}%</p>
+            <p className={`text-xs mt-1 ${stats.savingsRate > 20 ? 'text-green-400' : 'text-yellow-400'}`}>
+              {stats.savingsRate > 20 ? 'Excellent!' : 'Room to improve'}
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+          {/* CSV Upload */}
+          <CSVUpload />
+          
+          {/* AI Coach */}
+          <div id="insights">
+            <AICoach />
+          </div>
+        </div>
+
+        {/* Recent Transactions */}
+        <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl shadow-2xl">
+          <div className="p-4 sm:p-6 border-b border-white/20">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg sm:text-xl font-bold text-white">Recent Transactions</h3>
+              <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
+            </div>
+          </div>
+          
+          <div className="p-3 sm:p-6">
+            {isMobile ? (
+              // Mobile Card Layout
+              <div className="space-y-3">
+                {recentTransactions.slice(0, 5).map((transaction) => (
+                  <TransactionCard key={transaction.id} transaction={transaction} />
+                ))}
+              </div>
+            ) : (
+              // Desktop Table Layout
+              <TransactionTable transactions={recentTransactions.slice(0, 10)} />
+            )}
+          </div>
+          
+          {recentTransactions.length > 0 && (
+            <div className="p-4 sm:p-6 border-t border-white/20 text-center">
+              <button 
+                onClick={() => document.getElementById('transactions')?.scrollIntoView({ behavior: 'smooth' })}
+                className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all duration-200 shadow-lg font-medium text-sm sm:text-base"
+              >
+                View All Transactions
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>

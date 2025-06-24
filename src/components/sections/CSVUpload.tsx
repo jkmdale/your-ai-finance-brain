@@ -161,11 +161,18 @@ export const CSVUpload = () => {
             `Successfully processed ${totalProcessed} transactions and created budget with ${budgetResult.categoriesCreated} categories`
           );
 
-          // Notify other components that budget was created
+          // Notify other components that data was uploaded
           localStorage.setItem('csv-upload-complete', Date.now().toString());
+          
+          // Dispatch storage event for other components
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'csv-upload-complete',
             newValue: Date.now().toString()
+          }));
+
+          // Also dispatch a custom event for more reliable detection
+          window.dispatchEvent(new CustomEvent('csv-upload-complete', {
+            detail: { processed: totalProcessed, transactions: allTransactions }
           }));
           
         } catch (budgetError) {
