@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign, Loader2, Upload, Plus, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -245,9 +244,8 @@ export const BudgetOverview = () => {
           <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-500 rounded-xl flex items-center justify-center">
-                <T
-
-</div>
+                <TrendingDown className="w-6 h-6 text-white" />
+              </div>
             </div>
             <h3 className="text-white/70 text-sm font-medium mb-1">Total Spent</h3>
             <p className="text-2xl font-bold text-white">${budgetData.totalSpent.toLocaleString()}</p>
