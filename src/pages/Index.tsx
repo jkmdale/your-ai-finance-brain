@@ -6,6 +6,7 @@ import { GoalTracking } from "@/components/sections/GoalTracking";
 import { AIInsights } from "@/components/sections/AIInsights";
 import { TransactionHistory } from "@/components/sections/TransactionHistory";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
@@ -49,15 +50,17 @@ const Index = () => {
     );
   }
 
-  // If user is authenticated, show the main dashboard
+  // If user is authenticated, show the main dashboard with sidebar
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Dashboard />
-      <BudgetOverview />
-      <GoalTracking />
-      <AIInsights />
-      <TransactionHistory />
-    </div>
+    <SidebarLayout>
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <Dashboard />
+        <BudgetOverview />
+        <GoalTracking />
+        <AIInsights />
+        <TransactionHistory />
+      </div>
+    </SidebarLayout>
   );
 };
 
