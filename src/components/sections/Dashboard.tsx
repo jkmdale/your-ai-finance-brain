@@ -1,8 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
-import { AICoach } from './AICoach';
 import { TransactionCard } from '@/components/ui/transaction-card';
 import { TransactionTable } from '@/components/ui/transaction-table';
 import { FinancialHealthCard } from '@/components/ui/financial-health-card';
@@ -223,10 +221,6 @@ export const Dashboard = () => {
             {/* CSV Upload */}
             <CSVUpload />
             
-            {/* AI Coach */}
-            <div id="insights">
-              <AICoach />
-            </div>
           </div>
         </div>
       </section>
@@ -295,15 +289,9 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          {/* CSV Upload */}
+        {/* CSV Upload */}
+        <div className="mb-12">
           <CSVUpload />
-          
-          {/* AI Coach */}
-          <div id="insights">
-            <AICoach />
-          </div>
         </div>
 
         {/* Recent Transactions */}
