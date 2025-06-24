@@ -159,7 +159,7 @@ export const AppUnlockScreen: React.FC = () => {
               onClick={() => window.location.reload()}
               disabled={isUnlocking}
               variant="outline"
-              className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-2"
+              className="w-full border-white/20 text-purple-400 hover:text-purple-300 hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-2"
             >
               <Hash className="w-5 h-5" />
               <span>Use PIN Instead</span>
