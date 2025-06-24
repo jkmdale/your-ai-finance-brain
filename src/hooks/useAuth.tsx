@@ -292,21 +292,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     console.log('PIN verification successful');
     
-    // Get user from database to sign them in
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
-    if (usersError) {
-      console.log('Error fetching users:', usersError);
-      return { error: 'Authentication failed' };
-    }
-    
-    const targetUser = users?.find(u => u.email === email);
-    if (!targetUser) {
-      console.log('User not found');
-      return { error: 'User not found' };
-    }
-    
-    // For PIN authentication, we need to create a magic link or similar
-    // Since we can't directly sign in with PIN, we'll use the admin API
+    // For PIN authentication, we'll use the admin API to generate a magic link
     try {
       const { data, error } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
