@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -296,19 +295,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      // Get the stored PIN data for this user
+      // Get the stored PIN data for this user - handle potential query errors
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
         .select('pin_hash, pin_salt, user_id')
         .eq('user_email', email)
-        .single();
+        .maybeSingle();
 
-      if (userError || !userData) {
-        console.log('No PIN found for user:', userError);
+      if (userError) {
+        console.log('Database error querying PIN data:', userError);
+        return { error: 'Database error occurred during authentication' };
+      }
+
+      if (!userData) {
+        console.log('No PIN found for user:', email);
         return { error: 'No PIN set up for this account' };
       }
 
-      // Verify PIN using secure comparison
+      // Verify PIN using secure comparison - handle null salt
       const isValid = await PinSecurityService.verifyPin(
         pin, 
         userData.pin_hash, 
