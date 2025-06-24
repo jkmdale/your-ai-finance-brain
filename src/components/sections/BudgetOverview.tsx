@@ -39,60 +39,62 @@ export const BudgetOverview = () => {
 
   const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'cyan', 'emerald'];
 
-  useEffect(() => {
-    const fetchBudgetData = async () => {
-      if (!user) {
+  const fetchBudgetData = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Fetching budget data for user:', user.id);
+
+      // Get active budget with categories
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select(`
+          *,
+          budget_categories(
+            allocated_amount,
+            spent_amount,
+            categories(name, color)
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!budgets || budgets.length === 0) {
+        setBudgetData(null);
         setLoading(false);
         return;
       }
 
-      try {
-        // Get active budget with categories
-        const { data: budgets } = await supabase
-          .from('budgets')
-          .select(`
-            *,
-            budget_categories(
-              allocated_amount,
-              spent_amount,
-              categories(name, color)
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(1);
+      const budget = budgets[0];
+      const categories: BudgetCategory[] = budget.budget_categories?.map((bc: any, index: number) => ({
+        name: bc.categories?.name || 'Unknown',
+        allocated: bc.allocated_amount || 0,
+        spent: bc.spent_amount || 0,
+        color: colorPalette[index % colorPalette.length],
+        percentage: Math.round(((bc.allocated_amount || 0) / (budget.total_income || 1)) * 100)
+      })) || [];
 
-        if (!budgets || budgets.length === 0) {
-          setBudgetData(null);
-          setLoading(false);
-          return;
-        }
+      const totalBudgeted = categories.reduce((sum, cat) => sum + cat.allocated, 0);
+      const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
 
-        const budget = budgets[0];
-        const categories: BudgetCategory[] = budget.budget_categories?.map((bc: any, index: number) => ({
-          name: bc.categories?.name || 'Unknown',
-          allocated: bc.allocated_amount || 0,
-          spent: bc.spent_amount || 0,
-          color: colorPalette[index % colorPalette.length],
-          percentage: Math.round(((bc.allocated_amount || 0) / (budget.total_income || 1)) * 100)
-        })) || [];
+      setBudgetData({
+        totalBudgeted,
+        totalSpent,
+        categories
+      });
+    } catch (error) {
+      console.error('Error fetching budget data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const totalBudgeted = categories.reduce((sum, cat) => sum + cat.allocated, 0);
-        const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
-
-        setBudgetData({
-          totalBudgeted,
-          totalSpent,
-          categories
-        });
-      } catch (error) {
-        console.error('Error fetching budget data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchBudgetData();
   }, [user, refreshKey]);
 
@@ -100,6 +102,7 @@ export const BudgetOverview = () => {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'csv-upload-complete') {
+        console.log('CSV upload detected, refreshing budget data...');
         // Refresh budget data after CSV upload
         setTimeout(() => {
           setRefreshKey(prev => prev + 1);
@@ -107,8 +110,21 @@ export const BudgetOverview = () => {
       }
     };
 
+    // Listen for custom event from CSV upload
+    const handleCustomEvent = (e: CustomEvent) => {
+      console.log('Custom CSV upload event detected, refreshing budget data...');
+      setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+      }, 2000);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('csv-upload-complete', handleCustomEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('csv-upload-complete', handleCustomEvent as EventListener);
+    };
   }, []);
 
   if (loading) {

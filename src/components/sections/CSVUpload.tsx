@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -148,20 +149,21 @@ export const CSVUpload = () => {
         
         // Auto-create budget from transactions
         try {
+          console.log('Creating/updating budget from transactions...');
           const budgetResult = await budgetCreator.createBudgetFromTransactions(
             user.id,
             allTransactions,
             `Budget from ${new Date().toLocaleDateString()}`
           );
           
-          console.log('Auto-created budget:', budgetResult);
+          console.log('Budget creation result:', budgetResult);
           
           // Update success message to include budget creation
           setUploadMessage(
-            `Successfully processed ${totalProcessed} transactions and created budget with ${budgetResult.categoriesCreated} categories`
+            `Successfully processed ${totalProcessed} transactions and updated budget with ${budgetResult.categoriesCreated} categories`
           );
 
-          // Notify other components that data was uploaded
+          // Notify other components that data was uploaded and budget updated
           localStorage.setItem('csv-upload-complete', Date.now().toString());
           
           // Dispatch storage event for other components
@@ -172,12 +174,17 @@ export const CSVUpload = () => {
 
           // Also dispatch a custom event for more reliable detection
           window.dispatchEvent(new CustomEvent('csv-upload-complete', {
-            detail: { processed: totalProcessed, transactions: allTransactions }
+            detail: { 
+              processed: totalProcessed, 
+              transactions: allTransactions,
+              budgetUpdated: true,
+              budgetResult
+            }
           }));
           
         } catch (budgetError) {
-          console.error('Error creating budget:', budgetError);
-          allWarnings.push('Transactions processed but budget creation failed');
+          console.error('Error creating/updating budget:', budgetError);
+          allWarnings.push('Transactions processed but budget update failed');
         }
         
         setUploadResults({
