@@ -23,7 +23,7 @@ export const SecurityMethodSetup: React.FC = () => {
   }, [isBiometricAvailable]);
 
   const handleSetupPinFirst = () => {
-    // This will trigger the PIN setup screen to show
+    // Navigate to PIN setup by setting isPinSetup to false (which triggers PIN setup screen)
     setIsPinSetup(false);
   };
 

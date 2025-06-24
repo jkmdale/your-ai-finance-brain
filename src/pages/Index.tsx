@@ -58,18 +58,13 @@ const Index = () => {
     );
   }
 
-  // If user is authenticated but hasn't set up any security yet, show security method setup
-  if (user && !setupComplete && !isPinSetup) {
-    return <SecurityMethodSetup />;
-  }
-
-  // If user has started security setup but PIN isn't set up yet, show PIN setup screen
+  // If user is authenticated but PIN isn't set up yet, show PIN setup screen
   if (user && !isPinSetup) {
     return <PinSetupScreen />;
   }
 
   // If user has PIN set up but hasn't completed full security setup, 
-  // they need to choose their preferred unlock method
+  // show security method setup for preference selection
   if (user && isPinSetup && !setupComplete) {
     return <SecurityMethodSetup />;
   }
