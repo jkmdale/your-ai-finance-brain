@@ -15,6 +15,7 @@ export const AppUnlockScreen: React.FC = () => {
   const { signInWithPin, signInWithBiometric, signOut, user, isBiometricAvailable } = useAuth();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricAttempted, setBiometricAttempted] = useState(false);
+  const [biometricFailed, setBiometricFailed] = useState(false);
 
   React.useEffect(() => {
     const checkBiometric = async () => {
@@ -26,11 +27,11 @@ export const AppUnlockScreen: React.FC = () => {
 
   // Auto-attempt biometric unlock if it's the preferred method and hasn't been attempted yet
   React.useEffect(() => {
-    if (preferredUnlockMethod === 'biometric' && biometricAvailable && !biometricAttempted) {
+    if (preferredUnlockMethod === 'biometric' && biometricAvailable && !biometricAttempted && !biometricFailed) {
       setBiometricAttempted(true);
       handleBiometricUnlock();
     }
-  }, [preferredUnlockMethod, biometricAvailable, biometricAttempted]);
+  }, [preferredUnlockMethod, biometricAvailable, biometricAttempted, biometricFailed]);
 
   const handlePinUnlock = async () => {
     if (pin.length !== 4) {
@@ -65,7 +66,18 @@ export const AppUnlockScreen: React.FC = () => {
       const { error } = await signInWithBiometric(user.email);
       
       if (error) {
-        toast.error('Biometric authentication failed');
+        console.log('Biometric error:', error);
+        setBiometricFailed(true);
+        
+        // Check for specific passkey errors
+        if (error.includes('No passkeys available') || error.includes('passkey')) {
+          toast.error('No biometric credentials found. Please use PIN instead.');
+        } else if (error.includes('cancelled') || error.includes('not allowed')) {
+          toast.error('Biometric authentication was cancelled');
+        } else {
+          toast.error('Biometric authentication failed');
+        }
+        
         setIsUnlocking(false);
         return;
       }
@@ -73,8 +85,16 @@ export const AppUnlockScreen: React.FC = () => {
       unlockApp();
       toast.success('App unlocked!');
       setIsUnlocking(false);
-    } catch (error) {
-      toast.error('Biometric unlock failed');
+    } catch (error: any) {
+      console.log('Biometric unlock error:', error);
+      setBiometricFailed(true);
+      
+      if (error.message?.includes('passkey') || error.name === 'NotAllowedError') {
+        toast.error('No biometric credentials found. Please use PIN instead.');
+      } else {
+        toast.error('Biometric unlock failed');
+      }
+      
       setIsUnlocking(false);
     }
   };
@@ -82,6 +102,11 @@ export const AppUnlockScreen: React.FC = () => {
   const handleSignOut = async () => {
     await signOut();
     toast.success('Signed out successfully');
+  };
+
+  const switchToPinMode = () => {
+    setBiometricFailed(false);
+    setBiometricAttempted(true);
   };
 
   return (
@@ -102,11 +127,11 @@ export const AppUnlockScreen: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Unlock SmartFinanceAI</h2>
           <p className="text-white/70">
-            {preferredUnlockMethod === 'pin' ? 'Enter your PIN to continue' : 'Use biometric authentication to continue'}
+            {(preferredUnlockMethod === 'pin' || biometricFailed) ? 'Enter your PIN to continue' : 'Use biometric authentication to continue'}
           </p>
         </div>
 
-        {preferredUnlockMethod === 'pin' ? (
+        {(preferredUnlockMethod === 'pin' || biometricFailed) ? (
           <div className="space-y-6">
             <div className="flex justify-center">
               <InputOTP 
@@ -132,7 +157,7 @@ export const AppUnlockScreen: React.FC = () => {
               {isUnlocking ? 'Unlocking...' : 'Unlock'}
             </Button>
 
-            {biometricAvailable && (
+            {biometricAvailable && !biometricFailed && (
               <Button
                 onClick={handleBiometricUnlock}
                 disabled={isUnlocking}
@@ -156,7 +181,7 @@ export const AppUnlockScreen: React.FC = () => {
             </Button>
 
             <Button
-              onClick={() => window.location.reload()}
+              onClick={switchToPinMode}
               disabled={isUnlocking}
               variant="outline"
               className="w-full border-white/20 text-purple-400 hover:text-purple-300 hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-2"
