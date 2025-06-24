@@ -16,6 +16,7 @@ export const SmartFinanceIcon = ({ className = "", size = 32 }: SmartFinanceIcon
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="drop-shadow-lg"
+        style={{ background: 'transparent' }}
       >
         <defs>
           {/* Teal to blue gradient for the brain */}
@@ -35,79 +36,81 @@ export const SmartFinanceIcon = ({ className = "", size = 32 }: SmartFinanceIcon
           </filter>
         </defs>
         
-        {/* Main brain outline matching uploaded logo */}
-        <path
-          d="M25 35C25 28 30 22 37 22C40 22 43 23 45 25C47 23 50 22 53 22C60 22 65 28 65 35C68 36 70 39 70 43C70 48 66 52 61 52C60 52 59 52 58 51C59 54 59 57 58 60C56 66 51 70 45 70C42 70 39 69 37 67C35 69 32 70 29 70C23 70 18 66 16 60C15 57 15 54 16 51C15 52 14 52 13 52C8 52 4 48 4 43C4 39 6 36 9 35C9 28 14 22 21 22C24 22 27 23 29 25C31 23 34 22 37 22"
-          fill="url(#brainGradient)"
-          filter="url(#glow)"
-        />
-        
-        {/* Brain texture lines */}
-        <path
-          d="M30 30C32 28 35 29 37 31"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.8"
-        />
-        <path
-          d="M53 30C55 28 58 29 60 31"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.8"
-        />
-        <path
-          d="M28 40C30 38 33 39 35 41"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.7"
-        />
-        <path
-          d="M55 40C57 38 60 39 62 41"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.7"
-        />
-        <path
-          d="M25 50C27 48 30 49 32 51"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-        <path
-          d="M58 50C60 48 63 49 65 51"
-          stroke="#006400"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-        
-        {/* Central dollar sign */}
-        <g transform="translate(37, 46)">
-          {/* Vertical line of dollar sign */}
-          <line
-            x1="0"
-            y1="-14"
-            x2="0"
-            y2="14"
-            stroke="#FFFFFF"
-            strokeWidth="2.5"
-            strokeLinecap="round"
+        {/* Main brain outline - centered and scaled properly */}
+        <g transform="translate(50, 50)">
+          <path
+            d="M-25 -15C-25 -22 -20 -28 -13 -28C-10 -28 -7 -27 -5 -25C-3 -27 0 -28 3 -28C10 -28 15 -22 15 -15C18 -14 20 -11 20 -7C20 -2 16 2 11 2C10 2 9 2 8 1C9 4 9 7 8 10C6 16 1 20 -5 20C-8 20 -11 19 -13 17C-15 19 -18 20 -21 20C-27 20 -32 16 -34 10C-35 7 -35 4 -34 1C-35 2 -36 2 -37 2C-42 2 -46 -2 -46 -7C-46 -11 -44 -14 -41 -15C-41 -22 -36 -28 -29 -28C-26 -28 -23 -27 -21 -25C-19 -27 -16 -28 -13 -28"
+            fill="url(#brainGradient)"
+            filter="url(#glow)"
           />
           
-          {/* S shape for dollar sign */}
+          {/* Brain texture lines - adjusted for centering */}
           <path
-            d="M-8 -10C-8 -13 -5 -14 0 -14C5 -14 8 -13 8 -10C8 -7 5 -5 0 -5C-5 -5 -8 -3 -8 0C-8 3 -5 5 0 5C5 5 8 3 8 0"
-            stroke="#FFFFFF"
-            strokeWidth="2.5"
+            d="M-20 -20C-18 -22 -15 -21 -13 -19"
+            stroke="#006400"
+            strokeWidth="1.5"
             strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
+            opacity="0.8"
           />
+          <path
+            d="M3 -20C5 -22 8 -21 10 -19"
+            stroke="#006400"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.8"
+          />
+          <path
+            d="M-22 -10C-20 -12 -17 -11 -15 -9"
+            stroke="#006400"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.7"
+          />
+          <path
+            d="M5 -10C7 -12 10 -11 12 -9"
+            stroke="#006400"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.7"
+          />
+          <path
+            d="M-25 0C-23 -2 -20 -1 -18 1"
+            stroke="#006400"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.6"
+          />
+          <path
+            d="M8 0C10 -2 13 -1 15 1"
+            stroke="#006400"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.6"
+          />
+          
+          {/* Central dollar sign - centered */}
+          <g transform="translate(-13, -4)">
+            {/* Vertical line of dollar sign */}
+            <line
+              x1="0"
+              y1="-14"
+              x2="0"
+              y2="14"
+              stroke="#FFFFFF"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+            
+            {/* S shape for dollar sign */}
+            <path
+              d="M-8 -10C-8 -13 -5 -14 0 -14C5 -14 8 -13 8 -10C8 -7 5 -5 0 -5C-5 -5 -8 -3 -8 0C-8 3 -5 5 0 5C5 5 8 3 8 0"
+              stroke="#FFFFFF"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </g>
         </g>
       </svg>
     </div>
