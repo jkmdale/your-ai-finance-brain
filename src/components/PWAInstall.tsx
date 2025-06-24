@@ -12,6 +12,7 @@ export const PWAInstall = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
     console.log('PWAInstall component mounted');
@@ -22,13 +23,14 @@ export const PWAInstall = () => {
     console.log('Is iOS:', iOS);
 
     // Check if already installed
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    const isInstalled = localStorage.getItem('pwa-dismissed') === 'true';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                        (window.navigator as any).standalone === true;
+    const isDismissed = localStorage.getItem('pwa-dismissed') === 'true';
     
     console.log('Is standalone:', isStandalone);
-    console.log('Is dismissed:', isInstalled);
+    console.log('Is dismissed:', isDismissed);
 
-    if (!isStandalone && !isInstalled) {
+    if (!isStandalone && !isDismissed) {
       if (iOS) {
         // Show iOS install instructions after a delay
         console.log('Setting up iOS install banner');
@@ -39,22 +41,36 @@ export const PWAInstall = () => {
       } else {
         // Handle Android/Desktop install prompt
         console.log('Setting up beforeinstallprompt listener');
+        
         const handler = (e: Event) => {
           console.log('beforeinstallprompt event fired');
           e.preventDefault();
-          setDeferredPrompt(e as BeforeInstallPromptEvent);
+          const promptEvent = e as BeforeInstallPromptEvent;
+          setDeferredPrompt(promptEvent);
           setShowInstallBanner(true);
         };
 
         window.addEventListener('beforeinstallprompt', handler);
         
-        // Fallback: show banner after delay if no prompt event
-        setTimeout(() => {
-          if (!deferredPrompt && !showInstallBanner) {
-            console.log('No beforeinstallprompt event, showing fallback banner');
-            setShowInstallBanner(true);
-          }
-        }, 3000);
+        // Check if service worker is ready and show fallback banner
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(() => {
+            setTimeout(() => {
+              if (!deferredPrompt && !showInstallBanner) {
+                console.log('Service worker ready, showing fallback banner');
+                setShowInstallBanner(true);
+              }
+            }, 3000);
+          });
+        } else {
+          // Fallback: show banner after delay if no prompt event and no service worker
+          setTimeout(() => {
+            if (!deferredPrompt && !showInstallBanner) {
+              console.log('No service worker, showing fallback banner');
+              setShowInstallBanner(true);
+            }
+          }, 5000);
+        }
         
         return () => window.removeEventListener('beforeinstallprompt', handler);
       }
@@ -63,15 +79,34 @@ export const PWAInstall = () => {
 
   const handleInstallClick = async () => {
     console.log('Install button clicked');
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log('Install prompt outcome:', outcome);
-      
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        setShowInstallBanner(false);
+    setIsInstalling(true);
+    
+    try {
+      if (deferredPrompt) {
+        console.log('Using deferred prompt');
+        await deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('Install prompt outcome:', outcome);
+        
+        if (outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+          setDeferredPrompt(null);
+          setShowInstallBanner(false);
+          localStorage.setItem('pwa-installed', 'true');
+        } else {
+          console.log('User dismissed the install prompt');
+        }
+      } else {
+        // Fallback for browsers that don't support beforeinstallprompt
+        console.log('No deferred prompt available, showing manual instructions');
+        alert('To install this app:\n\n1. Click the browser menu (⋮ or ⚙️)\n2. Select "Install App" or "Add to Home Screen"\n3. Follow the prompts');
       }
+    } catch (error) {
+      console.error('Error during installation:', error);
+      // Show fallback instructions on error
+      alert('Installation not available. You can bookmark this page or add it to your home screen manually through your browser menu.');
+    } finally {
+      setIsInstalling(false);
     }
   };
 
@@ -81,7 +116,7 @@ export const PWAInstall = () => {
     localStorage.setItem('pwa-dismissed', 'true');
   };
 
-  console.log('PWAInstall render - showInstallBanner:', showInstallBanner);
+  console.log('PWAInstall render - showInstallBanner:', showInstallBanner, 'deferredPrompt:', !!deferredPrompt);
 
   if (!showInstallBanner) return null;
 
@@ -115,9 +150,10 @@ export const PWAInstall = () => {
       ) : (
         <Button
           onClick={handleInstallClick}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg h-9 text-sm"
+          disabled={isInstalling}
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg h-9 text-sm disabled:opacity-50"
         >
-          Install App
+          {isInstalling ? 'Installing...' : 'Install App'}
         </Button>
       )}
     </div>
