@@ -7,6 +7,7 @@ import { AIInsights } from "@/components/sections/AIInsights";
 import { TransactionHistory } from "@/components/sections/TransactionHistory";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecurityMethodSetup } from "@/components/security/SecurityMethodSetup";
+import { PinSetupScreen } from "@/components/security/PinSetupScreen";
 import { AppUnlockScreen } from "@/components/security/AppUnlockScreen";
 import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,7 +16,7 @@ import { useState } from "react";
 
 const Index = () => {
   const { user, loading } = useAuth();
-  const { isAppLocked, setupComplete } = useAppSecurity();
+  const { isAppLocked, setupComplete, preferredUnlockMethod, isPinSetup } = useAppSecurity();
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
 
@@ -60,6 +61,11 @@ const Index = () => {
   // If user is authenticated but security setup is not complete, show security setup
   if (user && !setupComplete) {
     return <SecurityMethodSetup />;
+  }
+
+  // If user chose PIN but hasn't set it up yet, show PIN setup screen
+  if (user && preferredUnlockMethod === 'pin' && !isPinSetup) {
+    return <PinSetupScreen />;
   }
 
   // If user is authenticated and app is locked, show unlock screen

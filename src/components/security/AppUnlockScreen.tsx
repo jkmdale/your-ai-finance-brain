@@ -58,15 +58,21 @@ export const AppUnlockScreen: React.FC = () => {
 
     setIsUnlocking(true);
     
-    // For demo purposes, we'll accept any 4-digit PIN
-    // In production, you'd validate against the stored PIN
-    if (pinToVerify === '1234' || pinToVerify.length === 4) {
-      setTimeout(() => {
-        unlockApp();
-        toast.success('App unlocked!');
+    try {
+      // Use the actual PIN authentication from useAuth
+      const { error } = await signInWithPin(user?.email || '', pinToVerify);
+      
+      if (error) {
+        toast.error('Invalid PIN');
+        setPin('');
         setIsUnlocking(false);
-      }, 500);
-    } else {
+        return;
+      }
+      
+      unlockApp();
+      toast.success('App unlocked!');
+      setIsUnlocking(false);
+    } catch (error) {
       toast.error('Invalid PIN');
       setPin('');
       setIsUnlocking(false);

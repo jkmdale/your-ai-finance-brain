@@ -11,6 +11,8 @@ interface AppSecurityContextType {
   setupComplete: boolean;
   setSetupComplete: (complete: boolean) => void;
   resetInactivityTimer: () => void;
+  isPinSetup: boolean;
+  setIsPinSetup: (setup: boolean) => void;
 }
 
 const AppSecurityContext = createContext<AppSecurityContextType | undefined>(undefined);
@@ -22,6 +24,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [preferredUnlockMethod, setPreferredUnlockMethodState] = useState<'pin' | 'biometric' | null>(null);
   const [setupComplete, setSetupComplete] = useState(false);
+  const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Initialize security settings from localStorage
@@ -29,9 +32,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
       const storedMethod = localStorage.getItem(`security_method_${user.id}`) as 'pin' | 'biometric' | null;
       const storedSetupComplete = localStorage.getItem(`security_setup_${user.id}`) === 'true';
+      const storedPinSetup = localStorage.getItem(`pin_setup_${user.id}`) === 'true';
       
       setPreferredUnlockMethodState(storedMethod);
       setSetupComplete(storedSetupComplete);
+      setIsPinSetup(storedPinSetup);
       
       // Lock app initially if setup is complete
       if (storedSetupComplete) {
@@ -122,6 +127,13 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
+  const setIsPinSetupState = useCallback((setup: boolean) => {
+    if (user) {
+      setIsPinSetup(setup);
+      localStorage.setItem(`pin_setup_${user.id}`, setup.toString());
+    }
+  }, [user]);
+
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer) {
       clearTimeout(inactivityTimer);
@@ -144,7 +156,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       lockApp,
       setupComplete,
       setSetupComplete: setSetupCompleteState,
-      resetInactivityTimer
+      resetInactivityTimer,
+      isPinSetup,
+      setIsPinSetup: setIsPinSetupState
     }}>
       {children}
     </AppSecurityContext.Provider>

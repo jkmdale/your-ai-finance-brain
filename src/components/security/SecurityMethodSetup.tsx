@@ -10,8 +10,8 @@ import { toast } from 'sonner';
 export const SecurityMethodSetup: React.FC = () => {
   const [selectedMethod, setSelectedMethod] = useState<'pin' | 'biometric' | null>(null);
   const [isSettingUp, setIsSettingUp] = useState(false);
-  const { setupPin, setupBiometric, isBiometricAvailable } = useAuth();
-  const { setPreferredUnlockMethod, setSetupComplete } = useAppSecurity();
+  const { setupBiometric, isBiometricAvailable } = useAuth();
+  const { setPreferredUnlockMethod, setSetupComplete, setIsPinSetup } = useAppSecurity();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   React.useEffect(() => {
@@ -33,10 +33,10 @@ export const SecurityMethodSetup: React.FC = () => {
 
     try {
       if (selectedMethod === 'pin') {
-        // For PIN setup, we'll redirect to a PIN creation flow
+        // For PIN setup, we'll show the PIN setup screen
         setPreferredUnlockMethod('pin');
-        setSetupComplete(true);
-        toast.success('PIN security enabled! You can set up your PIN in settings.');
+        // Don't set setupComplete yet - wait for PIN to be set up
+        toast.success('PIN method selected! Set up your PIN next.');
       } else if (selectedMethod === 'biometric') {
         // Set up biometric authentication
         const { error } = await setupBiometric();
