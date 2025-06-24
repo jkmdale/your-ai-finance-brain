@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -292,7 +291,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     console.log('PIN verification successful');
-    return { error: null };
+    
+    // Get user from database to sign them in
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+    if (usersError) {
+      console.log('Error fetching users:', usersError);
+      return { error: 'Authentication failed' };
+    }
+    
+    const targetUser = users?.find(u => u.email === email);
+    if (!targetUser) {
+      console.log('User not found');
+      return { error: 'User not found' };
+    }
+    
+    // For PIN authentication, we need to create a magic link or similar
+    // Since we can't directly sign in with PIN, we'll use the admin API
+    try {
+      const { data, error } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      
+      if (error) throw error;
+      
+      // Auto-sign in using the generated link
+      const { error: signInError } = await supabase.auth.verifyOtp({
+        email: email,
+        token: data.properties?.email_otp || '',
+        type: 'email'
+      });
+      
+      if (signInError) {
+        console.log('Auto sign-in failed:', signInError);
+        return { error: 'Authentication failed' };
+      }
+      
+      return { error: null };
+    } catch (error) {
+      console.log('PIN authentication error:', error);
+      return { error: 'Authentication failed' };
+    }
   };
 
   const setupBiometric = async () => {
@@ -480,28 +522,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log('Credential verified, user ID:', matchingCredential.user_id);
 
-      // Create session token for the authenticated user
+      // Now properly sign the user in using Supabase Auth
       try {
-        const sessionToken = crypto.randomUUID();
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const { data, error } = await supabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: email,
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
         
-        const { error: sessionError } = await supabase
-          .from('user_sessions')
-          .insert({
-            user_id: matchingCredential.user_id,
-            session_token: sessionToken,
-            auth_method: 'biometric',
-            expires_at: expiresAt.toISOString()
-          });
-
-        if (sessionError) {
-          console.log('Session creation error:', sessionError);
+        if (error) throw error;
+        
+        // Auto-sign in using the generated link
+        const { error: signInError } = await supabase.auth.verifyOtp({
+          email: email,
+          token: data.properties?.email_otp || '',
+          type: 'email'
+        });
+        
+        if (signInError) {
+          console.log('Auto sign-in failed:', signInError);
+          return { error: 'Authentication failed' };
         }
 
         console.log('Biometric authentication successful for user:', matchingCredential.user_id);
         return { error: null };
-      } catch (sessionError) {
-        console.log('Session creation error:', sessionError);
+      } catch (authError) {
+        console.log('Auth error:', authError);
         return { error: 'Authentication failed' };
       }
     } catch (error: any) {
