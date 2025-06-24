@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -430,6 +431,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
+      // First, get the stored credential for this user
+      const { data: storedCredentials, error: fetchError } = await supabase
+        .from('biometric_credentials')
+        .select('credential_id, user_id, user_email')
+        .eq('user_email', email);
+
+      if (fetchError || !storedCredentials || storedCredentials.length === 0) {
+        console.log('No biometric credentials found for user:', email, fetchError);
+        return { error: 'No passkeys available for this account. Please set up biometric authentication first.' };
+      }
+
+      console.log('Found stored credentials:', storedCredentials.length);
+
+      // Create the authentication request with allowCredentials
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       
       const publicKeyCredentialRequestOptions: CredentialRequestOptions = {
@@ -437,43 +452,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           challenge,
           userVerification: "required" as const,
           timeout: 60000,
-          rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname
+          rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname,
+          // Include the stored credential IDs to help the browser find the right passkey
+          allowCredentials: storedCredentials.map(cred => ({
+            id: new TextEncoder().encode(cred.credential_id),
+            type: "public-key" as const
+          }))
         }
       };
       
+      console.log('Requesting biometric authentication...');
       const assertion = await navigator.credentials.get(publicKeyCredentialRequestOptions) as PublicKeyCredential;
 
       if (!assertion) {
         return { error: 'Biometric authentication cancelled' };
       }
 
-      const { data, error } = await supabase
-        .from('biometric_credentials')
-        .select('user_id, user_email')
-        .eq('credential_id', assertion.id)
-        .eq('user_email', email)
-        .single();
+      console.log('Biometric authentication successful, credential ID:', assertion.id);
 
-      if (error || !data) {
-        console.log('Biometric verification failed:', error);
-        return { error: 'Biometric authentication failed' };
+      // Verify the credential ID matches one of our stored credentials
+      const matchingCredential = storedCredentials.find(cred => cred.credential_id === assertion.id);
+      
+      if (!matchingCredential) {
+        console.log('Credential not found in database');
+        return { error: 'Biometric authentication failed - credential not recognized' };
       }
 
-      // Create session token similar to PIN auth
+      console.log('Credential verified, user ID:', matchingCredential.user_id);
+
+      // Create session token for the authenticated user
       try {
         const sessionToken = crypto.randomUUID();
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
         
-        await supabase
+        const { error: sessionError } = await supabase
           .from('user_sessions')
           .insert({
-            user_id: data.user_id,
+            user_id: matchingCredential.user_id,
             session_token: sessionToken,
             auth_method: 'biometric',
             expires_at: expiresAt.toISOString()
           });
 
-        console.log('Biometric authentication successful for user:', data.user_id);
+        if (sessionError) {
+          console.log('Session creation error:', sessionError);
+        }
+
+        console.log('Biometric authentication successful for user:', matchingCredential.user_id);
         return { error: null };
       } catch (sessionError) {
         console.log('Session creation error:', sessionError);
@@ -486,6 +511,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Biometric authentication was cancelled or not allowed' };
       } else if (error.name === 'SecurityError') {
         return { error: 'Security error: Please ensure you are using HTTPS or localhost' };
+      } else if (error.name === 'InvalidStateError') {
+        return { error: 'No passkeys available for this account. Please set up biometric authentication first.' };
       }
       
       return { error: error.message || 'Biometric authentication failed' };
