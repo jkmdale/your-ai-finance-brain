@@ -75,9 +75,10 @@ export const PinSetupScreen: React.FC = () => {
         return;
       }
       
-      // Only mark PIN as set up - don't complete full setup yet
+      // Mark PIN as set up - this will trigger the security method setup
       setIsPinSetup(true);
       toast.success('PIN set up successfully!');
+      setIsSettingUp(false);
     } catch (error) {
       toast.error('Failed to set up PIN. Please try again.');
       setPin('');
