@@ -43,46 +43,89 @@ const parseDate = (dateString: string): string => {
   return new Date().toISOString().split('T')[0];
 };
 
-const categorizeTransaction = (description: string, amount: number): { category: string, isIncome: boolean } => {
+const isTransfer = (description: string, amount: number): boolean => {
   const desc = description.toLowerCase();
+  
+  // Transfer patterns - more comprehensive detection
+  const transferPatterns = [
+    /transfer/i,
+    /trf/i,
+    /xfer/i,
+    /between.*accounts/i,
+    /internal.*transfer/i,
+    /account.*transfer/i,
+    /payment.*to.*account/i,
+    /payment.*from.*account/i,
+    /06-0817/i,           // Account number patterns
+    /9171$/i,             // Credit card ending
+    /88419319/i,          // Loan account
+    /662330/i,            // KiwiSaver account
+    /own.*account/i,
+    /from.*savings/i,
+    /to.*savings/i,
+    /from.*checking/i,
+    /to.*checking/i,
+    /visa.*payment/i,     // Credit card payments
+    /card.*payment/i,
+    /loan.*payment/i      // Loan payments (often transfers)
+  ];
+  
+  // Check if description matches transfer patterns
+  const matchesPattern = transferPatterns.some(pattern => pattern.test(desc));
+  
+  // Round amounts are often transfers (especially multiples of 50 or 100)
+  const isRoundAmount = amount > 0 && (amount % 50 === 0 || amount % 100 === 0) && amount >= 100;
+  
+  return matchesPattern || (isRoundAmount && desc.includes('payment'));
+};
+
+const categorizeTransaction = (description: string, amount: number): { category: string, isIncome: boolean, isTransfer: boolean } => {
+  const desc = description.toLowerCase();
+  
+  // First check if it's a transfer
+  if (isTransfer(description, amount)) {
+    return { category: 'Transfer', isIncome: false, isTransfer: true };
+  }
   
   // Income patterns
   const incomePatterns = [
     /salary|wage|payroll|income|pay|deposit/,
     /refund|reimbursement|cashback/,
     /dividend|interest|investment/,
-    /freelance|contract|commission/
+    /freelance|contract|commission/,
+    /ird.*credit/,        // Tax refunds
+    /working.*for.*families/
   ];
   
   // Expense categories
   const categoryPatterns = {
     'Housing': /rent|mortgage|property|utilities|electricity|gas|water|internet|phone/,
     'Transportation': /uber|taxi|bus|train|fuel|gas|parking|car|vehicle|transport/,
-    'Food & Dining': /restaurant|cafe|food|grocery|supermarket|dining|takeaway|delivery/,
-    'Shopping': /amazon|ebay|store|shop|retail|clothing|electronics/,
+    'Food & Dining': /restaurant|cafe|food|grocery|supermarket|dining|takeaway|delivery|countdown|paknsave|new.*world/,
+    'Shopping': /amazon|ebay|store|shop|retail|clothing|electronics|warehouse|kmart/,
     'Entertainment': /netflix|spotify|movie|cinema|game|entertainment|subscription/,
     'Healthcare': /doctor|hospital|pharmacy|medical|health|dental/,
-    'Utilities': /electricity|gas|water|internet|phone|utility/,
+    'Utilities': /electricity|gas|water|internet|phone|utility|power/,
     'Personal Care': /salon|spa|cosmetics|personal|beauty/
   };
   
   // Check if it's income
   const isIncome = amount > 0 || incomePatterns.some(pattern => pattern.test(desc));
   
-  if (isIncome) {
-    if (/salary|wage|payroll/.test(desc)) return { category: 'Salary', isIncome: true };
-    if (/investment|dividend|interest/.test(desc)) return { category: 'Investment Income', isIncome: true };
-    return { category: 'Other Income', isIncome: true };
+  if (isIncome && !isTransfer(description, amount)) {
+    if (/salary|wage|payroll/.test(desc)) return { category: 'Salary', isIncome: true, isTransfer: false };
+    if (/investment|dividend|interest/.test(desc)) return { category: 'Investment Income', isIncome: true, isTransfer: false };
+    return { category: 'Other Income', isIncome: true, isTransfer: false };
   }
   
   // Categorize expenses
   for (const [category, pattern] of Object.entries(categoryPatterns)) {
     if (pattern.test(desc)) {
-      return { category, isIncome: false };
+      return { category, isIncome: false, isTransfer: false };
     }
   }
   
-  return { category: 'Other', isIncome: false };
+  return { category: 'Other', isIncome: false, isTransfer: false };
 };
 
 serve(async (req) => {
@@ -184,8 +227,17 @@ serve(async (req) => {
 
     // Process transactions
     const processedTransactions = [];
+    let transferCount = 0;
+    
     for (const transaction of transactions) {
-      const { category, isIncome } = categorizeTransaction(transaction.description, transaction.amount);
+      const { category, isIncome, isTransfer } = categorizeTransaction(transaction.description, transaction.amount);
+      
+      if (isTransfer) {
+        transferCount++;
+        console.log('Transfer detected:', transaction.description, transaction.amount);
+        // Still store transfers but mark them as such
+      }
+      
       const categoryId = categoryMap.get(`${category}_${isIncome}`);
       
       const transactionData = {
@@ -196,8 +248,9 @@ serve(async (req) => {
         description: transaction.description,
         merchant: transaction.merchant || null,
         transaction_date: transaction.date,
-        is_income: isIncome,
-        imported_from: 'csv'
+        is_income: isIncome && !isTransfer, // Transfers are not counted as income
+        imported_from: 'csv',
+        tags: isTransfer ? ['transfer'] : null // Mark transfers with a tag
       };
       
       processedTransactions.push(transactionData);
@@ -224,8 +277,9 @@ serve(async (req) => {
       }
     }
 
-    // Update account balance
-    const totalAmount = processedTransactions.reduce((sum, t) => 
+    // Update account balance - exclude transfers from balance calculation
+    const nonTransferTransactions = processedTransactions.filter(t => !t.tags?.includes('transfer'));
+    const totalAmount = nonTransferTransactions.reduce((sum, t) => 
       sum + (t.is_income ? t.amount : -t.amount), 0
     );
 
@@ -246,7 +300,7 @@ serve(async (req) => {
       })
       .eq('id', accountId);
 
-    // Update budget if exists
+    // Update budget if exists - exclude transfers
     const { data: activeBudget } = await supabaseClient
       .from('budgets')
       .select('id')
@@ -255,12 +309,12 @@ serve(async (req) => {
       .single();
 
     if (activeBudget) {
-      // Calculate total expenses and income from new transactions
-      const totalExpenses = processedTransactions
+      // Calculate total expenses and income from new non-transfer transactions
+      const totalExpenses = nonTransferTransactions
         .filter(t => !t.is_income)
         .reduce((sum, t) => sum + t.amount, 0);
       
-      const totalIncome = processedTransactions
+      const totalIncome = nonTransferTransactions
         .filter(t => t.is_income)
         .reduce((sum, t) => sum + t.amount, 0);
 
@@ -275,11 +329,12 @@ serve(async (req) => {
         .eq('id', activeBudget.id);
     }
 
-    console.log(`Successfully processed ${processedTransactions.length} transactions`);
+    console.log(`Successfully processed ${processedTransactions.length} transactions (${transferCount} transfers excluded from balance)`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       processed: processedTransactions.length,
+      transfers: transferCount,
       transactions: insertedTransactions,
       accountBalance: newBalance
     }), {

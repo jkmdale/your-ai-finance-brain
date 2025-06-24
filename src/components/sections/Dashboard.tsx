@@ -61,7 +61,7 @@ export const Dashboard = () => {
     try {
       console.log('Fetching dashboard data for user:', user.id);
 
-      // Fetch recent transactions with categories
+      // Fetch recent transactions with categories, excluding transfers
       const { data: transactions } = await supabase
         .from('transactions')
         .select(`
@@ -69,10 +69,11 @@ export const Dashboard = () => {
           categories(name, color)
         `)
         .eq('user_id', user.id)
+        .not('tags', 'cs', '["transfer"]') // Exclude transactions tagged as transfers
         .order('transaction_date', { ascending: false })
         .limit(10);
 
-      console.log('Fetched transactions:', transactions);
+      console.log('Fetched transactions (excluding transfers):', transactions);
 
       // Fetch bank accounts for balance
       const { data: accounts } = await supabase
@@ -84,14 +85,15 @@ export const Dashboard = () => {
       console.log('Fetched accounts:', accounts);
 
       if (transactions && transactions.length > 0) {
-        // Calculate current month's income and expenses
+        // Calculate current month's income and expenses (excluding transfers)
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         
         const currentMonthTransactions = transactions.filter(t => {
           const transactionDate = new Date(t.transaction_date);
           return transactionDate.getMonth() === currentMonth && 
-                 transactionDate.getFullYear() === currentYear;
+                 transactionDate.getFullYear() === currentYear &&
+                 (!t.tags || !t.tags.includes('transfer')); // Double-check transfer exclusion
         });
 
         const monthlyIncome = currentMonthTransactions
@@ -115,12 +117,12 @@ export const Dashboard = () => {
           warnings: []
         };
 
-        console.log('Calculated stats:', dashboardStats);
+        console.log('Calculated stats (excluding transfers):', dashboardStats);
 
         setStats(dashboardStats);
         setRecentTransactions(transactions);
       } else {
-        console.log('No transactions found, setting stats to null');
+        console.log('No non-transfer transactions found, setting stats to null');
         setStats(null);
         setRecentTransactions([]);
       }
