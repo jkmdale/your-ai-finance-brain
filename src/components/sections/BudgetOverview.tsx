@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign, Loader2, Upload } from 'lucide-react';
+import { PieChart, AlertCircle, TrendingDown, TrendingUp, DollarSign, Loader2, Upload, Plus, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -9,18 +10,22 @@ interface BudgetCategory {
   spent: number;
   color: string;
   percentage: number;
+  categoryId: string;
 }
 
 interface BudgetData {
   totalBudgeted: number;
   totalSpent: number;
   categories: BudgetCategory[];
+  budgetName: string;
+  budgetId: string;
 }
 
 export const BudgetOverview = () => {
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const { user } = useAuth();
 
   const getColorClasses = (color: string) => {
@@ -32,12 +37,13 @@ export const BudgetOverview = () => {
       purple: { bg: 'bg-purple-400', gradient: 'from-purple-400 to-purple-500' },
       pink: { bg: 'bg-pink-400', gradient: 'from-pink-400 to-pink-500' },
       cyan: { bg: 'bg-cyan-400', gradient: 'from-cyan-400 to-cyan-500' },
-      emerald: { bg: 'bg-emerald-400', gradient: 'from-emerald-400 to-emerald-500' }
+      emerald: { bg: 'bg-emerald-400', gradient: 'from-emerald-400 to-emerald-500' },
+      orange: { bg: 'bg-orange-400', gradient: 'from-orange-400 to-orange-500' }
     };
     return colorMap[color as keyof typeof colorMap] || { bg: 'bg-gray-400', gradient: 'from-gray-400 to-gray-500' };
   };
 
-  const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'cyan', 'emerald'];
+  const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'cyan', 'emerald', 'orange'];
 
   const fetchBudgetData = async () => {
     if (!user) {
@@ -56,7 +62,7 @@ export const BudgetOverview = () => {
           budget_categories(
             allocated_amount,
             spent_amount,
-            categories(name, color)
+            categories(id, name, color)
           )
         `)
         .eq('user_id', user.id)
@@ -71,13 +77,37 @@ export const BudgetOverview = () => {
       }
 
       const budget = budgets[0];
-      const categories: BudgetCategory[] = budget.budget_categories?.map((bc: any, index: number) => ({
-        name: bc.categories?.name || 'Unknown',
-        allocated: bc.allocated_amount || 0,
-        spent: bc.spent_amount || 0,
-        color: colorPalette[index % colorPalette.length],
-        percentage: Math.round(((bc.allocated_amount || 0) / (budget.total_income || 1)) * 100)
-      })) || [];
+      console.log('Fetched budget:', budget);
+
+      // Calculate spent amounts from actual transactions
+      const { data: transactionSums } = await supabase
+        .from('transactions')
+        .select('category_id, amount')
+        .eq('user_id', user.id)
+        .eq('is_income', false)
+        .not('tags', 'cs', '["transfer"]'); // Exclude transfers
+
+      const spentByCategory: { [key: string]: number } = {};
+      transactionSums?.forEach(t => {
+        if (t.category_id) {
+          if (!spentByCategory[t.category_id]) spentByCategory[t.category_id] = 0;
+          spentByCategory[t.category_id] += t.amount;
+        }
+      });
+
+      const categories: BudgetCategory[] = budget.budget_categories
+        ?.filter((bc: any) => bc.categories) // Only include categories that exist
+        .map((bc: any, index: number) => {
+          const actualSpent = spentByCategory[bc.categories.id] || 0;
+          return {
+            name: bc.categories.name,
+            allocated: bc.allocated_amount || 0,
+            spent: actualSpent,
+            color: colorPalette[index % colorPalette.length],
+            percentage: Math.round(((bc.allocated_amount || 0) / (budget.total_income || 1)) * 100),
+            categoryId: bc.categories.id
+          };
+        }) || [];
 
       const totalBudgeted = categories.reduce((sum, cat) => sum + cat.allocated, 0);
       const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
@@ -85,7 +115,9 @@ export const BudgetOverview = () => {
       setBudgetData({
         totalBudgeted,
         totalSpent,
-        categories
+        categories,
+        budgetName: budget.name,
+        budgetId: budget.id
       });
     } catch (error) {
       console.error('Error fetching budget data:', error);
@@ -103,14 +135,12 @@ export const BudgetOverview = () => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'csv-upload-complete') {
         console.log('CSV upload detected, refreshing budget data...');
-        // Refresh budget data after CSV upload
         setTimeout(() => {
           setRefreshKey(prev => prev + 1);
-        }, 2000); // Give time for budget creation to complete
+        }, 2000);
       }
     };
 
-    // Listen for custom event from CSV upload
     const handleCustomEvent = (e: CustomEvent) => {
       console.log('Custom CSV upload event detected, refreshing budget data...');
       setTimeout(() => {
@@ -182,6 +212,7 @@ export const BudgetOverview = () => {
   }
 
   const remaining = budgetData.totalBudgeted - budgetData.totalSpent;
+  const displayedCategories = showAllCategories ? budgetData.categories : budgetData.categories.slice(0, 6);
 
   return (
     <section id="budget" className="py-16 px-4 sm:px-6 lg:px-8">
@@ -190,8 +221,11 @@ export const BudgetOverview = () => {
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
             Smart Budget Intelligence
           </h2>
-          <p className="text-xl text-white/70 max-w-3xl mx-auto">
-            AI-powered budget optimization with real-time variance analysis and predictive adjustments
+          <p className="text-xl text-white/70 max-w-3xl mx-auto mb-2">
+            AI-powered budget optimization with real-time variance analysis
+          </p>
+          <p className="text-white/60">
+            Budget: <span className="font-medium text-white">{budgetData.budgetName}</span>
           </p>
         </div>
 
@@ -211,9 +245,9 @@ export const BudgetOverview = () => {
           <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-500 rounded-xl flex items-center justify-center">
-                <TrendingDown className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-purple-400 text-sm font-medium">Current Spend</span>
+                <T
+
+</div>
             </div>
             <h3 className="text-white/70 text-sm font-medium mb-1">Total Spent</h3>
             <p className="text-2xl font-bold text-white">${budgetData.totalSpent.toLocaleString()}</p>
@@ -238,15 +272,26 @@ export const BudgetOverview = () => {
         {/* Budget Categories */}
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-3xl p-8 shadow-2xl">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-2xl font-bold text-white">Budget Breakdown</h3>
-            <div className="flex items-center space-x-2">
-              <PieChart className="w-5 h-5 text-purple-400" />
-              <span className="text-white/70 text-sm">Real-time tracking</span>
+            <h3 className="text-2xl font-bold text-white">Budget Categories ({budgetData.categories.length})</h3>
+            <div className="flex items-center space-x-4">
+              {budgetData.categories.length > 6 && (
+                <button
+                  onClick={() => setShowAllCategories(!showAllCategories)}
+                  className="flex items-center space-x-2 text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span className="text-sm">{showAllCategories ? 'Show Less' : `Show All (${budgetData.categories.length})`}</span>
+                </button>
+              )}
+              <div className="flex items-center space-x-2">
+                <PieChart className="w-5 h-5 text-purple-400" />
+                <span className="text-white/70 text-sm">Real-time tracking</span>
+              </div>
             </div>
           </div>
 
           <div className="space-y-4">
-            {budgetData.categories.map((category, index) => {
+            {displayedCategories.map((category, index) => {
               const isOverBudget = category.spent > category.allocated;
               const spentPercentage = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
               const colors = getColorClasses(category.color);
@@ -264,7 +309,7 @@ export const BudgetOverview = () => {
                         ${category.spent.toLocaleString()} / ${category.allocated.toLocaleString()}
                       </span>
                       <div className="text-xs text-white/60">
-                        {spentPercentage.toFixed(0)}% used
+                        {spentPercentage.toFixed(0)}% used • {category.percentage}% of budget
                       </div>
                     </div>
                   </div>
