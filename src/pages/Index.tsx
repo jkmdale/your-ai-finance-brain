@@ -6,12 +6,16 @@ import { GoalTracking } from "@/components/sections/GoalTracking";
 import { AIInsights } from "@/components/sections/AIInsights";
 import { TransactionHistory } from "@/components/sections/TransactionHistory";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { SecurityMethodSetup } from "@/components/security/SecurityMethodSetup";
+import { AppUnlockScreen } from "@/components/security/AppUnlockScreen";
 import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppSecurity } from "@/hooks/useAppSecurity";
 import { useState } from "react";
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const { isAppLocked, setupComplete } = useAppSecurity();
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
 
@@ -53,7 +57,17 @@ const Index = () => {
     );
   }
 
-  // If user is authenticated, show the main dashboard with sidebar
+  // If user is authenticated but security setup is not complete, show security setup
+  if (user && !setupComplete) {
+    return <SecurityMethodSetup />;
+  }
+
+  // If user is authenticated and app is locked, show unlock screen
+  if (user && setupComplete && isAppLocked) {
+    return <AppUnlockScreen />;
+  }
+
+  // If user is authenticated, security is set up, and app is unlocked, show the main dashboard
   return (
     <SidebarLayout>
       <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
