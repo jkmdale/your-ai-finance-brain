@@ -14,36 +14,59 @@ export const PWAInstall = () => {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    console.log('PWAInstall component mounted');
+    
     // Check if it's iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(iOS);
+    console.log('Is iOS:', iOS);
 
     // Check if already installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     const isInstalled = localStorage.getItem('pwa-dismissed') === 'true';
+    
+    console.log('Is standalone:', isStandalone);
+    console.log('Is dismissed:', isInstalled);
 
     if (!isStandalone && !isInstalled) {
       if (iOS) {
         // Show iOS install instructions after a delay
-        setTimeout(() => setShowInstallBanner(true), 3000);
+        console.log('Setting up iOS install banner');
+        setTimeout(() => {
+          console.log('Showing iOS install banner');
+          setShowInstallBanner(true);
+        }, 2000);
       } else {
         // Handle Android/Desktop install prompt
+        console.log('Setting up beforeinstallprompt listener');
         const handler = (e: Event) => {
+          console.log('beforeinstallprompt event fired');
           e.preventDefault();
           setDeferredPrompt(e as BeforeInstallPromptEvent);
           setShowInstallBanner(true);
         };
 
         window.addEventListener('beforeinstallprompt', handler);
+        
+        // Fallback: show banner after delay if no prompt event
+        setTimeout(() => {
+          if (!deferredPrompt && !showInstallBanner) {
+            console.log('No beforeinstallprompt event, showing fallback banner');
+            setShowInstallBanner(true);
+          }
+        }, 3000);
+        
         return () => window.removeEventListener('beforeinstallprompt', handler);
       }
     }
-  }, []);
+  }, [deferredPrompt, showInstallBanner]);
 
   const handleInstallClick = async () => {
+    console.log('Install button clicked');
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
+      console.log('Install prompt outcome:', outcome);
       
       if (outcome === 'accepted') {
         setDeferredPrompt(null);
@@ -53,17 +76,23 @@ export const PWAInstall = () => {
   };
 
   const handleDismiss = () => {
+    console.log('Dismiss button clicked');
     setShowInstallBanner(false);
     localStorage.setItem('pwa-dismissed', 'true');
   };
 
+  console.log('PWAInstall render - showInstallBanner:', showInstallBanner);
+
   if (!showInstallBanner) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 backdrop-blur-xl bg-black/80 border border-white/20 rounded-2xl p-4 shadow-2xl z-[9999] animate-in slide-in-from-bottom duration-300">
+    <div 
+      className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 backdrop-blur-xl bg-black/90 border border-white/30 rounded-2xl p-4 shadow-2xl z-[99999] animate-in slide-in-from-bottom duration-300"
+      style={{ zIndex: 99999 }}
+    >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
             <Download className="w-4 h-4 text-white" />
           </div>
           <div>
@@ -73,7 +102,7 @@ export const PWAInstall = () => {
         </div>
         <button
           onClick={handleDismiss}
-          className="text-white/50 hover:text-white transition-colors"
+          className="text-white/50 hover:text-white transition-colors flex-shrink-0"
         >
           <X className="w-4 h-4" />
         </button>
