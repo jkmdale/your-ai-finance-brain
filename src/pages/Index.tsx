@@ -13,6 +13,7 @@ import { useState } from "react";
 const Index = () => {
   const { user, loading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -24,10 +25,12 @@ const Index = () => {
   }
 
   const handleGetStarted = () => {
+    setAuthMode('signup');
     setShowAuth(true);
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = (mode: 'signup' | 'signin' = 'signin') => {
+    setAuthMode(mode);
     setShowAuth(true);
   };
 

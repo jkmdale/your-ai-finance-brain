@@ -10,7 +10,7 @@ import { PWAInstall } from '@/components/PWAInstall';
 
 interface LandingPageProps {
   onGetStarted: () => void;
-  onSignIn: () => void;
+  onSignIn: (mode?: 'signup' | 'signin') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn }) => {
@@ -46,14 +46,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             
             <div className="flex items-center space-x-4">
               <Button
-                onClick={onSignIn}
+                onClick={() => onSignIn('signin')}
                 variant="ghost"
                 className="text-white hover:bg-white/10 border-white/20"
               >
                 Log In
               </Button>
               <Button
-                onClick={onGetStarted}
+                onClick={() => onSignIn('signup')}
                 className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
               >
                 Sign Up Free
@@ -167,14 +167,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
 
             <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <Button
-                onClick={onGetStarted}
+                onClick={() => onSignIn('signup')}
                 className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-10 py-4 rounded-full hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-2xl hover:shadow-purple-500/25 text-lg font-semibold"
               >
                 Start Free Premium Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
-                onClick={onSignIn}
+                onClick={() => onSignIn('signin')}
                 variant="outline"
                 className="backdrop-blur-sm bg-black/20 border border-white/10 text-white px-10 py-4 rounded-full hover:bg-black/30 transition-all duration-200 text-lg font-semibold"
               >
@@ -487,14 +487,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
               <Button
-                onClick={onGetStarted}
+                onClick={() => onSignIn('signup')}
                 className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-10 py-4 rounded-full hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-2xl hover:shadow-purple-500/25 text-lg font-semibold"
               >
                 Start Free Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
-                onClick={onSignIn}
+                onClick={() => onSignIn('signin')}
                 variant="outline"
                 className="backdrop-blur-sm bg-white/10 border border-white/20 text-white px-10 py-4 rounded-full hover:bg-white/20 transition-all duration-200 text-lg font-semibold"
               >
