@@ -78,7 +78,6 @@ export const PinSetupScreen: React.FC = () => {
       // Mark PIN as set up - this will trigger the security method setup
       setIsPinSetup(true);
       toast.success('PIN set up successfully!');
-      setIsSettingUp(false);
     } catch (error) {
       toast.error('Failed to set up PIN. Please try again.');
       setPin('');
@@ -114,7 +113,6 @@ export const PinSetupScreen: React.FC = () => {
         animate={{ opacity: 1, scale: 1 }}
         className="relative z-10 backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
       >
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
             {step === 'setup' ? (
@@ -134,7 +132,6 @@ export const PinSetupScreen: React.FC = () => {
           </p>
         </div>
 
-        {/* PIN Display Dots */}
         <div className="flex justify-center space-x-4 mb-12">
           {[...Array(4)].map((_, index) => (
             <motion.div
@@ -152,9 +149,7 @@ export const PinSetupScreen: React.FC = () => {
           ))}
         </div>
 
-        {/* Number Pad */}
         <div className="space-y-4">
-          {/* Numbers 1-3 */}
           <div className="grid grid-cols-3 gap-4">
             {numbers.slice(0, 3).map((item) => (
               <motion.button
@@ -170,7 +165,6 @@ export const PinSetupScreen: React.FC = () => {
             ))}
           </div>
 
-          {/* Numbers 4-6 */}
           <div className="grid grid-cols-3 gap-4">
             {numbers.slice(3, 6).map((item) => (
               <motion.button
@@ -186,7 +180,6 @@ export const PinSetupScreen: React.FC = () => {
             ))}
           </div>
 
-          {/* Numbers 7-9 */}
           <div className="grid grid-cols-3 gap-4">
             {numbers.slice(6, 9).map((item) => (
               <motion.button
@@ -202,12 +195,8 @@ export const PinSetupScreen: React.FC = () => {
             ))}
           </div>
 
-          {/* Bottom Row: Empty, 0, Delete */}
           <div className="grid grid-cols-3 gap-4">
-            {/* Empty space */}
             <div></div>
-
-            {/* Zero */}
             <motion.button
               onClick={() => handleNumberClick('0')}
               disabled={isSettingUp}
@@ -216,8 +205,6 @@ export const PinSetupScreen: React.FC = () => {
             >
               <span className="text-2xl font-medium">0</span>
             </motion.button>
-
-            {/* Delete */}
             <motion.button
               onClick={handleDelete}
               disabled={isSettingUp || currentPin.length === 0}
