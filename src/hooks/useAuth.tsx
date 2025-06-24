@@ -498,9 +498,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .select('credential_id, user_id, user_email')
         .eq('user_email', email);
 
-      if (fetchError || !storedCredentials || storedCredentials.length === 0) {
-        console.log('No biometric credentials found for user:', email, fetchError);
-        return { error: 'No passkeys available for this account. Please set up biometric authentication first.' };
+      if (fetchError) {
+        console.log('Database error fetching credentials:', fetchError);
+        return { error: 'Failed to retrieve biometric credentials' };
+      }
+
+      if (!storedCredentials || storedCredentials.length === 0) {
+        console.log('No biometric credentials found for user:', email);
+        return { error: 'No passkeys found for this account. Please set up biometric authentication first.' };
       }
 
       console.log('Found stored credentials:', storedCredentials.length);
@@ -514,9 +519,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           userVerification: "required" as const,
           timeout: 60000,
           rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname,
-          // Include the stored credential IDs to help the browser find the right passkey
+          // Convert credential IDs properly for allowCredentials
           allowCredentials: storedCredentials.map(cred => ({
-            id: new TextEncoder().encode(cred.credential_id),
+            id: Uint8Array.from(atob(cred.credential_id), c => c.charCodeAt(0)),
             type: "public-key" as const
           }))
         }
@@ -575,11 +580,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Biometric sign-in error:', error);
       
       if (error.name === 'NotAllowedError') {
-        return { error: 'Biometric authentication was cancelled or not allowed' };
+        return { error: 'Biometric authentication was cancelled or denied. Please try again.' };
       } else if (error.name === 'SecurityError') {
         return { error: 'Security error: Please ensure you are using HTTPS or localhost' };
       } else if (error.name === 'InvalidStateError') {
         return { error: 'No passkeys available for this account. Please set up biometric authentication first.' };
+      } else if (error.name === 'AbortError') {
+        return { error: 'Biometric authentication timed out. Please try again.' };
       }
       
       return { error: error.message || 'Biometric authentication failed' };

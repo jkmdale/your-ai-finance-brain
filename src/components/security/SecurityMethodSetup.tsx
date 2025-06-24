@@ -8,7 +8,7 @@ import { useAppSecurity } from '@/hooks/useAppSecurity';
 import { toast } from 'sonner';
 
 export const SecurityMethodSetup: React.FC = () => {
-  const [step, setStep] = useState<'intro' | 'pin-setup' | 'preference-selection'>('intro');
+  const [step, setStep] = useState<'intro' | 'preference-selection'>('intro');
   const [isSettingUp, setIsSettingUp] = useState(false);
   const { setupBiometric, isBiometricAvailable } = useAuth();
   const { setPreferredUnlockMethod, setSetupComplete, setIsPinSetup } = useAppSecurity();
@@ -22,9 +22,9 @@ export const SecurityMethodSetup: React.FC = () => {
     checkBiometric();
   }, [isBiometricAvailable]);
 
-  const handlePinSetupComplete = () => {
-    // PIN has been set up successfully, now ask for preference
-    setStep('preference-selection');
+  const handleSetupPinFirst = () => {
+    // This will trigger the PIN setup screen to show
+    setIsPinSetup(false);
   };
 
   const handlePreferenceSelection = async (method: 'pin' | 'biometric') => {
@@ -101,7 +101,7 @@ export const SecurityMethodSetup: React.FC = () => {
             </div>
 
             <Button
-              onClick={() => setStep('pin-setup')}
+              onClick={handleSetupPinFirst}
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12 flex items-center justify-center space-x-2"
             >
               <span>Set Up PIN Code</span>
@@ -111,31 +111,6 @@ export const SecurityMethodSetup: React.FC = () => {
             <p className="text-white/50 text-xs text-center mt-4">
               A PIN is required to secure your financial data
             </p>
-          </div>
-        )}
-
-        {step === 'pin-setup' && (
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <Hash className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Set Your PIN</h2>
-            <p className="text-white/70 text-sm mb-6">
-              Choose a 4-digit PIN to secure your app
-            </p>
-            
-            {/* This will be handled by PinSetupScreen component */}
-            <div className="text-center">
-              <p className="text-white/60 text-sm mb-4">
-                You'll be redirected to set up your PIN next...
-              </p>
-              <Button
-                onClick={handlePinSetupComplete}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
-              >
-                Continue to PIN Setup
-              </Button>
-            </div>
           </div>
         )}
 
