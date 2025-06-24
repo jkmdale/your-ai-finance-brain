@@ -31,20 +31,20 @@ export const EmailConfirmationScreen: React.FC<EmailConfirmationScreenProps> = (
       initial="initial"
       animate="animate"
       exit="exit"
-      className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
+      className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-6 shadow-2xl max-h-screen overflow-hidden"
     >
-      <div className="text-center mb-8">
-        <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+      <div className="text-center mb-6">
+        <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Mail className="w-10 h-10 text-white" />
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
-        <p className="text-white/70 mb-4">
+        <p className="text-white/70 mb-3">
           We've sent a confirmation link to:
         </p>
         <p className="text-white font-medium">{pendingEmail}</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 mb-6">
         <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl p-4">
           <div className="flex items-start space-x-3">
             <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
@@ -76,7 +76,7 @@ export const EmailConfirmationScreen: React.FC<EmailConfirmationScreenProps> = (
         </Button>
       </div>
 
-      <div className="mt-6 text-center">
+      <div className="text-center">
         <button
           onClick={() => onModeChange('email-entry')}
           className="text-white/70 hover:text-white transition-colors duration-200"
