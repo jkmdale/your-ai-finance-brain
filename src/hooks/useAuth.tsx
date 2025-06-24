@@ -270,48 +270,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithPin = async (pin: string, email: string) => {
     console.log('Attempting PIN authentication for:', email);
     
-    const pinHash = await hashPin(pin);
-    const { data, error } = await supabase
+    // Get the stored PIN hash for this user
+    const { data: userData, error: userError } = await supabase
       .from('user_pins')
-      .select('user_id, user_email')
-      .eq('pin_hash', pinHash)
+      .select('pin_hash, user_id')
       .eq('user_email', email)
       .single();
 
-    if (error || !data) {
-      console.log('PIN authentication failed:', error);
+    if (userError || !userData) {
+      console.log('No PIN found for user:', userError);
+      return { error: 'No PIN set up for this account' };
+    }
+
+    // Hash the provided PIN and compare
+    const providedPinHash = await hashPin(pin);
+    
+    if (providedPinHash !== userData.pin_hash) {
+      console.log('PIN verification failed');
       return { error: 'Invalid PIN' };
     }
 
-    // Now sign in the user with their stored credentials
-    // We need to get their password or use a different approach
-    // For now, we'll create a session directly (this requires service role key in production)
-    
-    // Alternative: Create a custom auth flow or use magic links
-    // For this implementation, we'll store a session token
-    try {
-      // Generate a temporary session
-      const sessionToken = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      await supabase
-        .from('user_sessions')
-        .insert({
-          user_id: data.user_id,
-          session_token: sessionToken,
-          auth_method: 'pin',
-          expires_at: expiresAt.toISOString()
-        });
-
-      // For now, we'll simulate a successful login
-      // In production, you'd want to implement a custom JWT flow
-      console.log('PIN authentication successful for user:', data.user_id);
-      
-      return { error: null };
-    } catch (sessionError) {
-      console.log('Session creation error:', sessionError);
-      return { error: 'Authentication failed' };
-    }
+    console.log('PIN verification successful');
+    return { error: null };
   };
 
   const setupBiometric = async () => {

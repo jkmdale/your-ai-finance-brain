@@ -56,14 +56,18 @@ export const AppUnlockScreen: React.FC = () => {
       return;
     }
 
+    if (!user?.email) {
+      toast.error('User session not found');
+      return;
+    }
+
     setIsUnlocking(true);
     
     try {
-      // Use the actual PIN authentication from useAuth
-      const { error } = await signInWithPin(user?.email || '', pinToVerify);
+      const { error } = await signInWithPin(pinToVerify, user.email);
       
       if (error) {
-        toast.error('Invalid PIN');
+        toast.error(error);
         setPin('');
         setIsUnlocking(false);
         return;
@@ -73,7 +77,7 @@ export const AppUnlockScreen: React.FC = () => {
       toast.success('App unlocked!');
       setIsUnlocking(false);
     } catch (error) {
-      toast.error('Invalid PIN');
+      toast.error('PIN verification failed');
       setPin('');
       setIsUnlocking(false);
     }
@@ -85,7 +89,6 @@ export const AppUnlockScreen: React.FC = () => {
     setIsUnlocking(true);
     
     try {
-      // Use the actual biometric authentication
       const { error } = await signInWithBiometric(user.email);
       
       if (error) {
@@ -163,7 +166,8 @@ export const AppUnlockScreen: React.FC = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Shield className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-2">Enter security PIN</h2>
+              <h2 className="text-xl font-bold text-white mb-2">Enter your PIN</h2>
+              <p className="text-white/70 text-sm">Use the PIN you set up to unlock the app</p>
             </div>
 
             {/* PIN Display Dots */}
@@ -234,9 +238,9 @@ export const AppUnlockScreen: React.FC = () => {
                 ))}
               </div>
 
-              {/* Bottom Row: Menu, 0, Delete */}
+              {/* Bottom Row: Biometric, 0, Delete */}
               <div className="grid grid-cols-3 gap-4">
-                {/* Menu/Biometric Button */}
+                {/* Biometric Button */}
                 <motion.button
                   onClick={biometricAvailable && !biometricFailed ? handleBiometricUnlock : undefined}
                   disabled={isUnlocking || !biometricAvailable || biometricFailed}
@@ -271,7 +275,7 @@ export const AppUnlockScreen: React.FC = () => {
 
             {isUnlocking && (
               <div className="text-center mt-6">
-                <div className="text-white/70 text-sm">Unlocking...</div>
+                <div className="text-white/70 text-sm">Verifying PIN...</div>
               </div>
             )}
           </>
