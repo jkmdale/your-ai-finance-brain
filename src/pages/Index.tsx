@@ -8,7 +8,7 @@ import { TransactionHistory } from "@/components/sections/TransactionHistory";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecurityMethodSetup } from "@/components/security/SecurityMethodSetup";
 import { PinSetupScreen } from "@/components/security/PinSetupScreen";
-import { AppUnlockScreen } from "@/components/security/AppUnlockScreen";
+import { UnlockScreen } from "@/components/security/UnlockScreen";
 import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSecurity } from "@/hooks/useAppSecurity";
@@ -23,8 +23,8 @@ const Index = () => {
   // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-400"></div>
       </div>
     );
   }
@@ -70,7 +70,7 @@ const Index = () => {
 
   // If user is authenticated and app is locked, show unlock screen
   if (user && setupComplete && isAppLocked) {
-    return <AppUnlockScreen />;
+    return <UnlockScreen />;
   }
 
   // If user is authenticated, security is set up, and app is unlocked, show the main dashboard

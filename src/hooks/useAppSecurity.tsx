@@ -17,7 +17,8 @@ interface AppSecurityContextType {
 
 const AppSecurityContext = createContext<AppSecurityContextType | undefined>(undefined);
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const APP_SWITCH_LOCK_DELAY = 30 * 1000; // 30 seconds after app switch
 
 export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
+  const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -45,65 +47,152 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Set up activity listeners
-  useEffect(() => {
-    if (!user || !setupComplete) return;
+  // Clear all timers helper
+  const clearAllTimers = useCallback(() => {
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      setInactivityTimer(null);
+    }
+    if (visibilityTimer) {
+      clearTimeout(visibilityTimer);
+      setVisibilityTimer(null);
+    }
+  }, [inactivityTimer, visibilityTimer]);
 
-    const activities = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+  // Reset inactivity timer
+  const resetInactivityTimer = useCallback(() => {
+    if (!setupComplete || isAppLocked) return;
     
-    const resetTimer = () => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
-      
-      const timer = setTimeout(() => {
-        setIsAppLocked(true);
-      }, INACTIVITY_TIMEOUT);
-      
-      setInactivityTimer(timer);
+    clearAllTimers();
+    
+    const timer = setTimeout(() => {
+      console.log('App locked due to inactivity');
+      setIsAppLocked(true);
+    }, INACTIVITY_TIMEOUT);
+    
+    setInactivityTimer(timer);
+  }, [setupComplete, isAppLocked, clearAllTimers]);
+
+  // Set up activity listeners for inactivity detection
+  useEffect(() => {
+    if (!user || !setupComplete || isAppLocked) {
+      clearAllTimers();
+      return;
+    }
+
+    const activities = [
+      'mousedown', 'mousemove', 'keypress', 'scroll', 
+      'touchstart', 'touchmove', 'click', 'wheel'
+    ];
+    
+    // Reset timer on any activity
+    const handleActivity = () => {
+      resetInactivityTimer();
     };
 
     // Set initial timer
-    resetTimer();
+    resetInactivityTimer();
 
     // Add event listeners
     activities.forEach(activity => {
-      document.addEventListener(activity, resetTimer, true);
+      document.addEventListener(activity, handleActivity, { passive: true });
     });
 
     return () => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
       activities.forEach(activity => {
-        document.removeEventListener(activity, resetTimer, true);
+        document.removeEventListener(activity, handleActivity);
       });
+      clearAllTimers();
     };
-  }, [user, setupComplete, inactivityTimer]);
+  }, [user, setupComplete, isAppLocked, resetInactivityTimer, clearAllTimers]);
 
-  // Handle page visibility change (app switching)
+  // Handle page visibility change (tab switching, app backgrounding)
   useEffect(() => {
     if (!user || !setupComplete) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // App is hidden, start a shorter timer
-        if (inactivityTimer) {
-          clearTimeout(inactivityTimer);
-        }
+        // App is hidden/backgrounded
+        console.log('App hidden, starting background timer');
+        clearAllTimers();
+        
         const timer = setTimeout(() => {
+          console.log('App locked due to background time');
           setIsAppLocked(true);
-        }, 1000); // Lock after 1 second when app is hidden
-        setInactivityTimer(timer);
+        }, APP_SWITCH_LOCK_DELAY);
+        
+        setVisibilityTimer(timer);
+      } else {
+        // App is visible again
+        console.log('App visible again');
+        if (visibilityTimer) {
+          clearTimeout(visibilityTimer);
+          setVisibilityTimer(null);
+        }
+        
+        // Resume inactivity timer if app is not locked
+        if (!isAppLocked) {
+          resetInactivityTimer();
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
+    // Also handle window focus/blur for desktop PWAs
+    const handleFocus = () => {
+      if (!document.hidden && !isAppLocked) {
+        resetInactivityTimer();
+      }
+    };
+    
+    const handleBlur = () => {
+      if (!document.hidden) {
+        clearAllTimers();
+        const timer = setTimeout(() => {
+          setIsAppLocked(true);
+        }, APP_SWITCH_LOCK_DELAY);
+        setVisibilityTimer(timer);
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      clearAllTimers();
     };
-  }, [user, setupComplete, inactivityTimer]);
+  }, [user, setupComplete, isAppLocked, resetInactivityTimer, visibilityTimer, clearAllTimers]);
+
+  // Handle page unload/beforeunload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (setupComplete) {
+        // Set app as locked in localStorage for next session
+        localStorage.setItem(`app_locked_${user?.id}`, 'true');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [setupComplete, user]);
+
+  // Check if app should be locked on load
+  useEffect(() => {
+    if (user && setupComplete) {
+      const wasLocked = localStorage.getItem(`app_locked_${user.id}`) === 'true';
+      if (wasLocked) {
+        setIsAppLocked(true);
+        localStorage.removeItem(`app_locked_${user.id}`);
+      }
+    }
+  }, [user, setupComplete]);
 
   const setPreferredUnlockMethod = useCallback((method: 'pin' | 'biometric') => {
     if (user) {
@@ -113,17 +202,25 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const unlockApp = useCallback(() => {
+    console.log('App unlocked');
     setIsAppLocked(false);
-  }, []);
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
 
   const lockApp = useCallback(() => {
+    console.log('App locked manually');
     setIsAppLocked(true);
-  }, []);
+    clearAllTimers();
+  }, [clearAllTimers]);
 
   const setSetupCompleteState = useCallback((complete: boolean) => {
     if (user) {
       setSetupComplete(complete);
       localStorage.setItem(`security_setup_${user.id}`, complete.toString());
+      
+      if (complete) {
+        setIsAppLocked(true);
+      }
     }
   }, [user]);
 
@@ -133,19 +230,6 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(`pin_setup_${user.id}`, setup.toString());
     }
   }, [user]);
-
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-    }
-    
-    if (setupComplete && !isAppLocked) {
-      const timer = setTimeout(() => {
-        setIsAppLocked(true);
-      }, INACTIVITY_TIMEOUT);
-      setInactivityTimer(timer);
-    }
-  }, [inactivityTimer, setupComplete, isAppLocked]);
 
   return (
     <AppSecurityContext.Provider value={{

@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { PinSecurityService } from '@/services/pinSecurityService';
 
 interface AuthContextType {
   user: User | null;
@@ -251,49 +252,76 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setupPin = async (pin: string) => {
     if (!user) return { error: 'No user logged in' };
     
-    const pinHash = await hashPin(pin);
-    const { error } = await supabase
-      .from('user_pins')
-      .upsert({ 
-        user_id: user.id, 
-        pin_hash: pinHash,
-        user_email: user.email 
-      });
-    
-    if (!error) {
-      setHasPin(true);
+    // Validate PIN format
+    if (!PinSecurityService.isValidPin(pin)) {
+      return { error: 'PIN must be 4-8 digits long' };
     }
-    
-    return { error };
+
+    // Check PIN strength
+    const strength = PinSecurityService.estimatePinStrength(pin);
+    if (strength === 'weak') {
+      return { error: 'PIN is too weak. Avoid common patterns like 1234 or repeated digits.' };
+    }
+
+    try {
+      // Hash PIN securely
+      const { hash, salt } = await PinSecurityService.hashPin(pin);
+      
+      const { error } = await supabase
+        .from('user_pins')
+        .upsert({ 
+          user_id: user.id, 
+          pin_hash: hash,
+          pin_salt: salt,
+          user_email: user.email 
+        });
+      
+      if (!error) {
+        setHasPin(true);
+      }
+      
+      return { error };
+    } catch (error: any) {
+      console.error('PIN setup error:', error);
+      return { error: error.message || 'Failed to set up PIN' };
+    }
   };
 
   const signInWithPin = async (pin: string, email: string) => {
     console.log('Attempting PIN authentication for:', email);
     
-    // Get the stored PIN hash for this user
-    const { data: userData, error: userError } = await supabase
-      .from('user_pins')
-      .select('pin_hash, user_id')
-      .eq('user_email', email)
-      .single();
-
-    if (userError || !userData) {
-      console.log('No PIN found for user:', userError);
-      return { error: 'No PIN set up for this account' };
+    if (!PinSecurityService.isValidPin(pin)) {
+      return { error: 'Invalid PIN format' };
     }
 
-    // Hash the provided PIN and compare
-    const providedPinHash = await hashPin(pin);
-    
-    if (providedPinHash !== userData.pin_hash) {
-      console.log('PIN verification failed');
-      return { error: 'Invalid PIN' };
-    }
-
-    console.log('PIN verification successful');
-    
-    // For PIN authentication, we'll use the admin API to generate a magic link
     try {
+      // Get the stored PIN data for this user
+      const { data: userData, error: userError } = await supabase
+        .from('user_pins')
+        .select('pin_hash, pin_salt, user_id')
+        .eq('user_email', email)
+        .single();
+
+      if (userError || !userData) {
+        console.log('No PIN found for user:', userError);
+        return { error: 'No PIN set up for this account' };
+      }
+
+      // Verify PIN using secure comparison
+      const isValid = await PinSecurityService.verifyPin(
+        pin, 
+        userData.pin_hash, 
+        userData.pin_salt || ''
+      );
+      
+      if (!isValid) {
+        console.log('PIN verification failed');
+        return { error: 'Invalid PIN' };
+      }
+
+      console.log('PIN verification successful');
+      
+      // Generate magic link for authentication
       const { data, error } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: email,
@@ -317,7 +345,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       
       return { error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.log('PIN authentication error:', error);
       return { error: 'Authentication failed' };
     }
