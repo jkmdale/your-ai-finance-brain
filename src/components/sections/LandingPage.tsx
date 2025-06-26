@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -528,9 +529,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
               <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-8 h-8" />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
-            <p className="text-white/60 text-sm">
+            <p className="text-white/60 text-sm mb-8">
               © 2024 SmartFinanceAI. All rights reserved. Your AI-Powered Finance Brain.
             </p>
+            
+            {/* Large icon at the very bottom */}
+            <div className="flex justify-center">
+              <img 
+                src="/icon_1024x1024.png" 
+                alt="SmartFinanceAI Large Icon" 
+                className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
+              />
+            </div>
           </div>
         </div>
       </footer>
