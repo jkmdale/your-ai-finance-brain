@@ -1,5 +1,4 @@
 
-
 project_id = "gzznuwtxyyaqlbbrxsuz"
 
 [api]
@@ -73,4 +72,3 @@ verify_jwt = true
 
 [functions.send-auth-email]
 verify_jwt = false
-
