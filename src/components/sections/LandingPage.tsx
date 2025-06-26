@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -41,7 +42,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-10 h-10" />
+              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-16 h-16" />
               <span className="text-white font-bold text-xl">SmartFinanceAI</span>
             </div>
             
@@ -550,3 +551,4 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
     </div>
   );
 };
+
