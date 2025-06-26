@@ -17,28 +17,6 @@ interface AuthEmailRequest {
   site_url: string;
 }
 
-// Simple in-memory rate limiting (resets on function restart)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes
-const RATE_LIMIT_MAX_REQUESTS = 10; // Max 10 emails per IP per 5 minutes
-
-const checkRateLimit = (clientIP: string): boolean => {
-  const now = Date.now();
-  const limit = rateLimitMap.get(clientIP);
-  
-  if (!limit || now > limit.resetTime) {
-    rateLimitMap.set(clientIP, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  
-  if (limit.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return false;
-  }
-  
-  limit.count++;
-  return true;
-};
-
 const createEmailTemplate = (
   title: string, 
   content: string, 
@@ -184,43 +162,51 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION START ===');
     console.log('Request method:', req.method);
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
 
-    // Get webhook secret - make it optional for testing
+    // Get webhook secret - this is critical for authentication
     const hookSecret = Deno.env.get("AUTH_EMAIL_HOOK_SECRET");
     console.log('Hook secret configured:', !!hookSecret);
 
-    // Only verify signature if secret is configured
-    if (hookSecret) {
-      const supabaseSignature = req.headers.get('supabase-signature');
-      console.log('Supabase signature present:', !!supabaseSignature);
-      
-      if (!supabaseSignature || supabaseSignature !== hookSecret) {
-        console.warn('Unauthorized request: Invalid or missing supabase-signature header');
-        return new Response(JSON.stringify({ 
-          error: 'Unauthorized',
-          message: 'Invalid webhook signature'
-        }), {
-          status: 401,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        });
-      }
-      console.log('Webhook authentication successful');
-    } else {
-      console.warn('No webhook secret configured - proceeding without authentication check');
-    }
-    
-    // Basic rate limiting by client IP
-    const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    if (!checkRateLimit(clientIP)) {
-      console.warn('Rate limit exceeded for IP:', clientIP);
+    if (!hookSecret) {
+      console.error('AUTH_EMAIL_HOOK_SECRET environment variable not set');
       return new Response(JSON.stringify({ 
-        error: 'Rate limit exceeded. Please try again later.',
-        retry_after: Math.ceil(RATE_LIMIT_WINDOW / 1000 / 60) // minutes
+        error: 'Authentication configuration error',
+        message: 'Webhook secret not configured'
       }), {
-        status: 429,
+        status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+
+    // Check for Supabase signature header
+    const supabaseSignature = req.headers.get('supabase-signature');
+    console.log('Supabase signature present:', !!supabaseSignature);
+    
+    if (!supabaseSignature) {
+      console.warn('Missing supabase-signature header');
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized',
+        message: 'Missing authentication signature'
+      }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Verify the webhook signature
+    if (supabaseSignature !== hookSecret) {
+      console.warn('Invalid supabase-signature header');
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized',
+        message: 'Invalid webhook signature'
+      }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    console.log('Webhook authentication successful');
     
     const requestBody = await req.json();
     
@@ -230,8 +216,7 @@ const handler = async (req: Request): Promise<Response> => {
       email_action_type: requestBody.email_action_type,
       site_url: requestBody.site_url,
       has_redirect_to: !!requestBody.redirect_to,
-      has_token_hash: !!requestBody.token_hash,
-      client_ip: clientIP
+      has_token_hash: !!requestBody.token_hash
     });
     
     const { to, subject, token_hash, redirect_to, email_action_type, site_url }: AuthEmailRequest = requestBody;
@@ -322,6 +307,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("❌ EMAIL SENDING ERROR ❌");
     console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
     
     // Don't expose internal error details in production
     const isResendError = error.message?.includes('Resend') || error.name === 'ResendError';
