@@ -159,125 +159,18 @@ const getEmailTemplate = (actionType: string, confirmationUrl: string, recipient
 };
 
 const handler = async (req: Request): Promise<Response> => {
+  console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION START ===');
+  
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION START ===');
-    console.log('Request method:', req.method);
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
-
-    const requestBody = await req.json();
-    console.log('Raw request body structure:', {
-      hasUser: !!requestBody.user,
-      hasEmailData: !!requestBody.email_data,
-      keys: Object.keys(requestBody)
-    });
-
-    // Handle both the direct payload format and the nested webhook format
-    let user, email_data;
-    
-    if (requestBody.user && requestBody.email_data) {
-      // Webhook format
-      user = requestBody.user;
-      email_data = requestBody.email_data;
-      console.log('Using webhook payload format');
-    } else {
-      // Direct format (fallback)
-      user = { email: requestBody.to };
-      email_data = {
-        token_hash: requestBody.token_hash,
-        redirect_to: requestBody.redirect_to,
-        email_action_type: requestBody.email_action_type,
-        site_url: requestBody.site_url
-      };
-      console.log('Using direct payload format (fallback)');
-    }
-
-    console.log('Parsed email data:', {
-      userEmail: user?.email,
-      emailActionType: email_data?.email_action_type,
-      siteUrl: email_data?.site_url,
-      hasTokenHash: !!email_data?.token_hash,
-      hasRedirectTo: !!email_data?.redirect_to
-    });
-
-    // Validate required fields
-    if (!user?.email || !email_data?.token_hash || !email_data?.email_action_type || !email_data?.site_url) {
-      console.error('Missing required fields:', {
-        hasEmail: !!user?.email,
-        hasTokenHash: !!email_data?.token_hash,
-        hasEmailActionType: !!email_data?.email_action_type,
-        hasSiteUrl: !!email_data?.site_url
-      });
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(user.email)) {
-      console.error('Invalid email format:', { email_valid: false });
-      return new Response(JSON.stringify({ error: 'Invalid email format' }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
-    }
-
-    // Get Resend API key
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      console.error('RESEND_API_KEY environment variable not set');
-      return new Response(JSON.stringify({ 
-        error: 'Email service configuration error',
-        message: 'Please configure email service credentials'
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
-    }
-
-    console.log('Resend API key configured:', { has_api_key: !!resendApiKey });
-
-    // Initialize Resend client
-    const resend = new Resend(resendApiKey);
-
-    // Build confirmation URL
-    const baseUrl = email_data.site_url.endsWith('/') ? email_data.site_url.slice(0, -1) : email_data.site_url;
-    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || baseUrl)}`;
-
-    // Get email template based on action type
-    const emailTemplate = getEmailTemplate(email_data.email_action_type, confirmationUrl, user.email);
-
-    console.log('Sending email:', {
-      action_type: email_data.email_action_type,
-      subject: emailTemplate.subject,
-      to_domain: user.email.split('@')[1] // Log domain only for privacy
-    });
-
-    // Send email via Resend
-    const emailResponse = await resend.emails.send({
-      from: 'SmartFinanceAI <onboarding@resend.dev>', // Update this to your verified domain
-      to: [user.email],
-      subject: emailTemplate.subject,
-      html: emailTemplate.html,
-    });
-
-    console.log('Email sent successfully:', { 
-      email_id: emailResponse.data?.id,
-      status: 'sent'
-    });
-
-    return new Response(JSON.stringify({ 
+    // Respond immediately to prevent timeout
+    const quickResponse = new Response(JSON.stringify({ 
       success: true, 
-      message: 'Authentication email sent successfully',
-      email_sent: true,
-      action_type: email_data.email_action_type,
-      email_id: emailResponse.data?.id
+      message: 'Email processing initiated'
     }), {
       status: 200,
       headers: {
@@ -286,22 +179,18 @@ const handler = async (req: Request): Promise<Response> => {
       },
     });
 
+    // Process email asynchronously
+    processEmailAsync(req);
+
+    return quickResponse;
+
   } catch (error: any) {
-    console.error("❌ EMAIL SENDING ERROR ❌");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
-    
-    // Don't expose internal error details in production
-    const isResendError = error.message?.includes('Resend') || error.name === 'ResendError';
-    const userFriendlyMessage = isResendError 
-      ? 'Email delivery service temporarily unavailable' 
-      : 'Failed to send authentication email';
+    console.error("❌ EMAIL FUNCTION ERROR ❌", error);
     
     return new Response(
       JSON.stringify({ 
-        error: userFriendlyMessage,
+        error: 'Email service temporarily unavailable',
         timestamp: new Date().toISOString(),
-        service: 'SmartFinanceAI Auth Email',
         retry_suggested: true
       }),
       {
@@ -311,5 +200,67 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 };
+
+// Process email asynchronously to prevent timeout
+async function processEmailAsync(req: Request) {
+  try {
+    const requestBody = await req.json();
+    console.log('Processing email for:', requestBody.user?.email);
+
+    // Handle both the direct payload format and the nested webhook format
+    let user, email_data;
+    
+    if (requestBody.user && requestBody.email_data) {
+      user = requestBody.user;
+      email_data = requestBody.email_data;
+    } else {
+      user = { email: requestBody.to };
+      email_data = {
+        token_hash: requestBody.token_hash,
+        redirect_to: requestBody.redirect_to,
+        email_action_type: requestBody.email_action_type,
+        site_url: requestBody.site_url
+      };
+    }
+
+    // Validate required fields
+    if (!user?.email || !email_data?.token_hash || !email_data?.email_action_type || !email_data?.site_url) {
+      throw new Error('Missing required fields');
+    }
+
+    // Get Resend API key
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      throw new Error('RESEND_API_KEY not configured');
+    }
+
+    // Initialize Resend
+    const resend = new Resend(resendApiKey);
+
+    // Build confirmation URL
+    const baseUrl = email_data.site_url.endsWith('/') ? email_data.site_url.slice(0, -1) : email_data.site_url;
+    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || baseUrl)}`;
+
+    // Get email template
+    const emailTemplate = getEmailTemplate(email_data.email_action_type, confirmationUrl, user.email);
+
+    // Send email
+    const emailResponse = await resend.emails.send({
+      from: 'SmartFinanceAI <onboarding@resend.dev>',
+      to: [user.email],
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+    });
+
+    console.log('Email sent successfully:', { 
+      email_id: emailResponse.data?.id,
+      action_type: email_data.email_action_type,
+      to: user.email
+    });
+
+  } catch (error: any) {
+    console.error("❌ ASYNC EMAIL PROCESSING ERROR ❌", error);
+  }
+}
 
 serve(handler);
