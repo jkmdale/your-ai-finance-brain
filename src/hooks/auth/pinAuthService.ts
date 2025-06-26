@@ -60,26 +60,9 @@ export const pinAuthService = {
       const { hash, salt } = await PinSecurityService.hashPin(pin);
       console.log('✓ PIN hashed successfully');
       
-      // Check if user already has a PIN
-      console.log('Checking for existing PIN...');
-      const { data: existingPin, error: checkError } = await supabase
-        .from('user_pins')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking existing PIN:', checkError);
-        // Continue anyway, might be first-time setup
-      } else if (existingPin) {
-        console.log('Found existing PIN, will update');
-      } else {
-        console.log('No existing PIN found, will create new');
-      }
-
-      // Prepare data for upsert
+      // Prepare data for upsert - ensure user_id is set correctly
       const pinData = { 
-        user_id: user.id, 
+        user_id: user.id, // This is now required (NOT NULL)
         pin_hash: hash,
         pin_salt: salt,
         user_email: user.email || null
@@ -108,16 +91,7 @@ export const pinAuthService = {
           code: error.code
         });
         
-        // Provide more specific error messages based on error type
-        if (error.code === '23505') {
-          return { error: 'PIN already exists for this user' };
-        } else if (error.code === '42501') {
-          return { error: 'Permission denied. Please ensure you are properly logged in.' };
-        } else if (error.message.includes('row-level security')) {
-          return { error: 'Security policy violation. Please try logging out and back in.' };
-        }
-        
-        return { error: `Database error: ${error.message}` };
+        return { error: `Failed to save PIN: ${error.message}` };
       }
       
       console.log('✓ PIN setup successful, data saved:', data);
@@ -126,7 +100,6 @@ export const pinAuthService = {
     } catch (error: any) {
       console.error('=== PIN SETUP FAILED ===');
       console.error('Unexpected error during PIN setup:', error);
-      console.error('Error stack:', error.stack);
       return { error: error.message || 'Failed to set up PIN' };
     }
   },
@@ -141,7 +114,7 @@ export const pinAuthService = {
     }
 
     try {
-      // Get the stored PIN data for this user - handle potential query errors
+      // Get the stored PIN data for this user
       console.log('Querying PIN data for user:', email);
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
@@ -161,7 +134,7 @@ export const pinAuthService = {
 
       console.log('✓ Found PIN data for user');
 
-      // Verify PIN using secure comparison - handle null salt
+      // Verify PIN using secure comparison
       console.log('Verifying PIN...');
       const isValid = await PinSecurityService.verifyPin(
         pin, 
@@ -175,36 +148,6 @@ export const pinAuthService = {
       }
 
       console.log('✓ PIN verification successful');
-      
-      // Generate magic link for authentication
-      console.log('Generating authentication link...');
-      const { data, error } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: email,
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      
-      if (error) {
-        console.error('Failed to generate auth link:', error);
-        throw error;
-      }
-      
-      // Auto-sign in using the generated link
-      console.log('Attempting auto sign-in...');
-      const { error: signInError } = await supabase.auth.verifyOtp({
-        email: email,
-        token: data.properties?.email_otp || '',
-        type: 'email'
-      });
-      
-      if (signInError) {
-        console.error('Auto sign-in failed:', signInError);
-        return { error: 'Authentication failed' };
-      }
-      
-      console.log('✓ PIN authentication successful');
       console.log('=== PIN SIGN IN SUCCESS ===');
       return { error: null };
     } catch (error: any) {
