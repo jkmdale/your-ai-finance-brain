@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Hash, Delete, Check } from 'lucide-react';
@@ -64,10 +65,12 @@ export const PinSetupScreen: React.FC = () => {
     setIsSettingUp(true);
     
     try {
+      console.log('Starting PIN setup process...');
       const { error } = await setupPin(originalPin);
       
       if (error) {
-        toast.error('Failed to set up PIN. Please try again.');
+        console.error('PIN setup failed:', error);
+        toast.error(`Failed to set up PIN: ${error}`);
         setPin('');
         setConfirmPin('');
         setStep('setup');
@@ -75,10 +78,12 @@ export const PinSetupScreen: React.FC = () => {
         return;
       }
       
+      console.log('PIN setup successful, marking as complete...');
       // Mark PIN as set up - this will trigger the security method setup
       setIsPinSetup(true);
       toast.success('PIN set up successfully!');
     } catch (error) {
+      console.error('Unexpected error during PIN setup:', error);
       toast.error('Failed to set up PIN. Please try again.');
       setPin('');
       setConfirmPin('');
@@ -221,7 +226,7 @@ export const PinSetupScreen: React.FC = () => {
             <div className="text-white/70 text-sm">Setting up PIN...</div>
           </div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };
