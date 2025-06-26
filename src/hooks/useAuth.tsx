@@ -250,23 +250,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const setupPin = async (pin: string) => {
-    if (!user) return { error: 'No user logged in' };
+    console.log('Setting up PIN for user:', user?.email);
     
-    // Validate PIN format
+    if (!user) {
+      console.log('No user logged in');
+      return { error: 'No user logged in' };
+    }
+    
     if (!PinSecurityService.isValidPin(pin)) {
+      console.log('Invalid PIN format');
       return { error: 'PIN must be 4-8 digits long' };
     }
 
-    // Check PIN strength
     const strength = PinSecurityService.estimatePinStrength(pin);
     if (strength === 'weak') {
+      console.log('PIN is too weak');
       return { error: 'PIN is too weak. Avoid common patterns like 1234 or repeated digits.' };
     }
 
     try {
-      // Hash PIN securely
+      console.log('Hashing PIN...');
       const { hash, salt } = await PinSecurityService.hashPin(pin);
       
+      console.log('Storing PIN in database...');
       const { error } = await supabase
         .from('user_pins')
         .upsert({ 
@@ -276,11 +282,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           user_email: user.email 
         });
       
-      if (!error) {
-        setHasPin(true);
+      if (error) {
+        console.log('Database error:', error);
+        return { error: error.message };
       }
       
-      return { error };
+      console.log('PIN setup successful');
+      setHasPin(true);
+      return { error: null };
     } catch (error: any) {
       console.error('PIN setup error:', error);
       return { error: error.message || 'Failed to set up PIN' };
