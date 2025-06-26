@@ -42,7 +42,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-16 h-16" />
+              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-5 h-5" />
               <span className="text-white font-bold text-xl">SmartFinanceAI</span>
             </div>
             
