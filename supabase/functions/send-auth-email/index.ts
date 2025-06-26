@@ -8,13 +8,18 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
-interface AuthEmailRequest {
-  to: string;
-  subject?: string;
-  token_hash: string;
-  redirect_to?: string;
-  email_action_type: string;
-  site_url: string;
+interface AuthEmailPayload {
+  user: {
+    id: string;
+    email: string;
+  };
+  email_data: {
+    token: string;
+    token_hash: string;
+    redirect_to: string;
+    email_action_type: string;
+    site_url: string;
+  };
 }
 
 const createEmailTemplate = (
@@ -164,60 +169,48 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Request method:', req.method);
     console.log('Request headers:', Object.fromEntries(req.headers.entries()));
 
-    // For Supabase Auth webhooks, we need to check the authorization header instead
-    const authHeader = req.headers.get('authorization');
-    const apiKey = req.headers.get('apikey');
-    
-    console.log('Auth header present:', !!authHeader);
-    console.log('API key present:', !!apiKey);
-    
-    // Allow requests with valid Supabase credentials
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    
-    let isAuthorized = false;
-    
-    // Check if request has valid authorization
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      if (token === supabaseServiceKey || token === supabaseAnonKey) {
-        isAuthorized = true;
-        console.log('Valid Supabase token provided');
-      }
-    }
-    
-    // Also check API key header
-    if (apiKey && (apiKey === supabaseServiceKey || apiKey === supabaseAnonKey)) {
-      isAuthorized = true;
-      console.log('Valid API key provided');
-    }
-    
-    // For webhook calls from Supabase Auth, they might not include these headers
-    // In that case, we'll allow the request if it has the expected payload structure
-    if (!isAuthorized) {
-      console.log('No valid auth credentials found, checking for webhook payload...');
-    }
-    
     const requestBody = await req.json();
-    
-    // Log only non-sensitive request details
-    console.log('Email request received:', {
-      to: requestBody.to,
-      email_action_type: requestBody.email_action_type,
-      site_url: requestBody.site_url,
-      has_redirect_to: !!requestBody.redirect_to,
-      has_token_hash: !!requestBody.token_hash
+    console.log('Raw request body structure:', {
+      hasUser: !!requestBody.user,
+      hasEmailData: !!requestBody.email_data,
+      keys: Object.keys(requestBody)
     });
+
+    // Handle both the direct payload format and the nested webhook format
+    let user, email_data;
     
-    const { to, subject, token_hash, redirect_to, email_action_type, site_url }: AuthEmailRequest = requestBody;
+    if (requestBody.user && requestBody.email_data) {
+      // Webhook format
+      user = requestBody.user;
+      email_data = requestBody.email_data;
+      console.log('Using webhook payload format');
+    } else {
+      // Direct format (fallback)
+      user = { email: requestBody.to };
+      email_data = {
+        token_hash: requestBody.token_hash,
+        redirect_to: requestBody.redirect_to,
+        email_action_type: requestBody.email_action_type,
+        site_url: requestBody.site_url
+      };
+      console.log('Using direct payload format (fallback)');
+    }
+
+    console.log('Parsed email data:', {
+      userEmail: user?.email,
+      emailActionType: email_data?.email_action_type,
+      siteUrl: email_data?.site_url,
+      hasTokenHash: !!email_data?.token_hash,
+      hasRedirectTo: !!email_data?.redirect_to
+    });
 
     // Validate required fields
-    if (!to || !token_hash || !email_action_type || !site_url) {
-      console.error('Missing required fields:', { 
-        has_to: !!to, 
-        has_token_hash: !!token_hash, 
-        has_email_action_type: !!email_action_type, 
-        has_site_url: !!site_url 
+    if (!user?.email || !email_data?.token_hash || !email_data?.email_action_type || !email_data?.site_url) {
+      console.error('Missing required fields:', {
+        hasEmail: !!user?.email,
+        hasTokenHash: !!email_data?.token_hash,
+        hasEmailActionType: !!email_data?.email_action_type,
+        hasSiteUrl: !!email_data?.site_url
       });
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
@@ -227,7 +220,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(to)) {
+    if (!emailRegex.test(user.email)) {
       console.error('Invalid email format:', { email_valid: false });
       return new Response(JSON.stringify({ error: 'Invalid email format' }), {
         status: 400,
@@ -254,24 +247,23 @@ const handler = async (req: Request): Promise<Response> => {
     const resend = new Resend(resendApiKey);
 
     // Build confirmation URL
-    const baseUrl = site_url.endsWith('/') ? site_url.slice(0, -1) : site_url;
-    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirect_to || baseUrl)}`;
+    const baseUrl = email_data.site_url.endsWith('/') ? email_data.site_url.slice(0, -1) : email_data.site_url;
+    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || baseUrl)}`;
 
     // Get email template based on action type
-    const emailTemplate = getEmailTemplate(email_action_type, confirmationUrl, to);
-    const finalSubject = subject || emailTemplate.subject;
+    const emailTemplate = getEmailTemplate(email_data.email_action_type, confirmationUrl, user.email);
 
     console.log('Sending email:', {
-      action_type: email_action_type,
-      subject: finalSubject,
-      to_domain: to.split('@')[1] // Log domain only for privacy
+      action_type: email_data.email_action_type,
+      subject: emailTemplate.subject,
+      to_domain: user.email.split('@')[1] // Log domain only for privacy
     });
 
     // Send email via Resend
     const emailResponse = await resend.emails.send({
       from: 'SmartFinanceAI <onboarding@resend.dev>', // Update this to your verified domain
-      to: [to],
-      subject: finalSubject,
+      to: [user.email],
+      subject: emailTemplate.subject,
       html: emailTemplate.html,
     });
 
@@ -284,7 +276,7 @@ const handler = async (req: Request): Promise<Response> => {
       success: true, 
       message: 'Authentication email sent successfully',
       email_sent: true,
-      action_type: email_action_type,
+      action_type: email_data.email_action_type,
       email_id: emailResponse.data?.id
     }), {
       status: 200,
