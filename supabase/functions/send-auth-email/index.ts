@@ -260,7 +260,7 @@ async function processEmailAsync(req: Request) {
 
     // Send email
     const emailResponse = await resend.emails.send({
-      from: 'SmartFinanceAI <onboarding@resend.dev>',
+      from: 'SmartFinanceAI <noreply@smartfinanceai.app>',
       to: [user.email],
       subject: emailTemplate.subject,
       html: emailTemplate.html,
