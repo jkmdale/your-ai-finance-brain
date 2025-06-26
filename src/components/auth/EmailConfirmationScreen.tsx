@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Mail, CheckCircle } from 'lucide-react';
+import { Mail, CheckCircle, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AuthMode } from './types';
 
@@ -9,6 +9,7 @@ interface EmailConfirmationScreenProps {
   pendingEmail: string;
   onResendConfirmation: () => void;
   onModeChange: (mode: AuthMode) => void;
+  onHome?: () => void;
   loading: boolean;
 }
 
@@ -22,6 +23,7 @@ export const EmailConfirmationScreen: React.FC<EmailConfirmationScreenProps> = (
   pendingEmail,
   onResendConfirmation,
   onModeChange,
+  onHome,
   loading
 }) => {
   return (
@@ -33,6 +35,18 @@ export const EmailConfirmationScreen: React.FC<EmailConfirmationScreenProps> = (
       exit="exit"
       className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-6 shadow-2xl max-h-screen overflow-hidden"
     >
+      <div className="flex justify-between items-center mb-6">
+        <div></div>
+        {onHome && (
+          <button
+            onClick={onHome}
+            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
+          >
+            <Home className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
       <div className="text-center mb-6">
         <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Mail className="w-10 h-10 text-white" />

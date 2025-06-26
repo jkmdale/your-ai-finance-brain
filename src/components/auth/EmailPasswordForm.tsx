@@ -1,10 +1,9 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff } from 'lucide-react';
+import { Shield, Eye, EyeOff, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AuthMode } from './types';
 
 interface EmailPasswordFormProps {
@@ -14,8 +13,9 @@ interface EmailPasswordFormProps {
   setPassword: (password: string) => void;
   onSubmit: (isSignUp: boolean, additionalData?: { firstName?: string; lastName?: string; country?: string }) => void;
   onModeChange: (mode: AuthMode) => void;
+  onHome?: () => void;
   loading: boolean;
-  isSignUp?: boolean;
+  isSignUp: boolean;
 }
 
 const pageVariants = {
@@ -24,25 +24,6 @@ const pageVariants = {
   exit: { opacity: 0, x: -50 }
 };
 
-const countries = [
-  { code: 'NZ', name: 'New Zealand' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'US', name: 'United States' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'FR', name: 'France' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'KR', name: 'South Korea' },
-  { code: 'CN', name: 'China' },
-  { code: 'IN', name: 'India' },
-  { code: 'BR', name: 'Brazil' },
-  { code: 'MX', name: 'Mexico' },
-  { code: 'ZA', name: 'South Africa' }
-];
-
 export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
   email,
   setEmail,
@@ -50,41 +31,70 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
   setPassword,
   onSubmit,
   onModeChange,
+  onHome,
   loading,
-  isSignUp = false
+  isSignUp
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [country, setCountry] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (isSignUp) {
-      onSubmit(isSignUp, { firstName, lastName, country });
+      onSubmit(true, { firstName, lastName, country });
     } else {
-      onSubmit(isSignUp);
+      onSubmit(false);
     }
   };
 
   return (
     <motion.div
-      key={isSignUp ? 'signup' : 'email'}
+      key={isSignUp ? "signup" : "email"}
       variants={pageVariants}
       initial="initial"
       animate="animate"
       exit="exit"
       className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
     >
+      <div className="flex justify-between items-center mb-6">
+        <div></div>
+        {onHome && (
+          <button
+            onClick={onHome}
+            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
+          >
+            <Home className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white mb-2">
-          {isSignUp ? 'Create Account' : 'Sign In'}
-        </h2>
+        <div className="w-20 h-20 bg-gradient-to-br from-purple-800 to-blue-800 rounded-2xl flex items-center justify-center mx-auto mb-6 relative">
+          <Shield className="w-10 h-10 text-white/90" />
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-blue-400/20 rounded-2xl"></div>
+        </div>
+        <h1 className="text-3xl font-bold text-white mb-2">
+          {isSignUp ? 'Create Account' : 'Welcome Back'}
+        </h1>
         <p className="text-white/70">
-          {isSignUp ? 'Join SmartFinanceAI today' : 'Enter your credentials to continue'}
+          {isSignUp ? 'Join SmartFinanceAI to get started' : 'Sign in to your SmartFinanceAI account'}
         </p>
       </div>
 
-      <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <Input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+            required
+          />
+        </div>
+
         {isSignUp && (
           <>
             <div className="grid grid-cols-2 gap-4">
@@ -94,6 +104,7 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+                required
               />
               <Input
                 type="text"
@@ -101,74 +112,69 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+                required
               />
             </div>
-
-            <Select value={country} onValueChange={setCountry}>
-              <SelectTrigger className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12">
-                <SelectValue placeholder="Select your country" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700 text-white">
-                {countries.map((country) => (
-                  <SelectItem key={country.code} value={country.code} className="text-white hover:bg-gray-800">
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div>
+              <Input
+                type="text"
+                placeholder="Country"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
+                required
+              />
+            </div>
           </>
         )}
 
-        <div>
-          <Input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12"
-          />
-        </div>
-
         <div className="relative">
           <Input
-            type={showPassword ? 'text' : 'password'}
+            type={showPassword ? "text" : "password"}
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12 pr-12"
+            required
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white"
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
 
         <Button
-          onClick={handleSubmit}
+          type="submit"
           disabled={loading}
-          className={`w-full ${
-            isSignUp 
-              ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-              : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'
-          } text-white rounded-xl h-12`}
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl h-12"
         >
-          {loading 
-            ? (isSignUp ? 'Creating Account...' : 'Signing In...') 
-            : (isSignUp ? 'Create Account' : 'Sign In')
-          }
+          {loading ? (isSignUp ? 'Creating Account...' : 'Signing In...') : (isSignUp ? 'Create Account' : 'Sign In')}
         </Button>
-      </div>
+      </form>
 
-      <div className="mt-6 text-center">
-        <button
-          onClick={() => onModeChange('email-entry')}
-          className="text-white/70 hover:text-white transition-colors duration-200"
-        >
-          {isSignUp ? '← Back to login' : '← Back'}
-        </button>
+      <div className="mt-8 text-center space-y-4">
+        {!isSignUp && (
+          <button
+            onClick={() => onModeChange('email-entry')}
+            className="text-white/70 hover:text-white transition-colors duration-200"
+          >
+            ← Back to login options
+          </button>
+        )}
+        <div>
+          <button
+            onClick={() => onModeChange(isSignUp ? 'email' : 'signup')}
+            className="text-white/70 hover:text-white transition-colors duration-200"
+          >
+            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+            <span className="text-purple-400 font-medium">
+              {isSignUp ? 'Sign in' : 'Sign up'}
+            </span>
+          </button>
+        </div>
       </div>
     </motion.div>
   );

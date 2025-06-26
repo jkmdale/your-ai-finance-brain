@@ -207,6 +207,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     setLoading(false);
   };
 
+  const handleGoHome = () => {
+    // Reset auth state and go back to landing page
+    setMode('email-entry');
+    setEmail('');
+    setPassword('');
+    setLoading(false);
+    onAuthSuccess?.();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Elements */}
@@ -224,6 +233,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               setEmail={setEmail}
               onContinue={handleEmailEntry}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
             />
           )}
@@ -250,6 +260,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               setPassword={setPassword}
               onSubmit={handleEmailAuth}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
               isSignUp={false}
             />
@@ -263,6 +274,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               setPassword={setPassword}
               onSubmit={handleEmailAuth}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
               isSignUp={true}
             />
@@ -273,6 +285,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               pendingEmail={pendingEmail}
               onResendConfirmation={handleResendConfirmation}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
             />
           )}
@@ -282,6 +295,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               email={email}
               onPinComplete={handlePinComplete}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
             />
           )}
@@ -292,6 +306,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               biometricAvailable={biometricAvailable}
               onBiometricAuth={handleBiometricAuth}
               onModeChange={handleModeChange}
+              onHome={handleGoHome}
               loading={loading}
             />
           )}
