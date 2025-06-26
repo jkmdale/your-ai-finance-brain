@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 
@@ -246,9 +247,8 @@ async function processEmailAsync(req: Request) {
     // Initialize Resend
     const resend = new Resend(resendApiKey);
 
-    // Build confirmation URL
-    const baseUrl = email_data.site_url.endsWith('/') ? email_data.site_url.slice(0, -1) : email_data.site_url;
-    const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || baseUrl)}`;
+    // Build confirmation URL - FIXED: Remove duplicate auth/v1 path
+    const confirmationUrl = `${email_data.site_url}/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || 'http://localhost:3000')}`;
 
     console.log('🔗 Confirmation URL:', confirmationUrl);
 
