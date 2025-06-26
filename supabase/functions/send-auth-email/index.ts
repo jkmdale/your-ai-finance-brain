@@ -1,10 +1,9 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, supabase-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
@@ -184,6 +183,34 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     console.log('=== SMARTFINANCEAI AUTH EMAIL FUNCTION START ===');
     console.log('Request method:', req.method);
+
+    // Webhook authentication using AUTH_EMAIL_HOOK_SECRET
+    const hookSecret = Deno.env.get("AUTH_EMAIL_HOOK_SECRET");
+    if (!hookSecret) {
+      console.error('AUTH_EMAIL_HOOK_SECRET environment variable not set');
+      return new Response(JSON.stringify({ 
+        error: 'Webhook authentication not configured',
+        message: 'AUTH_EMAIL_HOOK_SECRET is required'
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Verify webhook signature
+    const supabaseSignature = req.headers.get('supabase-signature');
+    if (!supabaseSignature || supabaseSignature !== hookSecret) {
+      console.warn('Unauthorized request: Invalid or missing supabase-signature header');
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized',
+        message: 'Invalid webhook signature'
+      }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    console.log('Webhook authentication successful');
     
     // Basic rate limiting by client IP
     const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
