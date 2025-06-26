@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 
@@ -206,6 +205,7 @@ async function processEmailAsync(req: Request) {
   try {
     const requestBody = await req.json();
     console.log('Processing email for:', requestBody.user?.email);
+    console.log('Full request body:', JSON.stringify(requestBody, null, 2));
 
     // Handle both the direct payload format and the nested webhook format
     let user, email_data;
@@ -225,14 +225,23 @@ async function processEmailAsync(req: Request) {
 
     // Validate required fields
     if (!user?.email || !email_data?.token_hash || !email_data?.email_action_type || !email_data?.site_url) {
+      console.error('❌ Missing required fields:', {
+        hasEmail: !!user?.email,
+        hasTokenHash: !!email_data?.token_hash,
+        hasActionType: !!email_data?.email_action_type,
+        hasSiteUrl: !!email_data?.site_url
+      });
       throw new Error('Missing required fields');
     }
 
     // Get Resend API key
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
+      console.error('❌ RESEND_API_KEY not configured');
       throw new Error('RESEND_API_KEY not configured');
     }
+
+    console.log('✅ Resend API key found');
 
     // Initialize Resend
     const resend = new Resend(resendApiKey);
@@ -241,8 +250,13 @@ async function processEmailAsync(req: Request) {
     const baseUrl = email_data.site_url.endsWith('/') ? email_data.site_url.slice(0, -1) : email_data.site_url;
     const confirmationUrl = `${baseUrl}/auth/v1/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || baseUrl)}`;
 
+    console.log('🔗 Confirmation URL:', confirmationUrl);
+
     // Get email template
     const emailTemplate = getEmailTemplate(email_data.email_action_type, confirmationUrl, user.email);
+
+    console.log('📧 Sending email to:', user.email);
+    console.log('📋 Email subject:', emailTemplate.subject);
 
     // Send email
     const emailResponse = await resend.emails.send({
@@ -252,7 +266,14 @@ async function processEmailAsync(req: Request) {
       html: emailTemplate.html,
     });
 
-    console.log('Email sent successfully:', { 
+    console.log('📨 Resend API Response:', JSON.stringify(emailResponse, null, 2));
+
+    if (emailResponse.error) {
+      console.error('❌ Resend API Error:', emailResponse.error);
+      throw new Error(`Resend API Error: ${JSON.stringify(emailResponse.error)}`);
+    }
+
+    console.log('✅ Email sent successfully:', { 
       email_id: emailResponse.data?.id,
       action_type: email_data.email_action_type,
       to: user.email
@@ -260,6 +281,11 @@ async function processEmailAsync(req: Request) {
 
   } catch (error: any) {
     console.error("❌ ASYNC EMAIL PROCESSING ERROR ❌", error);
+    console.error("❌ Error details:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
   }
 }
 
