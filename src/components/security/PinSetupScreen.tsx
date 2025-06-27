@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Hash, Delete, Check } from 'lucide-react';
@@ -17,12 +16,12 @@ export const PinSetupScreen: React.FC = () => {
 
   const handleNumberClick = (number: string) => {
     if (isSettingUp) return;
-    
+
     if (step === 'setup') {
       if (pin.length < 4) {
         const newPin = pin + number;
         setPin(newPin);
-        
+
         if (newPin.length === 4) {
           setTimeout(() => {
             setStep('confirm');
@@ -33,7 +32,7 @@ export const PinSetupScreen: React.FC = () => {
       if (confirmPin.length < 4) {
         const newConfirmPin = confirmPin + number;
         setConfirmPin(newConfirmPin);
-        
+
         if (newConfirmPin.length === 4) {
           setTimeout(() => {
             handlePinSetup(pin, newConfirmPin);
@@ -45,7 +44,7 @@ export const PinSetupScreen: React.FC = () => {
 
   const handleDelete = () => {
     if (isSettingUp) return;
-    
+
     if (step === 'setup') {
       setPin(pin.slice(0, -1));
     } else {
@@ -63,11 +62,11 @@ export const PinSetupScreen: React.FC = () => {
     }
 
     setIsSettingUp(true);
-    
+
     try {
       console.log('Starting PIN setup process...');
       const { error } = await setupPin(originalPin);
-      
+
       if (error) {
         console.error('PIN setup failed:', error);
         toast.error(`Failed to set up PIN: ${error}`);
@@ -77,9 +76,8 @@ export const PinSetupScreen: React.FC = () => {
         setIsSettingUp(false);
         return;
       }
-      
+
       console.log('PIN setup successful, marking as complete...');
-      // Mark PIN as set up - this will trigger the security method setup
       setIsPinSetup(true);
       toast.success('PIN set up successfully!');
     } catch (error) {
@@ -130,10 +128,9 @@ export const PinSetupScreen: React.FC = () => {
             {step === 'setup' ? 'Set Your PIN' : 'Confirm Your PIN'}
           </h2>
           <p className="text-white/70 text-sm">
-            {step === 'setup' 
-              ? 'Choose a 4-digit PIN to secure your app' 
-              : 'Enter your PIN again to confirm'
-            }
+            {step === 'setup'
+              ? 'Choose a 4-digit PIN to secure your app'
+              : 'Enter your PIN again to confirm'}
           </p>
         </div>
 
@@ -142,12 +139,13 @@ export const PinSetupScreen: React.FC = () => {
             <motion.div
               key={index}
               className={`w-4 h-4 rounded-full ${
-                index < currentPin.length 
-                  ? 'bg-purple-400' 
-                  : 'bg-white/20'
+                index < currentPin.length ? 'bg-purple-400' : 'bg-white/20'
               }`}
               animate={{
-                scale: index === currentPin.length - 1 && currentPin.length > 0 ? [1, 1.2, 1] : 1
+                scale:
+                  index === currentPin.length - 1 && currentPin.length > 0
+                    ? [1, 1.2, 1]
+                    : 1,
               }}
               transition={{ duration: 0.2 }}
             />
@@ -165,7 +163,9 @@ export const PinSetupScreen: React.FC = () => {
                 whileTap={{ scale: 0.95 }}
               >
                 <span className="text-2xl font-medium">{item.num}</span>
-                {item.letters && <span className="text-xs text-white/60 mt-1">{item.letters}</span>}
+                {item.letters && (
+                  <span className="text-xs text-white/60 mt-1">{item.letters}</span>
+                )}
               </motion.button>
             ))}
           </div>
@@ -226,7 +226,7 @@ export const PinSetupScreen: React.FC = () => {
             <div className="text-white/70 text-sm">Setting up PIN...</div>
           </div>
         )}
-      </div>
+      </motion.div> {/* ✅ fixed closing tag */}
     </div>
   );
 };
