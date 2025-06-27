@@ -34,7 +34,7 @@ export const pinAuthService = {
         .upsert({
           user_id: user.id,
           pin_hash: hash,
-          salt: salt,
+          pin_salt: salt, // Use correct column name from database schema
           user_email: user.email
         }, { 
           onConflict: 'user_id',
@@ -69,10 +69,10 @@ export const pinAuthService = {
     console.log('🔵 PIN Sign In - PIN length:', pin?.length);
 
     try {
-      // Get user PIN data from email
+      // Get user PIN data from email - use correct column name
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
-        .select('user_id, pin_hash, salt')
+        .select('user_id, pin_hash, pin_salt')
         .eq('user_email', email)
         .single();
 
@@ -88,15 +88,20 @@ export const pinAuthService = {
         return { error: 'Invalid email or PIN.' };
       }
 
-      const { user_id, pin_hash, salt } = userData;
+      // Destructure with correct column name
+      const { user_id, pin_hash, pin_salt } = userData;
 
-      if (!user_id || !pin_hash || !salt) {
-        console.error('❌ PIN Sign In - Incomplete user data:', { user_id: !!user_id, pin_hash: !!pin_hash, salt: !!salt });
+      if (!user_id || !pin_hash || !pin_salt) {
+        console.error('❌ PIN Sign In - Incomplete user data:', { 
+          user_id: !!user_id, 
+          pin_hash: !!pin_hash, 
+          pin_salt: !!pin_salt 
+        });
         return { error: 'Invalid user data. Please contact support.' };
       }
 
       console.log('🔵 PIN Sign In - Verifying PIN');
-      const isValid = await PinSecurityService.verifyPin(pin, pin_hash, salt);
+      const isValid = await PinSecurityService.verifyPin(pin, pin_hash, pin_salt);
       
       if (!isValid) {
         console.error('❌ PIN Sign In - PIN verification failed');
