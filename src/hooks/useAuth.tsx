@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('🔵 Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session:', session?.user?.email);
+      console.log('🔵 Initial session:', session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -59,39 +59,83 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkAdditionalAuthMethods = async (userId: string) => {
     try {
+      console.log('🔵 Checking additional auth methods for user:', userId);
+      
       // Check for PIN
-      const { data: pinData } = await supabase
+      const { data: pinData, error: pinError } = await supabase
         .from('user_pins')
         .select('id')
         .eq('user_id', userId)
-        .single();
-      setHasPin(!!pinData);
+        .maybeSingle();
+      
+      if (pinError) {
+        console.error('❌ Error checking PIN:', pinError);
+      } else {
+        const hasPinAuth = !!pinData;
+        console.log('🔵 User has PIN auth:', hasPinAuth);
+        setHasPin(hasPinAuth);
+      }
 
       // Check for biometric
-      const { data: biometricData } = await supabase
+      const { data: biometricData, error: biometricError } = await supabase
         .from('biometric_credentials')
         .select('id')
         .eq('user_id', userId)
-        .single();
-      setHasBiometric(!!biometricData);
+        .maybeSingle();
+      
+      if (biometricError) {
+        console.error('❌ Error checking biometric:', biometricError);
+      } else {
+        const hasBiometricAuth = !!biometricData;
+        console.log('🔵 User has biometric auth:', hasBiometricAuth);
+        setHasBiometric(hasBiometricAuth);
+      }
     } catch (error) {
-      console.log('Error checking additional auth methods:', error);
+      console.error('❌ Error checking additional auth methods:', error);
     }
   };
 
   const setupPin = async (pin: string) => {
-    const result = await pinAuthService.setupPin(pin, user);
-    if (result.error === null) {
-      setHasPin(true);
+    console.log('🔵 Setting up PIN for user:', user?.email);
+    
+    if (!user) {
+      console.error('❌ No authenticated user for PIN setup');
+      return { error: 'No authenticated user' };
     }
+
+    const result = await pinAuthService.setupPin(pin, user);
+    
+    if (result.error === null) {
+      console.log('✅ PIN setup successful, updating hasPin state');
+      setHasPin(true);
+      // Refresh auth methods to ensure consistency
+      await checkAdditionalAuthMethods(user.id);
+    } else {
+      console.error('❌ PIN setup failed:', result.error);
+    }
+    
     return result;
   };
 
   const setupBiometric = async () => {
-    const result = await biometricAuthService.setupBiometric(user);
-    if (!result.error) {
-      setHasBiometric(true);
+    console.log('🔵 Setting up biometric for user:', user?.email);
+    
+    if (!user) {
+      console.error('❌ No authenticated user for biometric setup');
+      return { error: 'No authenticated user' };
     }
+
+    const result = await biometricAuthService.setupBiometric(user);
+    
+    if (!result.error) {
+      console.log('✅ Biometric setup successful, updating hasBiometric state');
+      setHasBiometric(true);
+      // Refresh auth methods to ensure consistency
+      await checkAdditionalAuthMethods(user.id);
+    } else {
+      console.error('❌ Biometric setup failed:', result.error);
+    }
+    
     return result;
   };
 
