@@ -19,8 +19,7 @@ interface AppSecurityContextType {
 
 const AppSecurityContext = createContext<AppSecurityContextType | undefined>(undefined);
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const APP_SWITCH_LOCK_DELAY = 30 * 1000; // 30 seconds after app switch
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes - ONLY trigger for locking
 
 export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
@@ -29,12 +28,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
-  const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
   
-  // Use refs for immediate synchronous access
-  const securityDisabledRef = useRef(false);
+  // Simple pause mechanism - just a counter
   const pauseCountRef = useRef(0);
-  const eventListenersActiveRef = useRef(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -54,77 +50,65 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Clear all timers helper
-  const clearAllTimers = useCallback(() => {
+  // Simple check if locking is paused
+  const isLockingPaused = useCallback(() => {
+    return pauseCountRef.current > 0;
+  }, []);
+
+  // Simple pause function
+  const pauseLocking = useCallback(() => {
+    pauseCountRef.current++;
+    console.log('🔓 Pausing app locking (count:', pauseCountRef.current, ')');
+    
+    // Clear any existing timer when pausing
     if (inactivityTimer) {
       clearTimeout(inactivityTimer);
       setInactivityTimer(null);
     }
-    if (visibilityTimer) {
-      clearTimeout(visibilityTimer);
-      setVisibilityTimer(null);
-    }
-  }, [inactivityTimer, visibilityTimer]);
+  }, [inactivityTimer]);
 
-  // Check if security is effectively disabled - SYNCHRONOUS check
-  const isSecurityDisabled = useCallback(() => {
-    return securityDisabledRef.current || pauseCountRef.current > 0;
-  }, []);
-
-  // IMMEDIATE synchronous pause and resume functions
-  const pauseLocking = useCallback(() => {
-    pauseCountRef.current++;
-    console.log('🔓 IMMEDIATELY pausing app locking (count:', pauseCountRef.current, ')');
-    
-    if (pauseCountRef.current === 1) {
-      // First pause call - IMMEDIATELY disable all security
-      securityDisabledRef.current = true;
-      clearAllTimers();
-      console.log('🔓 Security IMMEDIATELY DISABLED');
-    }
-  }, [clearAllTimers]);
-
+  // Simple resume function
   const resumeLocking = useCallback(() => {
     pauseCountRef.current = Math.max(0, pauseCountRef.current - 1);
     console.log('🔒 Resuming app locking (count:', pauseCountRef.current, ')');
     
-    if (pauseCountRef.current === 0) {
-      // Last resume call - re-enable security with delay
-      setTimeout(() => {
-        securityDisabledRef.current = false;
-        console.log('🔒 Security monitoring RE-ENABLED');
-        
-        // Restart inactivity timer if conditions are right
-        if (!isAppLocked && setupComplete) {
-          resetInactivityTimer();
-        }
-      }, 1000); // Give time for any pending operations
+    // If fully resumed and conditions are right, restart timer
+    if (pauseCountRef.current === 0 && !isAppLocked && setupComplete) {
+      resetInactivityTimer();
     }
   }, [isAppLocked, setupComplete]);
 
-  // Reset inactivity timer with immediate security check
+  // Reset inactivity timer - ONLY trigger for locking
   const resetInactivityTimer = useCallback(() => {
-    if (!setupComplete || isAppLocked || isSecurityDisabled()) {
+    // Don't set timer if not needed
+    if (!setupComplete || isAppLocked || isLockingPaused()) {
       return;
     }
     
-    clearAllTimers();
+    // Clear existing timer
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+    }
     
+    // Set new timer - ONLY lock after 5 minutes of inactivity
     const timer = setTimeout(() => {
-      if (!isSecurityDisabled()) {
-        console.log('App locked due to inactivity');
+      if (!isLockingPaused()) {
+        console.log('🔒 App locked due to 5 minutes of inactivity');
         setIsAppLocked(true);
       }
     }, INACTIVITY_TIMEOUT);
     
     setInactivityTimer(timer);
-  }, [setupComplete, isAppLocked, isSecurityDisabled, clearAllTimers]);
+  }, [setupComplete, isAppLocked, isLockingPaused, inactivityTimer]);
 
-  // Activity listener setup with immediate security checks
+  // SIMPLIFIED activity monitoring - ONLY for inactivity timer
   useEffect(() => {
-    if (!user || !setupComplete || isAppLocked) {
-      clearAllTimers();
-      eventListenersActiveRef.current = false;
+    if (!user || !setupComplete || isAppLocked || isLockingPaused()) {
+      // Clear timer if conditions aren't right
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        setInactivityTimer(null);
+      }
       return;
     }
 
@@ -133,106 +117,31 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       'touchstart', 'touchmove', 'click', 'wheel'
     ];
     
-    // Activity handler with immediate security check
+    // Activity handler - just reset the inactivity timer
     const handleActivity = () => {
-      if (!isSecurityDisabled()) {
+      if (!isLockingPaused()) {
         resetInactivityTimer();
       }
     };
 
-    // Only set up listeners if security is not disabled
-    if (!isSecurityDisabled()) {
-      resetInactivityTimer();
-      eventListenersActiveRef.current = true;
+    // Start the timer and add listeners
+    resetInactivityTimer();
 
+    activities.forEach(activity => {
+      document.addEventListener(activity, handleActivity, { passive: true });
+    });
+
+    return () => {
       activities.forEach(activity => {
-        document.addEventListener(activity, handleActivity, { passive: true });
+        document.removeEventListener(activity, handleActivity);
       });
-
-      return () => {
-        activities.forEach(activity => {
-          document.removeEventListener(activity, handleActivity);
-        });
-        clearAllTimers();
-        eventListenersActiveRef.current = false;
-      };
-    } else {
-      eventListenersActiveRef.current = false;
-    }
-  }, [user, setupComplete, isAppLocked, resetInactivityTimer, clearAllTimers]);
-
-  // Visibility change handler with immediate security checks
-  useEffect(() => {
-    if (!user || !setupComplete) {
-      return;
-    }
-
-    const handleVisibilityChange = () => {
-      // IMMEDIATE synchronous check
-      if (isSecurityDisabled()) {
-        console.log('👀 Visibility change ignored - security is disabled');
-        return;
-      }
-
-      if (document.hidden) {
-        console.log('🌙 App hidden, starting background timer');
-        clearAllTimers();
-        
-        const timer = setTimeout(() => {
-          if (!isSecurityDisabled()) {
-            console.log('🔒 App locked due to background time');
-            setIsAppLocked(true);
-          }
-        }, APP_SWITCH_LOCK_DELAY);
-        
-        setVisibilityTimer(timer);
-      } else {
-        console.log('☀️ App visible again');
-        if (visibilityTimer) {
-          clearTimeout(visibilityTimer);
-          setVisibilityTimer(null);
-        }
-        
-        if (!isAppLocked && !isSecurityDisabled()) {
-          resetInactivityTimer();
-        }
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
       }
     };
+  }, [user, setupComplete, isAppLocked, resetInactivityTimer, inactivityTimer, isLockingPaused]);
 
-    const handleFocus = () => {
-      if (!document.hidden && !isAppLocked && !isSecurityDisabled()) {
-        resetInactivityTimer();
-      }
-    };
-    
-    const handleBlur = () => {
-      if (!document.hidden && !isSecurityDisabled()) {
-        clearAllTimers();
-        const timer = setTimeout(() => {
-          if (!isSecurityDisabled()) {
-            setIsAppLocked(true);
-          }
-        }, APP_SWITCH_LOCK_DELAY);
-        setVisibilityTimer(timer);
-      }
-    };
-
-    // Only add listeners if security should be active
-    if (!isSecurityDisabled()) {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('focus', handleFocus);
-      window.addEventListener('blur', handleBlur);
-      
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', handleFocus);
-        window.removeEventListener('blur', handleBlur);
-        clearAllTimers();
-      };
-    }
-  }, [user, setupComplete, isAppLocked, resetInactivityTimer, visibilityTimer, clearAllTimers]);
-
-  // Handle page unload/beforeunload
+  // Handle page unload - save lock state
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (setupComplete) {
@@ -266,16 +175,19 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const unlockApp = useCallback(() => {
-    console.log('App unlocked');
+    console.log('🔓 App unlocked');
     setIsAppLocked(false);
     resetInactivityTimer();
   }, [resetInactivityTimer]);
 
   const lockApp = useCallback(() => {
-    console.log('App locked manually');
+    console.log('🔒 App locked manually');
     setIsAppLocked(true);
-    clearAllTimers();
-  }, [clearAllTimers]);
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      setInactivityTimer(null);
+    }
+  }, [inactivityTimer]);
 
   const setSetupCompleteState = useCallback((complete: boolean) => {
     if (user) {
