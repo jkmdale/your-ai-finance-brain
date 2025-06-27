@@ -29,13 +29,12 @@ export const pinAuthService = {
 
       console.log('🔵 PIN Setup - Attempting database upsert');
       
-      // Use the correct column name 'salt' instead of 'pin_salt'
       const { data, error } = await supabase
         .from('user_pins')
         .upsert({
           user_id: user.id,
           pin_hash: hash,
-          salt: salt, // This should match the database column name
+          salt: salt,
           user_email: user.email
         }, { 
           onConflict: 'user_id',
@@ -57,43 +56,57 @@ export const pinAuthService = {
       }
 
       console.log('✅ PIN Setup - Successfully saved to database');
-      return { success: true };
+      return { error: null };
     } catch (error) {
       console.error('❌ PIN Setup - Unexpected error:', error);
       return { error: `Setup failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
     }
   },
 
-  signInWithPin: async (email: string, pin: string) => {
+  signInWithPin: async (pin: string, email: string) => {
+    console.log('🔵 PIN Sign In - Starting process');
+    console.log('🔵 PIN Sign In - Email:', email);
+    console.log('🔵 PIN Sign In - PIN length:', pin?.length);
+
     try {
-      // Get user from email using the correct column name
+      // Get user PIN data from email
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
         .select('user_id, pin_hash, salt')
         .eq('user_email', email)
         .single();
 
-      if (userError || !userData) {
-        console.error('User PIN record not found:', userError);
+      console.log('🔵 PIN Sign In - Database query result:', { userData, userError });
+
+      if (userError) {
+        console.error('❌ PIN Sign In - Database error:', userError);
+        return { error: 'Invalid email or PIN.' };
+      }
+
+      if (!userData) {
+        console.error('❌ PIN Sign In - No user data found');
         return { error: 'Invalid email or PIN.' };
       }
 
       const { user_id, pin_hash, salt } = userData;
 
+      if (!user_id || !pin_hash || !salt) {
+        console.error('❌ PIN Sign In - Incomplete user data:', { user_id: !!user_id, pin_hash: !!pin_hash, salt: !!salt });
+        return { error: 'Invalid user data. Please contact support.' };
+      }
+
+      console.log('🔵 PIN Sign In - Verifying PIN');
       const isValid = await PinSecurityService.verifyPin(pin, pin_hash, salt);
+      
       if (!isValid) {
+        console.error('❌ PIN Sign In - PIN verification failed');
         return { error: 'Incorrect PIN.' };
       }
 
-      // Get the actual user by ID and sign in using a secure method
-      const { data: userInfo, error: fetchError } = await supabase.auth.admin.getUserById(user_id);
-      if (fetchError || !userInfo) {
-        return { error: 'Failed to fetch user account.' };
-      }
-
-      return { success: true };
+      console.log('✅ PIN Sign In - PIN verified successfully');
+      return { error: null };
     } catch (err) {
-      console.error('PIN login error:', err);
+      console.error('❌ PIN Sign In - Unexpected error:', err);
       return { error: 'An error occurred during PIN login.' };
     }
   }

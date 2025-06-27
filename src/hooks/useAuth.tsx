@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const setupPin = async (pin: string) => {
     const result = await pinAuthService.setupPin(pin, user);
-    if (!result.error) {
+    if (result.error === null) {
       setHasPin(true);
     }
     return result;
