@@ -15,9 +15,9 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
   const securityPausedRef = useRef(false);
 
   const openFilePicker = useCallback(() => {
-    console.log('📁 Opening file picker - PAUSING SECURITY COMPLETELY');
+    console.log('📁 Opening file picker - DISABLING SECURITY ENTIRELY');
     
-    // Pause security immediately and track it
+    // Disable security completely before opening picker
     pauseLocking();
     securityPausedRef.current = true;
     setIsPickerOpen(true);
@@ -47,14 +47,14 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
         options.onFilesSelected(files);
       }
       
-      // Resume security after a longer delay to ensure file processing completes
+      // Give extra time for CSV processing to complete
       setTimeout(() => {
         if (securityPausedRef.current) {
-          console.log('🔒 Resuming security after file processing (10 second delay)');
+          console.log('🔒 Re-enabling security after file processing (15 second delay)');
           resumeLocking();
           securityPausedRef.current = false;
         }
-      }, 10000); // 10 second delay for file processing
+      }, 15000); // 15 seconds for CSV processing
       
       cleanup();
     };
@@ -64,14 +64,14 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       console.log('❌ File picker cancelled');
       setIsPickerOpen(false);
       
-      // Resume security after cancellation
+      // Re-enable security after brief delay
       setTimeout(() => {
         if (securityPausedRef.current) {
-          console.log('🔒 Resuming security after cancellation');
+          console.log('🔒 Re-enabling security after cancellation');
           resumeLocking();
           securityPausedRef.current = false;
         }
-      }, 2000); // 2 second delay after cancellation
+      }, 3000); // 3 seconds after cancellation
       
       cleanup();
     };
@@ -83,14 +83,14 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       input.value = ''; // Clear for reuse
     };
 
-    // Detect cancellation via window focus
+    // Detect cancellation via window focus (with longer delay)
     const handleWindowFocus = () => {
       setTimeout(() => {
         if (isPickerOpen && (!input.files || input.files.length === 0)) {
           console.log('🔍 File picker cancelled (focus without files)');
           handleCancel();
         }
-      }, 1000); // Increased delay to avoid false positives
+      }, 2000); // 2 second delay to avoid false positives
     };
 
     // Add event listeners
@@ -100,7 +100,7 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
     // Delay focus listener to avoid immediate triggering
     setTimeout(() => {
       window.addEventListener('focus', handleWindowFocus, { once: true });
-    }, 500);
+    }, 1000);
 
     // Open the file picker
     setTimeout(() => {
@@ -119,7 +119,7 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
     }
     
     if (securityPausedRef.current) {
-      console.log('🔒 Cleanup: Resuming security');
+      console.log('🔒 Cleanup: Re-enabling security');
       resumeLocking();
       securityPausedRef.current = false;
     }
