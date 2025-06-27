@@ -106,7 +106,7 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <motion.div className="space-y-6">
       <div className="text-center">
         <Shield className="mx-auto h-12 w-12 text-primary" />
         <h2 className="text-xl font-semibold mt-4">Secure Your App</h2>
@@ -117,29 +117,4 @@ export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({
 
       <div className="grid grid-cols-2 gap-4">
         <Button
-          variant={selectedMethod === 'pin' ? 'default' : 'outline'}
-          onClick={() => setSelectedMethod('pin')}
-        >
-          <Hash className="mr-2 h-4 w-4" /> Use PIN
-        </Button>
-        {biometricAvailable && (
-          <Button
-            variant={selectedMethod === 'biometric' ? 'default' : 'outline'}
-            onClick={() => setSelectedMethod('biometric')}
-          >
-            <Fingerprint className="mr-2 h-4 w-4" /> Use Biometrics
-          </Button>
-        )}
-      </div>
-
-      <div className="flex justify-between">
-        <Button variant="ghost" onClick={onSkip}>
-          Skip
-        </Button>
-        <Button onClick={handleConfirm} disabled={loading || !selectedMethod}>
-          Confirm
-        </Button>
-      </div>
-    </div>
-  );
-};
+          variant={selectedMethod === 'pin' ?
