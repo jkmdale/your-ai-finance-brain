@@ -27,26 +27,49 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [preferredUnlockMethod, setPreferredUnlockMethodState] = useState<'pin' | 'biometric' | null>(null);
   const [setupComplete, setSetupComplete] = useState(false);
   const [isPinSetup, setIsPinSetup] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize security settings from localStorage
+  // Initialize security settings from localStorage when user changes
   useEffect(() => {
-    if (user) {
+    if (user && !isInitialized) {
+      console.log('🔐 Initializing security settings for user:', user.email);
+      
       const storedMethod = localStorage.getItem(`security_method_${user.id}`) as 'pin' | 'biometric' | null;
       const storedSetupComplete = localStorage.getItem(`security_setup_${user.id}`) === 'true';
       const storedPinSetup = localStorage.getItem(`pin_setup_${user.id}`) === 'true';
+      
+      console.log('🔐 Restored settings:', { storedMethod, storedSetupComplete, storedPinSetup });
       
       setPreferredUnlockMethodState(storedMethod);
       setSetupComplete(storedSetupComplete);
       setIsPinSetup(storedPinSetup);
       
-      // Lock app initially if setup is complete
-      if (storedSetupComplete) {
+      // Only lock app if setup is complete and we're returning from a previous session
+      const wasLocked = localStorage.getItem(`app_locked_${user.id}`) === 'true';
+      if (storedSetupComplete && wasLocked) {
+        console.log('🔒 App was previously locked, locking now');
         setIsAppLocked(true);
+        localStorage.removeItem(`app_locked_${user.id}`);
+      } else if (storedSetupComplete) {
+        // If setup is complete but app wasn't locked, don't lock immediately
+        console.log('🔓 Setup complete but app wasn\'t locked previously');
+        setIsAppLocked(false);
       }
+      
+      setIsInitialized(true);
+    } else if (!user) {
+      // Reset state when user logs out
+      console.log('🔐 User logged out, resetting security state');
+      setIsInitialized(false);
+      setIsAppLocked(false);
+      setPreferredUnlockMethodState(null);
+      setSetupComplete(false);
+      setIsPinSetup(false);
+      clearInactivityTimer();
     }
-  }, [user]);
+  }, [user, isInitialized]);
 
   // Clear inactivity timer
   const clearInactivityTimer = useCallback(() => {
@@ -141,19 +164,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [setupComplete, user]);
 
-  // Check if app should be locked on load
-  useEffect(() => {
-    if (user && setupComplete) {
-      const wasLocked = localStorage.getItem(`app_locked_${user.id}`) === 'true';
-      if (wasLocked) {
-        setIsAppLocked(true);
-        localStorage.removeItem(`app_locked_${user.id}`);
-      }
-    }
-  }, [user, setupComplete]);
-
   const setPreferredUnlockMethod = useCallback((method: 'pin' | 'biometric') => {
     if (user) {
+      console.log('🔐 Setting preferred unlock method:', method);
       setPreferredUnlockMethodState(method);
       localStorage.setItem(`security_method_${user.id}`, method);
     }
@@ -180,17 +193,21 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
 
   const setSetupCompleteState = useCallback((complete: boolean) => {
     if (user) {
+      console.log('🔐 Setting setup complete:', complete);
       setSetupComplete(complete);
       localStorage.setItem(`security_setup_${user.id}`, complete.toString());
       
-      if (complete) {
+      // Only lock immediately if this is the first time setup is being completed
+      if (complete && !setupComplete) {
+        console.log('🔒 First time setup complete, locking app');
         setIsAppLocked(true);
       }
     }
-  }, [user]);
+  }, [user, setupComplete]);
 
   const setIsPinSetupState = useCallback((setup: boolean) => {
     if (user) {
+      console.log('🔐 Setting PIN setup:', setup);
       setIsPinSetup(setup);
       localStorage.setItem(`pin_setup_${user.id}`, setup.toString());
     }
