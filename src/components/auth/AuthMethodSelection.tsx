@@ -1,120 +1,77 @@
-import React, { useState, useEffect } from 'react';
+
+import React from 'react';
 import { motion } from 'framer-motion';
-import {
-  Mail,
-  Hash,
-  Fingerprint,
-  Shield,
-  Zap,
-  Lock,
-  CheckCircle,
-} from 'lucide-react';
+import { Fingerprint, Hash, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
 interface AuthMethodSelectionProps {
-  onComplete: () => void;
-  onSkip: () => void;
+  onSelectMethod: (method: 'pin' | 'biometric') => void;
+  availableMethods: {
+    pin: boolean;
+    biometric: boolean;
+  };
 }
 
 export const AuthMethodSelection: React.FC<AuthMethodSelectionProps> = ({
-  onComplete,
-  onSkip,
+  onSelectMethod,
+  availableMethods
 }) => {
-  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const { setupPin, setupBiometric, isBiometricAvailable, user } = useAuth();
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-
-  useEffect(() => {
-    const checkBiometric = async () => {
-      const available = await isBiometricAvailable();
-      setBiometricAvailable(available);
-    };
-    checkBiometric();
-  }, [isBiometricAvailable]);
-
-  const saveUserPreference = async (method: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          login_preference: method,
-          setup_completed: true,
-        },
-      });
-
-      if (error) {
-        console.error('Error saving user preference:', error);
-        toast.error('Failed to save preference');
-        return false;
-      }
-
-      localStorage.setItem(`security_method_${user.id}`, method);
-      localStorage.setItem(`security_setup_${user.id}`, 'true');
-      return true;
-    } catch (err) {
-      console.error('Unexpected error saving preference:', err);
-      return false;
-    }
-  };
-
-  const handleConfirm = async () => {
-    if (!selectedMethod) return;
-
-    if (selectedMethod === 'pin') {
-      setLoading(true);
-      alert('👣 Starting PIN setup');
-
-      try {
-        const result = await setupPin('1234'); // Replace with actual user PIN input later
-
-        if (result?.error) {
-          alert('❌ Error saving PIN: ' + result.error.message);
-        } else {
-          alert('✅ PIN saved successfully!');
-          const success = await saveUserPreference('pin');
-          if (success) onComplete();
-        }
-      } catch (err) {
-        alert('❌ Unexpected error: ' + err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (selectedMethod === 'biometric') {
-      setLoading(true);
-      try {
-        const result = await setupBiometric();
-        if (result?.error) {
-          toast.error('Failed to set up biometrics');
-        } else {
-          toast.success('Biometric setup complete!');
-          const success = await saveUserPreference('biometric');
-          if (success) onComplete();
-        }
-      } catch (err) {
-        toast.error('Unexpected error setting up biometrics');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
   return (
-    <motion.div className="space-y-6">
-      <div className="text-center">
-        <Shield className="mx-auto h-12 w-12 text-primary" />
-        <h2 className="text-xl font-semibold mt-4">Secure Your App</h2>
-        <p className="text-sm text-muted-foreground">
-          Choose your preferred way to unlock the app
-        </p>
+    <div className="fixed inset-0 bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4 z-50">
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Button
-          variant={selectedMethod === 'pin' ?
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative z-10 backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+      >
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <ArrowRight className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Choose Sign-In Method</h2>
+          <p className="text-white/70 text-sm">Select your preferred way to unlock the app</p>
+        </div>
+
+        <div className="space-y-4">
+          {availableMethods.pin && (
+            <motion.button
+              onClick={() => onSelectMethod('pin')}
+              className="w-full backdrop-blur-sm bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-6 flex items-center space-x-4 text-white transition-all duration-200"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="w-12 h-12 bg-purple-600/20 rounded-xl flex items-center justify-center">
+                <Hash className="w-6 h-6 text-purple-400" />
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="font-semibold">PIN Code</h3>
+                <p className="text-white/60 text-sm">Use your 4-digit PIN</p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-white/40" />
+            </motion.button>
+          )}
+
+          {availableMethods.biometric && (
+            <motion.button
+              onClick={() => onSelectMethod('biometric')}
+              className="w-full backdrop-blur-sm bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-6 flex items-center space-x-4 text-white transition-all duration-200"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center">
+                <Fingerprint className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="font-semibold">Biometric</h3>
+                <p className="text-white/60 text-sm">Use fingerprint or face unlock</p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-white/40" />
+            </motion.button>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};

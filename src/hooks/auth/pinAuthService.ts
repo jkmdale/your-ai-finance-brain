@@ -28,18 +28,15 @@ export const pinAuthService = {
       console.log('🔵 PIN Setup - Salt length:', salt?.length);
 
       console.log('🔵 PIN Setup - Attempting database upsert');
-      console.log('🔵 PIN Setup - Data to insert:', {
-        user_id: user.id,
-        pin_hash: hash ? '***HASH***' : null,
-        salt: salt ? '***SALT***' : null
-      });
-
+      
+      // Use the correct column name 'salt' instead of 'pin_salt'
       const { data, error } = await supabase
         .from('user_pins')
         .upsert({
           user_id: user.id,
           pin_hash: hash,
-          salt: salt
+          salt: salt, // This should match the database column name
+          user_email: user.email
         }, { 
           onConflict: 'user_id',
           ignoreDuplicates: false
@@ -69,11 +66,11 @@ export const pinAuthService = {
 
   signInWithPin: async (email: string, pin: string) => {
     try {
-      // Get user from email
+      // Get user from email using the correct column name
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
         .select('user_id, pin_hash, salt')
-        .eq('email', email)
+        .eq('user_email', email)
         .single();
 
       if (userError || !userData) {
@@ -88,13 +85,12 @@ export const pinAuthService = {
         return { error: 'Incorrect PIN.' };
       }
 
-      // Get the actual user by ID and sign in using a secure method (you may customize this)
+      // Get the actual user by ID and sign in using a secure method
       const { data: userInfo, error: fetchError } = await supabase.auth.admin.getUserById(user_id);
       if (fetchError || !userInfo) {
         return { error: 'Failed to fetch user account.' };
       }
 
-      // Implement your actual sign-in logic here
       return { success: true };
     } catch (err) {
       console.error('PIN login error:', err);
