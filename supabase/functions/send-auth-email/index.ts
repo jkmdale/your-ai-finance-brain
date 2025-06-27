@@ -247,8 +247,9 @@ async function processEmailAsync(req: Request) {
     // Initialize Resend
     const resend = new Resend(resendApiKey);
 
-    // Build confirmation URL - FIXED: Remove duplicate auth/v1 path
-    const confirmationUrl = `${email_data.site_url}/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(email_data.redirect_to || 'http://localhost:3000')}`;
+    // Build confirmation URL - Use redirect_to instead of site_url for better routing
+    const baseUrl = email_data.redirect_to || 'https://a29b8699-11a7-4b06-985f-e3c27ee69b05.lovableproject.com';
+    const confirmationUrl = `${email_data.site_url}/verify?token=${email_data.token_hash}&type=${email_data.email_action_type}&redirect_to=${encodeURIComponent(baseUrl)}`;
 
     console.log('🔗 Confirmation URL:', confirmationUrl);
 
