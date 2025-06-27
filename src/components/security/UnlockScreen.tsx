@@ -99,16 +99,20 @@ export const UnlockScreen: React.FC = () => {
     setIsUnlocking(true);
     
     try {
-      const { error } = await signInWithBiometric(user.email);
+      console.log('🔐 Attempting biometric unlock for:', user.email);
+      const { error, userId } = await signInWithBiometric(user.email);
       
       if (error) {
-        console.log('Biometric error:', error);
+        console.log('❌ Biometric error:', error);
         
         if (error.includes('No passkeys available') || error.includes('not recognized')) {
           toast.error('No biometric credentials found. Please use PIN instead.');
           setShowPinMode(true);
-        } else if (error.includes('cancelled') || error.includes('not allowed')) {
+        } else if (error.includes('cancelled') || error.includes('denied')) {
           toast.error('Biometric authentication was cancelled');
+        } else if (error.includes('preview mode')) {
+          toast.error('Biometric auth not available in preview mode');
+          setShowPinMode(true);
         } else {
           toast.error('Biometric authentication failed');
           setShowPinMode(true);
@@ -118,11 +122,20 @@ export const UnlockScreen: React.FC = () => {
         return;
       }
       
+      // Verify the authenticated user matches the current session
+      if (userId && userId !== user.id) {
+        console.error('❌ User ID mismatch:', userId, 'vs', user.id);
+        toast.error('Authentication failed - user mismatch');
+        setIsUnlocking(false);
+        return;
+      }
+      
+      console.log('✅ Biometric unlock successful');
       unlockApp();
       toast.success('App unlocked with biometric!');
       setIsUnlocking(false);
     } catch (error: any) {
-      console.error('Biometric unlock error:', error);
+      console.error('❌ Biometric unlock error:', error);
       toast.error('Biometric authentication failed. Please use PIN.');
       setShowPinMode(true);
       setIsUnlocking(false);

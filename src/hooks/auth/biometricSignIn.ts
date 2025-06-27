@@ -5,95 +5,117 @@ import { biometricAvailability } from './biometricAvailability';
 
 export const biometricSignIn = {
   async signInWithBiometric(email: string) {
-    console.log('Attempting biometric authentication for:', email);
+    console.log('🔐 Starting biometric authentication for:', email);
 
-    // Check if we're in an iframe first
+    // Environment checks
     if (window.self !== window.top) {
       return { error: 'Biometric authentication is not available in preview mode. It will work when deployed or accessed directly.' };
     }
 
-    // Check for HTTPS requirement
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
       return { error: 'Biometric authentication requires HTTPS connection' };
     }
 
     const isAvailable = await biometricAvailability.isBiometricAvailable();
     if (!isAvailable) {
-      return { error: 'Biometric authentication not available' };
+      return { error: 'Biometric authentication not available on this device' };
     }
 
     try {
-      // First, get the stored credential for this user
+      console.log('🔍 Fetching stored credentials for user:', email);
+      
+      // Get stored credentials for this user
       const { data: storedCredentials, error: fetchError } = await supabase
         .from('biometric_credentials')
-        .select('credential_id, user_id, user_email')
+        .select('credential_id, user_id, user_email, public_key')
         .eq('user_email', email);
 
       if (fetchError) {
-        console.log('Database error fetching credentials:', fetchError);
+        console.error('❌ Database error fetching credentials:', fetchError);
         return { error: 'Failed to retrieve biometric credentials' };
       }
 
       if (!storedCredentials || storedCredentials.length === 0) {
-        console.log('No biometric credentials found for user:', email);
+        console.log('❌ No biometric credentials found for user:', email);
         return { error: 'No passkeys found for this account. Please set up biometric authentication first.' };
       }
 
-      console.log('Found stored credentials:', storedCredentials.length);
+      console.log('✅ Found stored credentials:', storedCredentials.length);
 
-      // Create the authentication request with allowCredentials
+      // Create authentication challenge
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       
+      // Convert stored credential IDs back to ArrayBuffer for the request
+      const allowCredentials = storedCredentials.map(cred => ({
+        id: biometricUtils.base64ToArrayBuffer(cred.credential_id),
+        type: "public-key" as const,
+        transports: ["internal"] as AuthenticatorTransport[]
+      }));
+
       const publicKeyCredentialRequestOptions: CredentialRequestOptions = {
         publicKey: {
           challenge,
           userVerification: "required" as const,
           timeout: 60000,
           rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname,
-          // Convert credential IDs properly for allowCredentials
-          allowCredentials: storedCredentials.map(cred => ({
-            id: biometricUtils.base64ToArrayBuffer(cred.credential_id),
-            type: "public-key" as const
-          }))
+          allowCredentials
         }
       };
       
-      console.log('Requesting biometric authentication...');
+      console.log('🚀 Requesting biometric authentication...');
+      console.log('Challenge length:', challenge.length);
+      console.log('Allowed credentials:', allowCredentials.length);
+      
       const assertion = await navigator.credentials.get(publicKeyCredentialRequestOptions) as PublicKeyCredential;
 
       if (!assertion) {
-        return { error: 'Biometric authentication cancelled' };
+        console.log('❌ No assertion returned - user cancelled');
+        return { error: 'Biometric authentication was cancelled' };
       }
 
-      console.log('Biometric authentication successful, credential ID:', assertion.id);
+      console.log('✅ Biometric authentication completed, credential ID:', assertion.id);
 
-      // Convert the assertion ID to base64 for comparison
+      // Convert assertion ID to base64 for comparison
       const assertionIdBase64 = biometricUtils.arrayBufferToBase64(assertion.rawId);
+      console.log('🔍 Looking for matching credential with ID:', assertionIdBase64);
 
-      // Verify the credential ID matches one of our stored credentials
-      const matchingCredential = storedCredentials.find(cred => cred.credential_id === assertionIdBase64);
+      // Find matching credential
+      const matchingCredential = storedCredentials.find(cred => {
+        console.log('Comparing stored:', cred.credential_id, 'with assertion:', assertionIdBase64);
+        return cred.credential_id === assertionIdBase64;
+      });
       
       if (!matchingCredential) {
-        console.log('Credential not found in database');
-        return { error: 'Biometric authentication failed - credential not recognized' };
+        console.error('❌ No matching credential found in database');
+        console.log('Available credentials:', storedCredentials.map(c => c.credential_id));
+        return { error: 'Biometric credential not recognized. Please try again or use a different authentication method.' };
       }
 
-      console.log('Credential verified, user ID:', matchingCredential.user_id);
+      console.log('✅ Credential verified for user:', matchingCredential.user_id);
 
-      // Simple success - don't try to auto-sign in, let the app handle the session
-      console.log('Biometric authentication successful for user:', matchingCredential.user_id);
-      return { error: null };
-    } catch (error: any) {
-      console.error('Biometric sign-in error:', error);
+      // Update last used timestamp
+      await supabase
+        .from('biometric_credentials')
+        .update({ last_used: new Date().toISOString() })
+        .eq('credential_id', matchingCredential.credential_id);
+
+      console.log('🎉 Biometric authentication successful!');
+      return { error: null, userId: matchingCredential.user_id };
       
+    } catch (error: any) {
+      console.error('❌ Biometric sign-in error:', error);
+      
+      // Enhanced error handling
       if (error.name === 'NotAllowedError') {
         return { error: 'Biometric authentication was cancelled or denied. Please try again.' };
       } else if (error.name === 'SecurityError') {
         return { error: 'Security error: Please ensure you are using HTTPS or localhost' };
       } else if (error.name === 'InvalidStateError') {
-        return { error: 'No passkeys available for this account. Please set up biometric authentication first.' };
+        return { error: 'No valid passkeys available. Please set up biometric authentication first.' };
       } else if (error.name === 'AbortError') {
         return { error: 'Biometric authentication timed out. Please try again.' };
+      } else if (error.name === 'NotSupportedError') {
+        return { error: 'Biometric authentication is not supported on this device.' };
       }
       
       return { error: error.message || 'Biometric authentication failed' };
