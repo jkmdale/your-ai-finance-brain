@@ -139,6 +139,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
+  // New unlock-specific biometric function
+  const unlockWithBiometric = async () => {
+    if (!user) {
+      return { error: 'No authenticated user' };
+    }
+    
+    return await biometricAuthService.unlockWithBiometric(user.email || '', user.id);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -151,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setupPin,
       signInWithPin: pinAuthService.signInWithPin,
       setupBiometric,
-      signInWithBiometric: biometricAuthService.signInWithBiometric,
+      signInWithBiometric: unlockWithBiometric, // Use unlock method for existing interface
       isBiometricAvailable: biometricAuthService.isBiometricAvailable,
       getUserCapabilities: authService.getUserCapabilities,
       getUserPreference: authService.getUserPreference,

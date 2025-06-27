@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Hash, Fingerprint, LogOut, Delete, Eye, EyeOff } from 'lucide-react';
@@ -100,17 +99,17 @@ export const UnlockScreen: React.FC = () => {
     
     try {
       console.log('🔐 Attempting biometric unlock for:', user.email);
-      const { error, userId } = await signInWithBiometric(user.email);
+      const result = await signInWithBiometric(user.email);
       
-      if (error) {
-        console.log('❌ Biometric error:', error);
+      if (result.error) {
+        console.log('❌ Biometric error:', result.error);
         
-        if (error.includes('No passkeys available') || error.includes('not recognized')) {
+        if (result.error.includes('No passkeys available') || result.error.includes('not recognized')) {
           toast.error('No biometric credentials found. Please use PIN instead.');
           setShowPinMode(true);
-        } else if (error.includes('cancelled') || error.includes('denied')) {
+        } else if (result.error.includes('cancelled') || result.error.includes('denied')) {
           toast.error('Biometric authentication was cancelled');
-        } else if (error.includes('preview mode')) {
+        } else if (result.error.includes('preview mode')) {
           toast.error('Biometric auth not available in preview mode');
           setShowPinMode(true);
         } else {
@@ -118,14 +117,6 @@ export const UnlockScreen: React.FC = () => {
           setShowPinMode(true);
         }
         
-        setIsUnlocking(false);
-        return;
-      }
-      
-      // Verify the authenticated user matches the current session
-      if (userId && userId !== user.id) {
-        console.error('❌ User ID mismatch:', userId, 'vs', user.id);
-        toast.error('Authentication failed - user mismatch');
         setIsUnlocking(false);
         return;
       }
