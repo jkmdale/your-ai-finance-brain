@@ -30,6 +30,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
   const [lockingPaused, setLockingPaused] = useState(false);
+  const [pauseCount, setPauseCount] = useState(0); // Track nested pause calls
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -61,20 +62,40 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [inactivityTimer, visibilityTimer]);
 
-  // Pause and resume locking functions
+  // Enhanced pause and resume locking functions with reference counting
   const pauseLocking = useCallback(() => {
-    console.log('Pausing app locking (e.g., for file upload)');
-    setLockingPaused(true);
-    clearAllTimers();
+    setPauseCount(prev => {
+      const newCount = prev + 1;
+      console.log('🔓 Pausing app locking (count:', newCount, ')');
+      
+      if (newCount === 1) {
+        // First pause call - actually pause
+        setLockingPaused(true);
+        clearAllTimers();
+      }
+      
+      return newCount;
+    });
   }, [clearAllTimers]);
 
   const resumeLocking = useCallback(() => {
-    console.log('Resuming app locking');
-    setLockingPaused(false);
-    // Restart inactivity timer if app is not locked
-    if (!isAppLocked && setupComplete) {
-      resetInactivityTimer();
-    }
+    setPauseCount(prev => {
+      const newCount = Math.max(0, prev - 1);
+      console.log('🔒 Resuming app locking (count:', newCount, ')');
+      
+      if (newCount === 0) {
+        // Last resume call - actually resume
+        setLockingPaused(false);
+        // Restart inactivity timer if app is not locked
+        if (!isAppLocked && setupComplete) {
+          setTimeout(() => {
+            resetInactivityTimer();
+          }, 100);
+        }
+      }
+      
+      return newCount;
+    });
   }, [isAppLocked, setupComplete]);
 
   // Reset inactivity timer
@@ -105,7 +126,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     
     // Reset timer on any activity
     const handleActivity = () => {
-      resetInactivityTimer();
+      if (!lockingPaused) {
+        resetInactivityTimer();
+      }
     };
 
     // Set initial timer
@@ -129,27 +152,34 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     if (!user || !setupComplete || lockingPaused) return;
 
     const handleVisibilityChange = () => {
+      if (lockingPaused) {
+        console.log('👀 Visibility change ignored - locking is paused');
+        return;
+      }
+
       if (document.hidden) {
         // App is hidden/backgrounded
-        console.log('App hidden, starting background timer');
+        console.log('🌙 App hidden, starting background timer');
         clearAllTimers();
         
         const timer = setTimeout(() => {
-          console.log('App locked due to background time');
-          setIsAppLocked(true);
+          if (!lockingPaused) {
+            console.log('🔒 App locked due to background time');
+            setIsAppLocked(true);
+          }
         }, APP_SWITCH_LOCK_DELAY);
         
         setVisibilityTimer(timer);
       } else {
         // App is visible again
-        console.log('App visible again');
+        console.log('☀️ App visible again');
         if (visibilityTimer) {
           clearTimeout(visibilityTimer);
           setVisibilityTimer(null);
         }
         
-        // Resume inactivity timer if app is not locked
-        if (!isAppLocked) {
+        // Resume inactivity timer if app is not locked and not paused
+        if (!isAppLocked && !lockingPaused) {
           resetInactivityTimer();
         }
       }
@@ -168,7 +198,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       if (!document.hidden && !lockingPaused) {
         clearAllTimers();
         const timer = setTimeout(() => {
-          setIsAppLocked(true);
+          if (!lockingPaused) {
+            setIsAppLocked(true);
+          }
         }, APP_SWITCH_LOCK_DELAY);
         setVisibilityTimer(timer);
       }

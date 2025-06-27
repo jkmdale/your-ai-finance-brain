@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSecurity } from '@/hooks/useAppSecurity';
+import { useFilePicker } from '@/hooks/useFilePicker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
@@ -31,39 +31,15 @@ export const CSVUpload = () => {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const { user } = useAuth();
-  const { pauseLocking, resumeLocking } = useAppSecurity();
 
   const csvProcessor = new CSVProcessor();
 
-  // Pause locking when component mounts and file picker might be used
-  useEffect(() => {
-    const handleFocus = () => {
-      // When window gets focus again after file picker, ensure locking is paused briefly
-      pauseLocking();
-      setTimeout(() => {
-        if (!uploading && !processing) {
-          resumeLocking();
-        }
-      }, 2000); // Give 2 seconds buffer after regaining focus
-    };
-
-    const handleClick = (event: MouseEvent) => {
-      // Check if user clicked on file input or its label
-      const target = event.target as HTMLElement;
-      if (target.closest('#csv-upload-container')) {
-        console.log('File picker interaction detected, pausing app locking');
-        pauseLocking();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('click', handleClick);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('click', handleClick);
-    };
-  }, [uploading, processing, pauseLocking, resumeLocking]);
+  // Use dedicated file picker hook
+  const { openFilePicker, isPickerOpen } = useFilePicker({
+    accept: '.csv,text/csv,application/vnd.ms-excel',
+    multiple: true,
+    onFilesSelected: handleFilesSelected
+  });
 
   const analyzeTransactions = async (transactions: any[]) => {
     if (!transactions.length) return;
@@ -87,22 +63,12 @@ export const CSVUpload = () => {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('File upload started, pausing app locking');
-    // Pause app locking as soon as file upload starts
-    pauseLocking();
-
-    const files = event.target.files;
-    if (!files || files.length === 0) {
-      console.log('No files selected, resuming app locking');
-      resumeLocking();
-      return;
-    }
-
+  async function handleFilesSelected(files: FileList) {
+    console.log('📁 Processing selected files:', files.length);
+    
     if (!user) {
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
-      resumeLocking();
       return;
     }
 
@@ -112,7 +78,6 @@ export const CSVUpload = () => {
     if (nonCsvFiles.length > 0) {
       setUploadStatus('error');
       setUploadMessage(`Please upload only CSV files. Found non-CSV files: ${nonCsvFiles.map(f => f.name).join(', ')}`);
-      resumeLocking();
       return;
     }
 
@@ -247,8 +212,6 @@ export const CSVUpload = () => {
         setUploadStatus('error');
         setUploadMessage(`Processing failed. Errors: ${allErrors.join('; ')}`);
       }
-
-      event.target.value = ''; // reset input
     } catch (error: any) {
       console.error('Upload error:', error);
       setUploadStatus('error');
@@ -256,11 +219,8 @@ export const CSVUpload = () => {
     } finally {
       setUploading(false);
       setProcessing(false);
-      // Resume app locking after upload is complete
-      console.log('File upload complete, resuming app locking');
-      setTimeout(() => resumeLocking(), 1000); // 1 second delay to ensure everything is settled
     }
-  };
+  }
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.9) return 'text-green-400';
@@ -293,40 +253,32 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
-        <div className="relative" id="csv-upload-container">
-          <label htmlFor="csv-upload" className="block w-full h-full cursor-pointer">
-            <div
-              className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-                uploading || !user
-                  ? 'border-white/20 bg-white/5 cursor-not-allowed'
-                  : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60'
-              }`}
-            >
-              <div className="text-center pointer-events-none">
-                {processing ? (
-                  <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
-                ) : (
-                  <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
-                )}
-                <p className="text-white/80 font-medium">
-                  {processing ? 'Processing with AI...' : !user ? 'Please log in to upload' : 'Click to upload CSV files'}
-                </p>
-                <p className="text-white/50 text-sm mt-1">
-                  {!user ? 'Authentication required' : 'Auto-detects bank formats from 50+ supported banks'}
-                </p>
-              </div>
+        <div className="relative">
+          <button
+            onClick={openFilePicker}
+            disabled={uploading || !user || isPickerOpen}
+            className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
+              uploading || !user || isPickerOpen
+                ? 'border-white/20 bg-white/5 cursor-not-allowed'
+                : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
+            }`}
+          >
+            <div className="text-center">
+              {processing || isPickerOpen ? (
+                <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
+              ) : (
+                <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+              )}
+              <p className="text-white/80 font-medium">
+                {processing ? 'Processing with AI...' : 
+                 isPickerOpen ? 'Opening file picker...' :
+                 !user ? 'Please log in to upload' : 'Click to upload CSV files'}
+              </p>
+              <p className="text-white/50 text-sm mt-1">
+                {!user ? 'Authentication required' : 'Auto-detects bank formats from 50+ supported banks'}
+              </p>
             </div>
-          </label>
-          <input
-            id="csv-upload"
-            type="file"
-            accept=".csv,text/csv,application/vnd.ms-excel"
-            multiple
-            onChange={handleFileUpload}
-            disabled={uploading || !user}
-            className="absolute inset-0 w-full h-full opacity-0 z-10"
-            aria-label="Upload CSV files"
-          />
+          </button>
         </div>
 
         {uploadStatus !== 'idle' && (
