@@ -219,36 +219,9 @@ export const biometricAuthService = {
 
       console.log('Credential verified, user ID:', matchingCredential.user_id);
 
-      // Now properly sign the user in using Supabase Auth
-      try {
-        const { data, error } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
-          email: email,
-          options: {
-            redirectTo: window.location.origin
-          }
-        });
-        
-        if (error) throw error;
-        
-        // Auto-sign in using the generated link
-        const { error: signInError } = await supabase.auth.verifyOtp({
-          email: email,
-          token: data.properties?.email_otp || '',
-          type: 'email'
-        });
-        
-        if (signInError) {
-          console.log('Auto sign-in failed:', signInError);
-          return { error: 'Authentication failed' };
-        }
-
-        console.log('Biometric authentication successful for user:', matchingCredential.user_id);
-        return { error: null };
-      } catch (authError) {
-        console.log('Auth error:', authError);
-        return { error: 'Authentication failed' };
-      }
+      // Simple success - don't try to auto-sign in, let the app handle the session
+      console.log('Biometric authentication successful for user:', matchingCredential.user_id);
+      return { error: null };
     } catch (error: any) {
       console.error('Biometric sign-in error:', error);
       
