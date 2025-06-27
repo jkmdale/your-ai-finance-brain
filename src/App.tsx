@@ -14,23 +14,21 @@ const queryClient = new QueryClient();
 const App = () => {
   return (
     <>
-      <div style={{ transform: 'scale(0.9)', transformOrigin: 'top left', width: '111.11%', height: '111.11%' }} className="flex items-center justify-center min-h-screen">
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AuthProvider>
-              <AppSecurityProvider>
-                <Toaster />
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </AppSecurityProvider>
-            </AuthProvider>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </div>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <AppSecurityProvider>
+              <Toaster />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </AppSecurityProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
       <PWAInstall />
     </>
   );

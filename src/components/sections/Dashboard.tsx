@@ -168,12 +168,8 @@ export const Dashboard = () => {
 
   if (loading) {
     return (
-      <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
-          </div>
-        </div>
+      <section className="min-h-screen w-full flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white"></div>
       </section>
     );
   }
@@ -181,154 +177,144 @@ export const Dashboard = () => {
   // Empty state for new users
   if (!stats) {
     return (
-      <section id="dashboard" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Welcome to Your Financial OS
-            </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
-              Start your intelligent financial journey by uploading your first transaction file
-            </p>
-          </div>
-
-          {/* Empty State Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {[
-              { title: 'Total Balance', icon: DollarSign, color: 'blue' },
-              { title: 'Monthly Income', icon: TrendingUp, color: 'green' },
-              { title: 'Monthly Expenses', icon: PieChart, color: 'purple' },
-              { title: 'Savings Rate', icon: Target, color: 'emerald' }
-            ].map((item, index) => {
-              const IconComponent = item.icon;
-              return (
-                <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses(item.color)} rounded-xl flex items-center justify-center opacity-50`}>
-                      <IconComponent className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                  <h3 className="text-white/70 text-sm font-medium mb-1">{item.title}</h3>
-                  <p className="text-xl font-bold text-white/50">--</p>
-                  <p className="text-xs text-white/40 mt-1">Upload data to see stats</p>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* CSV Upload */}
-            <CSVUpload />
-            
-          </div>
+      <section className="min-h-screen w-full p-4 space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            Welcome to Your Financial OS
+          </h2>
+          <p className="text-lg text-white/70">
+            Start your intelligent financial journey by uploading your first transaction file
+          </p>
         </div>
+
+        {/* Empty State Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { title: 'Total Balance', icon: DollarSign, color: 'blue' },
+            { title: 'Monthly Income', icon: TrendingUp, color: 'green' },
+            { title: 'Monthly Expenses', icon: PieChart, color: 'purple' },
+            { title: 'Savings Rate', icon: Target, color: 'emerald' }
+          ].map((item, index) => {
+            const IconComponent = item.icon;
+            return (
+              <div key={index} className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`w-10 h-10 bg-gradient-to-br ${getColorClasses(item.color)} rounded-xl flex items-center justify-center opacity-50`}>
+                    <IconComponent className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <h3 className="text-white/70 text-sm font-medium mb-1">{item.title}</h3>
+                <p className="text-lg font-bold text-white/50">--</p>
+                <p className="text-xs text-white/40 mt-1">Upload data to see stats</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* CSV Upload */}
+        <CSVUpload />
       </section>
     );
   }
 
   // Dashboard with real data
   return (
-    <section id="dashboard" className="py-8 sm:py-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-            Financial Intelligence Dashboard
-          </h2>
-          <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto">
-            AI-powered analysis with secure authentication and smart insights
+    <section className="min-h-screen w-full p-4 space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+          Financial Intelligence Dashboard
+        </h2>
+        <p className="text-lg text-white/70">
+          AI-powered analysis with secure authentication and smart insights
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className={`w-10 h-10 bg-gradient-to-br ${getColorClasses('blue')} rounded-xl flex items-center justify-center`}>
+              <DollarSign className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <h3 className="text-white/70 text-sm font-medium mb-1">Total Balance</h3>
+          <p className="text-lg font-bold text-white">${stats.totalBalance.toLocaleString()}</p>
+          <p className="text-xs text-green-400 mt-1">+2.5% this month</p>
+        </div>
+
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className={`w-10 h-10 bg-gradient-to-br ${getColorClasses('green')} rounded-xl flex items-center justify-center`}>
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Income</h3>
+          <p className="text-lg font-bold text-white">${stats.monthlyIncome.toLocaleString()}</p>
+          <p className="text-xs text-green-400 mt-1">This month</p>
+        </div>
+
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className={`w-10 h-10 bg-gradient-to-br ${getColorClasses('purple')} rounded-xl flex items-center justify-center`}>
+              <PieChart className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Expenses</h3>
+          <p className="text-lg font-bold text-white">${stats.monthlyExpenses.toLocaleString()}</p>
+          <p className="text-xs text-red-400 mt-1">This month</p>
+        </div>
+
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className={`w-10 h-10 bg-gradient-to-br ${getColorClasses('emerald')} rounded-xl flex items-center justify-center`}>
+              <Target className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <h3 className="text-white/70 text-sm font-medium mb-1">Savings Rate</h3>
+          <p className="text-lg font-bold text-white">{stats.savingsRate.toFixed(1)}%</p>
+          <p className={`text-xs mt-1 ${stats.savingsRate > 20 ? 'text-green-400' : 'text-yellow-400'}`}>
+            {stats.savingsRate > 20 ? 'Excellent!' : 'Room to improve'}
           </p>
         </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('blue')} rounded-xl flex items-center justify-center`}>
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <h3 className="text-white/70 text-sm font-medium mb-1">Total Balance</h3>
-            <p className="text-xl font-bold text-white">${stats.totalBalance.toLocaleString()}</p>
-            <p className="text-xs text-green-400 mt-1">+2.5% this month</p>
-          </div>
-
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('green')} rounded-xl flex items-center justify-center`}>
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Income</h3>
-            <p className="text-xl font-bold text-white">${stats.monthlyIncome.toLocaleString()}</p>
-            <p className="text-xs text-green-400 mt-1">This month</p>
-          </div>
-
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('purple')} rounded-xl flex items-center justify-center`}>
-                <PieChart className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Expenses</h3>
-            <p className="text-xl font-bold text-white">${stats.monthlyExpenses.toLocaleString()}</p>
-            <p className="text-xs text-red-400 mt-1">This month</p>
-          </div>
-
-          <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-gradient-to-br ${getColorClasses('emerald')} rounded-xl flex items-center justify-center`}>
-                <Target className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <h3 className="text-white/70 text-sm font-medium mb-1">Savings Rate</h3>
-            <p className="text-xl font-bold text-white">{stats.savingsRate.toFixed(1)}%</p>
-            <p className={`text-xs mt-1 ${stats.savingsRate > 20 ? 'text-green-400' : 'text-yellow-400'}`}>
-              {stats.savingsRate > 20 ? 'Excellent!' : 'Room to improve'}
-            </p>
-          </div>
-        </div>
-
-        {/* CSV Upload */}
-        <div className="mb-12">
-          <CSVUpload />
-        </div>
-
-        {/* Recent Transactions */}
-        {recentTransactions.length > 0 && (
-          <div id="transactions" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl shadow-2xl">
-            <div className="p-4 sm:p-6 border-b border-white/20">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg sm:text-xl font-bold text-white">Recent Transactions</h3>
-                <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
-              </div>
-            </div>
-            
-            <div className="p-3 sm:p-6">
-              {isMobile ? (
-                // Mobile Card Layout
-                <div className="space-y-3">
-                  {recentTransactions.slice(0, 5).map((transaction) => (
-                    <TransactionCard key={transaction.id} transaction={transaction} />
-                  ))}
-                </div>
-              ) : (
-                // Desktop Table Layout
-                <TransactionTable transactions={recentTransactions.slice(0, 10)} />
-              )}
-            </div>
-            
-            <div className="p-4 sm:p-6 border-t border-white/20 text-center">
-              <button 
-                onClick={() => document.getElementById('transactions')?.scrollIntoView({ behavior: 'smooth' })}
-                className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all duration-200 shadow-lg font-medium text-sm sm:text-base"
-              >
-                View All Transactions
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* CSV Upload */}
+      <CSVUpload />
+
+      {/* Recent Transactions */}
+      {recentTransactions.length > 0 && (
+        <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl shadow-2xl">
+          <div className="p-4 border-b border-white/20">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Recent Transactions</h3>
+              <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
+            </div>
+          </div>
+          
+          <div className="p-4">
+            {isMobile ? (
+              // Mobile Card Layout
+              <div className="space-y-3">
+                {recentTransactions.slice(0, 5).map((transaction) => (
+                  <TransactionCard key={transaction.id} transaction={transaction} />
+                ))}
+              </div>
+            ) : (
+              // Desktop Table Layout
+              <TransactionTable transactions={recentTransactions.slice(0, 10)} />
+            )}
+          </div>
+          
+          <div className="p-4 border-t border-white/20 text-center">
+            <button 
+              onClick={() => document.getElementById('transactions')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-2 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all duration-200 shadow-lg font-medium"
+            >
+              View All Transactions
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
