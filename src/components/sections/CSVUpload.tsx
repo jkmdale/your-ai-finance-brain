@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +35,36 @@ export const CSVUpload = () => {
 
   const csvProcessor = new CSVProcessor();
 
+  // Pause locking when component mounts and file picker might be used
+  useEffect(() => {
+    const handleFocus = () => {
+      // When window gets focus again after file picker, ensure locking is paused briefly
+      pauseLocking();
+      setTimeout(() => {
+        if (!uploading && !processing) {
+          resumeLocking();
+        }
+      }, 2000); // Give 2 seconds buffer after regaining focus
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      // Check if user clicked on file input or its label
+      const target = event.target as HTMLElement;
+      if (target.closest('#csv-upload-container')) {
+        console.log('File picker interaction detected, pausing app locking');
+        pauseLocking();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [uploading, processing, pauseLocking, resumeLocking]);
+
   const analyzeTransactions = async (transactions: any[]) => {
     if (!transactions.length) return;
 
@@ -58,11 +88,13 @@ export const CSVUpload = () => {
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    // Pause app locking during file upload process
+    console.log('File upload started, pausing app locking');
+    // Pause app locking as soon as file upload starts
     pauseLocking();
 
     const files = event.target.files;
     if (!files || files.length === 0) {
+      console.log('No files selected, resuming app locking');
       resumeLocking();
       return;
     }
@@ -225,7 +257,8 @@ export const CSVUpload = () => {
       setUploading(false);
       setProcessing(false);
       // Resume app locking after upload is complete
-      resumeLocking();
+      console.log('File upload complete, resuming app locking');
+      setTimeout(() => resumeLocking(), 1000); // 1 second delay to ensure everything is settled
     }
   };
 
