@@ -30,6 +30,26 @@ export const biometricAuthService = {
     }
   },
 
+  // Helper function to convert ArrayBuffer to base64
+  arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  },
+
+  // Helper function to convert base64 to ArrayBuffer
+  base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  },
+
   async setupBiometric(user: any) {
     if (!user) return { error: 'No user logged in' };
     
@@ -93,10 +113,13 @@ export const biometricAuthService = {
       console.log('Storing credential in database...');
       const response = credential.response as AuthenticatorAttestationResponse;
       
+      // Convert credential ID to base64 for storage
+      const credentialIdBase64 = this.arrayBufferToBase64(credential.rawId);
+      
       const credentialData = {
         user_id: user.id,
         user_email: user.email,
-        credential_id: credential.id,
+        credential_id: credentialIdBase64,
         public_key: JSON.stringify({
           id: credential.id,
           rawId: Array.from(new Uint8Array(credential.rawId)),
@@ -194,7 +217,7 @@ export const biometricAuthService = {
           rpId: window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname,
           // Convert credential IDs properly for allowCredentials
           allowCredentials: storedCredentials.map(cred => ({
-            id: Uint8Array.from(atob(cred.credential_id), c => c.charCodeAt(0)),
+            id: this.base64ToArrayBuffer(cred.credential_id),
             type: "public-key" as const
           }))
         }
@@ -209,8 +232,11 @@ export const biometricAuthService = {
 
       console.log('Biometric authentication successful, credential ID:', assertion.id);
 
+      // Convert the assertion ID to base64 for comparison
+      const assertionIdBase64 = this.arrayBufferToBase64(assertion.rawId);
+
       // Verify the credential ID matches one of our stored credentials
-      const matchingCredential = storedCredentials.find(cred => cred.credential_id === assertion.id);
+      const matchingCredential = storedCredentials.find(cred => cred.credential_id === assertionIdBase64);
       
       if (!matchingCredential) {
         console.log('Credential not found in database');
