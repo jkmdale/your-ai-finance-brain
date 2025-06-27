@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Hash, Delete, Check } from 'lucide-react';
@@ -11,7 +12,7 @@ export const PinSetupScreen: React.FC = () => {
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState<'setup' | 'confirm'>('setup');
   const [isSettingUp, setIsSettingUp] = useState(false);
-  const { setupPin } = useAuth();
+  const { setupPin, user } = useAuth();
   const { setIsPinSetup } = useAppSecurity();
 
   const handleNumberClick = (number: string) => {
@@ -53,7 +54,12 @@ export const PinSetupScreen: React.FC = () => {
   };
 
   const handlePinSetup = async (originalPin: string, confirmedPin: string) => {
+    console.log('🔵 PinSetupScreen - Starting PIN setup');
+    console.log('🔵 PinSetupScreen - User authenticated:', !!user);
+    console.log('🔵 PinSetupScreen - PINs match:', originalPin === confirmedPin);
+
     if (originalPin !== confirmedPin) {
+      console.error('❌ PinSetupScreen - PINs do not match');
       toast.error('PINs do not match. Please try again.');
       setPin('');
       setConfirmPin('');
@@ -64,28 +70,28 @@ export const PinSetupScreen: React.FC = () => {
     setIsSettingUp(true);
 
     try {
-      console.log('Starting PIN setup process...');
-      const { error } = await setupPin(originalPin);
+      console.log('🔵 PinSetupScreen - Calling setupPin service');
+      const result = await setupPin(originalPin);
+      console.log('🔵 PinSetupScreen - Setup result:', result);
 
-      if (error) {
-        console.error('PIN setup failed:', error);
-        toast.error(`Failed to set up PIN: ${error}`);
+      if (result?.error) {
+        console.error('❌ PinSetupScreen - Setup failed:', result.error);
+        toast.error(`Failed to set up PIN: ${result.error}`);
         setPin('');
         setConfirmPin('');
         setStep('setup');
-        setIsSettingUp(false);
-        return;
+      } else {
+        console.log('✅ PinSetupScreen - PIN setup successful');
+        setIsPinSetup(true);
+        toast.success('PIN set up successfully!');
       }
-
-      console.log('PIN setup successful, marking as complete...');
-      setIsPinSetup(true);
-      toast.success('PIN set up successfully!');
     } catch (error) {
-      console.error('Unexpected error during PIN setup:', error);
+      console.error('❌ PinSetupScreen - Unexpected error:', error);
       toast.error('Failed to set up PIN. Please try again.');
       setPin('');
       setConfirmPin('');
       setStep('setup');
+    } finally {
       setIsSettingUp(false);
     }
   };
