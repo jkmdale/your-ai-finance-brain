@@ -46,12 +46,12 @@ export const pinAuthService = {
       let result;
       if (existingPin) {
         console.log('🔵 PIN Setup - Updating existing PIN');
-        // Update existing PIN
+        // Update existing PIN - using correct column name 'salt'
         result = await supabase
           .from('user_pins')
           .update({
             pin_hash: hash,
-            pin_salt: salt,
+            salt: salt,
             user_email: user.email,
             updated_at: new Date().toISOString()
           })
@@ -59,13 +59,13 @@ export const pinAuthService = {
           .select();
       } else {
         console.log('🔵 PIN Setup - Creating new PIN');
-        // Insert new PIN
+        // Insert new PIN - using correct column name 'salt'
         result = await supabase
           .from('user_pins')
           .insert({
             user_id: user.id,
             pin_hash: hash,
-            pin_salt: salt,
+            salt: salt,
             user_email: user.email
           })
           .select();
@@ -110,10 +110,10 @@ export const pinAuthService = {
 
     try {
       console.log('🔵 PIN Sign In - Querying database for user PIN data');
-      // Get user PIN data from email
+      // Get user PIN data from email - using correct column name 'salt'
       const { data: userData, error: userError } = await supabase
         .from('user_pins')
-        .select('user_id, pin_hash, pin_salt')
+        .select('user_id, pin_hash, salt')
         .eq('user_email', email)
         .maybeSingle();
 
@@ -132,19 +132,19 @@ export const pinAuthService = {
         return { error: 'Invalid email or PIN.' };
       }
 
-      const { user_id, pin_hash, pin_salt } = userData;
+      const { user_id, pin_hash, salt } = userData;
 
-      if (!user_id || !pin_hash || !pin_salt) {
+      if (!user_id || !pin_hash || !salt) {
         console.error('❌ PIN Sign In - Incomplete user data:', { 
           user_id: !!user_id, 
           pin_hash: !!pin_hash, 
-          pin_salt: !!pin_salt 
+          salt: !!salt 
         });
         return { error: 'Invalid user data. Please contact support.' };
       }
 
       console.log('🔵 PIN Sign In - Verifying PIN against stored hash');
-      const isValid = await PinSecurityService.verifyPin(pin, pin_hash, pin_salt);
+      const isValid = await PinSecurityService.verifyPin(pin, pin_hash, salt);
       
       if (!isValid) {
         console.error('❌ PIN Sign In - PIN verification failed');

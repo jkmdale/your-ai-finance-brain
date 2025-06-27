@@ -394,7 +394,7 @@ export type Database = {
           created_at: string | null
           id: string
           pin_hash: string
-          pin_salt: string | null
+          salt: string | null
           updated_at: string | null
           user_email: string | null
           user_id: string
@@ -403,7 +403,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           pin_hash: string
-          pin_salt?: string | null
+          salt?: string | null
           updated_at?: string | null
           user_email?: string | null
           user_id: string
@@ -412,7 +412,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           pin_hash?: string
-          pin_salt?: string | null
+          salt?: string | null
           updated_at?: string | null
           user_email?: string | null
           user_id?: string
