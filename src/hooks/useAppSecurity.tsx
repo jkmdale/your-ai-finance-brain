@@ -29,11 +29,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
-  const [lockingPaused, setLockingPaused] = useState(false);
   const [pauseCount, setPauseCount] = useState(0);
-  
-  // Global flag to completely disable security monitoring (for file pickers, etc.)
-  const [securityDisabled, setSecurityDisabled] = useState(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -65,6 +61,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [inactivityTimer, visibilityTimer]);
 
+  // Check if security is effectively disabled
+  const isSecurityDisabled = useCallback(() => {
+    return pauseCount > 0;
+  }, [pauseCount]);
+
   // Enhanced pause and resume locking functions with reference counting
   const pauseLocking = useCallback(() => {
     setPauseCount(prev => {
@@ -72,10 +73,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       console.log('🔓 Pausing app locking (count:', newCount, ')');
       
       if (newCount === 1) {
-        // First pause call - actually pause and disable all security
-        setLockingPaused(true);
-        setSecurityDisabled(true);
+        // First pause call - immediately disable all security monitoring
         clearAllTimers();
+        console.log('🔓 Security monitoring COMPLETELY DISABLED');
       }
       
       return newCount;
@@ -88,9 +88,8 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       console.log('🔒 Resuming app locking (count:', newCount, ')');
       
       if (newCount === 0) {
-        // Last resume call - actually resume
-        setLockingPaused(false);
-        setSecurityDisabled(false);
+        // Last resume call - re-enable security monitoring
+        console.log('🔒 Security monitoring RE-ENABLED');
         // Restart inactivity timer if app is not locked
         if (!isAppLocked && setupComplete) {
           setTimeout(() => {
@@ -105,21 +104,25 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
 
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
-    if (!setupComplete || isAppLocked || lockingPaused || securityDisabled) return;
+    if (!setupComplete || isAppLocked || isSecurityDisabled()) {
+      return;
+    }
     
     clearAllTimers();
     
     const timer = setTimeout(() => {
-      console.log('App locked due to inactivity');
-      setIsAppLocked(true);
+      if (!isSecurityDisabled()) {
+        console.log('App locked due to inactivity');
+        setIsAppLocked(true);
+      }
     }, INACTIVITY_TIMEOUT);
     
     setInactivityTimer(timer);
-  }, [setupComplete, isAppLocked, lockingPaused, securityDisabled, clearAllTimers]);
+  }, [setupComplete, isAppLocked, isSecurityDisabled, clearAllTimers]);
 
   // Set up activity listeners for inactivity detection
   useEffect(() => {
-    if (!user || !setupComplete || isAppLocked || lockingPaused || securityDisabled) {
+    if (!user || !setupComplete || isAppLocked || isSecurityDisabled()) {
       clearAllTimers();
       return;
     }
@@ -131,7 +134,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     
     // Reset timer on any activity
     const handleActivity = () => {
-      if (!lockingPaused && !securityDisabled) {
+      if (!isSecurityDisabled()) {
         resetInactivityTimer();
       }
     };
@@ -150,14 +153,16 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       });
       clearAllTimers();
     };
-  }, [user, setupComplete, isAppLocked, lockingPaused, securityDisabled, resetInactivityTimer, clearAllTimers]);
+  }, [user, setupComplete, isAppLocked, isSecurityDisabled, resetInactivityTimer, clearAllTimers]);
 
   // Handle page visibility change (tab switching, app backgrounding)
   useEffect(() => {
-    if (!user || !setupComplete || lockingPaused || securityDisabled) return;
+    if (!user || !setupComplete || isSecurityDisabled()) {
+      return;
+    }
 
     const handleVisibilityChange = () => {
-      if (lockingPaused || securityDisabled) {
+      if (isSecurityDisabled()) {
         console.log('👀 Visibility change ignored - security is disabled');
         return;
       }
@@ -168,7 +173,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
         clearAllTimers();
         
         const timer = setTimeout(() => {
-          if (!lockingPaused && !securityDisabled) {
+          if (!isSecurityDisabled()) {
             console.log('🔒 App locked due to background time');
             setIsAppLocked(true);
           }
@@ -184,7 +189,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
         }
         
         // Resume inactivity timer if app is not locked and not paused
-        if (!isAppLocked && !lockingPaused && !securityDisabled) {
+        if (!isAppLocked && !isSecurityDisabled()) {
           resetInactivityTimer();
         }
       }
@@ -194,16 +199,16 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     
     // Also handle window focus/blur for desktop PWAs
     const handleFocus = () => {
-      if (!document.hidden && !isAppLocked && !lockingPaused && !securityDisabled) {
+      if (!document.hidden && !isAppLocked && !isSecurityDisabled()) {
         resetInactivityTimer();
       }
     };
     
     const handleBlur = () => {
-      if (!document.hidden && !lockingPaused && !securityDisabled) {
+      if (!document.hidden && !isSecurityDisabled()) {
         clearAllTimers();
         const timer = setTimeout(() => {
-          if (!lockingPaused && !securityDisabled) {
+          if (!isSecurityDisabled()) {
             setIsAppLocked(true);
           }
         }, APP_SWITCH_LOCK_DELAY);
@@ -220,7 +225,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener('blur', handleBlur);
       clearAllTimers();
     };
-  }, [user, setupComplete, isAppLocked, lockingPaused, securityDisabled, resetInactivityTimer, visibilityTimer, clearAllTimers]);
+  }, [user, setupComplete, isAppLocked, isSecurityDisabled, resetInactivityTimer, visibilityTimer, clearAllTimers]);
 
   // Handle page unload/beforeunload
   useEffect(() => {
