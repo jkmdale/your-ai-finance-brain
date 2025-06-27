@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSecurity } from '@/hooks/useAppSecurity';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
@@ -31,6 +31,7 @@ export const CSVUpload = () => {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const { user } = useAuth();
+  const { pauseLocking, resumeLocking } = useAppSecurity();
 
   const csvProcessor = new CSVProcessor();
 
@@ -57,12 +58,19 @@ export const CSVUpload = () => {
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Pause app locking during file upload process
+    pauseLocking();
+
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      resumeLocking();
+      return;
+    }
 
     if (!user) {
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
+      resumeLocking();
       return;
     }
 
@@ -72,6 +80,7 @@ export const CSVUpload = () => {
     if (nonCsvFiles.length > 0) {
       setUploadStatus('error');
       setUploadMessage(`Please upload only CSV files. Found non-CSV files: ${nonCsvFiles.map(f => f.name).join(', ')}`);
+      resumeLocking();
       return;
     }
 
@@ -215,6 +224,8 @@ export const CSVUpload = () => {
     } finally {
       setUploading(false);
       setProcessing(false);
+      // Resume app locking after upload is complete
+      resumeLocking();
     }
   };
 

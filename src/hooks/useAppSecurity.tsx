@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -13,6 +12,8 @@ interface AppSecurityContextType {
   resetInactivityTimer: () => void;
   isPinSetup: boolean;
   setIsPinSetup: (setup: boolean) => void;
+  pauseLocking: () => void;
+  resumeLocking: () => void;
 }
 
 const AppSecurityContext = createContext<AppSecurityContextType | undefined>(undefined);
@@ -28,6 +29,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
+  const [lockingPaused, setLockingPaused] = useState(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -59,9 +61,25 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [inactivityTimer, visibilityTimer]);
 
+  // Pause and resume locking functions
+  const pauseLocking = useCallback(() => {
+    console.log('Pausing app locking (e.g., for file upload)');
+    setLockingPaused(true);
+    clearAllTimers();
+  }, [clearAllTimers]);
+
+  const resumeLocking = useCallback(() => {
+    console.log('Resuming app locking');
+    setLockingPaused(false);
+    // Restart inactivity timer if app is not locked
+    if (!isAppLocked && setupComplete) {
+      resetInactivityTimer();
+    }
+  }, [isAppLocked, setupComplete]);
+
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
-    if (!setupComplete || isAppLocked) return;
+    if (!setupComplete || isAppLocked || lockingPaused) return;
     
     clearAllTimers();
     
@@ -71,11 +89,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }, INACTIVITY_TIMEOUT);
     
     setInactivityTimer(timer);
-  }, [setupComplete, isAppLocked, clearAllTimers]);
+  }, [setupComplete, isAppLocked, lockingPaused, clearAllTimers]);
 
   // Set up activity listeners for inactivity detection
   useEffect(() => {
-    if (!user || !setupComplete || isAppLocked) {
+    if (!user || !setupComplete || isAppLocked || lockingPaused) {
       clearAllTimers();
       return;
     }
@@ -104,11 +122,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       });
       clearAllTimers();
     };
-  }, [user, setupComplete, isAppLocked, resetInactivityTimer, clearAllTimers]);
+  }, [user, setupComplete, isAppLocked, lockingPaused, resetInactivityTimer, clearAllTimers]);
 
   // Handle page visibility change (tab switching, app backgrounding)
   useEffect(() => {
-    if (!user || !setupComplete) return;
+    if (!user || !setupComplete || lockingPaused) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -141,13 +159,13 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     
     // Also handle window focus/blur for desktop PWAs
     const handleFocus = () => {
-      if (!document.hidden && !isAppLocked) {
+      if (!document.hidden && !isAppLocked && !lockingPaused) {
         resetInactivityTimer();
       }
     };
     
     const handleBlur = () => {
-      if (!document.hidden) {
+      if (!document.hidden && !lockingPaused) {
         clearAllTimers();
         const timer = setTimeout(() => {
           setIsAppLocked(true);
@@ -165,7 +183,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener('blur', handleBlur);
       clearAllTimers();
     };
-  }, [user, setupComplete, isAppLocked, resetInactivityTimer, visibilityTimer, clearAllTimers]);
+  }, [user, setupComplete, isAppLocked, lockingPaused, resetInactivityTimer, visibilityTimer, clearAllTimers]);
 
   // Handle page unload/beforeunload
   useEffect(() => {
@@ -242,7 +260,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       setSetupComplete: setSetupCompleteState,
       resetInactivityTimer,
       isPinSetup,
-      setIsPinSetup: setIsPinSetupState
+      setIsPinSetup: setIsPinSetupState,
+      pauseLocking,
+      resumeLocking
     }}>
       {children}
     </AppSecurityContext.Provider>
