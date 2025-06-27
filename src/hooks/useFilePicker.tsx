@@ -1,5 +1,6 @@
 
 import { useState, useCallback, useRef } from 'react';
+import { useAppSecurity } from '@/hooks/useAppSecurity';
 
 interface UseFilePickerOptions {
   accept?: string;
@@ -10,10 +11,14 @@ interface UseFilePickerOptions {
 export const useFilePicker = (options: UseFilePickerOptions = {}) => {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { pauseLocking, resumeLocking } = useAppSecurity();
 
   const openFilePicker = useCallback(() => {
     console.log('📁 Opening file picker');
     setIsPickerOpen(true);
+    
+    // Pause app locking while file picker is open
+    pauseLocking();
 
     // Create or reuse file input
     if (!fileInputRef.current) {
@@ -55,6 +60,10 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       input.removeEventListener('cancel', handleCancel);
       window.removeEventListener('focus', handleWindowFocus);
       input.value = ''; // Clear for reuse
+      
+      // Resume app locking after file operation
+      console.log('📁 File picker closed, resuming app locking');
+      resumeLocking();
     };
 
     // Detect cancellation via window focus
@@ -81,7 +90,7 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       input.click();
     }, 100);
 
-  }, [options, isPickerOpen]);
+  }, [options, isPickerOpen, pauseLocking, resumeLocking]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -92,7 +101,10 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       fileInputRef.current = null;
     }
     setIsPickerOpen(false);
-  }, []);
+    
+    // Ensure locking is resumed
+    resumeLocking();
+  }, [resumeLocking]);
 
   return {
     openFilePicker,
