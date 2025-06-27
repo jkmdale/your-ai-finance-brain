@@ -28,12 +28,8 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [isPinSetup, setIsPinSetup] = useState(false);
   
-  // Single timer reference
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Track if security should be completely disabled (for file operations)
-  const securityDisabledRef = useRef(false);
-  const disableCountRef = useRef(0);
+  const isLockedByInactivityRef = useRef(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -53,114 +49,88 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Clear any existing timer
-  const clearTimer = useCallback(() => {
+  // Clear timer function
+  const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
+      console.log('⏰ Clearing inactivity timer');
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
     }
   }, []);
 
-  // Pause function - completely disables security
-  const pauseLocking = useCallback(() => {
-    disableCountRef.current++;
-    securityDisabledRef.current = true;
-    
-    console.log('🔓 SECURITY COMPLETELY DISABLED - count:', disableCountRef.current);
-    
-    // Immediately clear any existing timer
-    clearTimer();
-  }, [clearTimer]);
-
-  // Resume function - only re-enables when all pauses are cleared
-  const resumeLocking = useCallback(() => {
-    disableCountRef.current = Math.max(0, disableCountRef.current - 1);
-    
-    if (disableCountRef.current === 0) {
-      securityDisabledRef.current = false;
-      console.log('🔒 SECURITY RE-ENABLED - will start timer if conditions are right');
-      
-      // Only restart timer if we're not locked and setup is complete
-      if (!isAppLocked && setupComplete) {
-        startInactivityTimer();
-      }
-    } else {
-      console.log('🔓 Security still disabled - count:', disableCountRef.current);
-    }
-  }, [isAppLocked, setupComplete]);
-
-  // Start the inactivity timer - only if security is not disabled
+  // Start inactivity timer
   const startInactivityTimer = useCallback(() => {
-    // Never start timer if security is disabled
-    if (securityDisabledRef.current) {
-      console.log('⏸️ Timer blocked - security is disabled');
+    // Don't start timer if not setup, already locked, or app is hidden
+    if (!setupComplete || isAppLocked || document.hidden) {
       return;
     }
-    
-    // Don't start if not setup or already locked
-    if (!setupComplete || isAppLocked) {
-      console.log('⏸️ Timer blocked - setup:', setupComplete, 'locked:', isAppLocked);
-      return;
-    }
-    
-    // Clear any existing timer first
-    clearTimer();
+
+    clearInactivityTimer();
     
     console.log('⏰ Starting 5-minute inactivity timer');
-    
     inactivityTimerRef.current = setTimeout(() => {
-      // Final check - don't lock if security got disabled during the timeout
-      if (!securityDisabledRef.current) {
-        console.log('🔒 App locked due to 5 minutes of inactivity');
-        setIsAppLocked(true);
-      } else {
-        console.log('🔓 Lock prevented - security was disabled during timeout');
-      }
+      console.log('🔒 Locking app due to 5 minutes of inactivity');
+      isLockedByInactivityRef.current = true;
+      setIsAppLocked(true);
     }, INACTIVITY_TIMEOUT);
-  }, [setupComplete, isAppLocked, clearTimer]);
+  }, [setupComplete, isAppLocked, clearInactivityTimer]);
 
-  // Reset timer function - public interface
-  const resetInactivityTimer = useCallback(() => {
-    // Only reset if security is not disabled
-    if (!securityDisabledRef.current) {
+  // Handle visibility change
+  const handleVisibilityChange = useCallback(() => {
+    if (!setupComplete) return;
+
+    if (document.hidden) {
+      // App became hidden - start the timer
+      console.log('📱 App hidden - starting inactivity timer');
       startInactivityTimer();
+    } else {
+      // App became visible - cancel timer if running
+      console.log('📱 App visible - canceling inactivity timer');
+      clearInactivityTimer();
     }
-  }, [startInactivityTimer]);
+  }, [setupComplete, startInactivityTimer, clearInactivityTimer]);
 
-  // Activity monitoring - only when security is enabled
+  // Handle user activity
+  const handleUserActivity = useCallback(() => {
+    if (!setupComplete || isAppLocked || document.hidden) return;
+
+    // Reset the timer on user activity
+    startInactivityTimer();
+  }, [setupComplete, isAppLocked, startInactivityTimer]);
+
+  // Setup visibility and activity listeners
   useEffect(() => {
-    if (!user || !setupComplete || isAppLocked) {
-      clearTimer();
+    if (!user || !setupComplete) {
+      clearInactivityTimer();
       return;
     }
 
-    const activities = [
-      'mousedown', 'mousemove', 'keypress', 'scroll', 
+    const activityEvents = [
+      'mousedown', 'mousemove', 'keypress', 'scroll',
       'touchstart', 'touchmove', 'click', 'wheel'
     ];
-    
-    // Activity handler - only reset timer if security is enabled
-    const handleActivity = () => {
-      if (!securityDisabledRef.current) {
-        startInactivityTimer();
-      }
-    };
 
-    // Start initial timer
-    startInactivityTimer();
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Add activity listeners
-    activities.forEach(activity => {
-      document.addEventListener(activity, handleActivity, { passive: true });
+    activityEvents.forEach(event => {
+      document.addEventListener(event, handleUserActivity, { passive: true });
     });
 
+    // Start initial timer if app is visible
+    if (!document.hidden && !isAppLocked) {
+      startInactivityTimer();
+    }
+
     return () => {
-      activities.forEach(activity => {
-        document.removeEventListener(activity, handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, handleUserActivity);
       });
-      clearTimer();
+      clearInactivityTimer();
     };
-  }, [user, setupComplete, isAppLocked, startInactivityTimer, clearTimer]);
+  }, [user, setupComplete, isAppLocked, handleVisibilityChange, handleUserActivity, startInactivityTimer, clearInactivityTimer]);
 
   // Handle page unload - save lock state
   useEffect(() => {
@@ -197,9 +167,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
 
   const unlockApp = useCallback(() => {
     console.log('🔓 App unlocked');
+    isLockedByInactivityRef.current = false;
     setIsAppLocked(false);
-    // Start timer only if security is not disabled
-    if (!securityDisabledRef.current) {
+    
+    // Start timer if app is currently visible
+    if (!document.hidden) {
       startInactivityTimer();
     }
   }, [startInactivityTimer]);
@@ -207,8 +179,14 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const lockApp = useCallback(() => {
     console.log('🔒 App locked manually');
     setIsAppLocked(true);
-    clearTimer();
-  }, [clearTimer]);
+    clearInactivityTimer();
+  }, [clearInactivityTimer]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (!document.hidden && !isAppLocked) {
+      startInactivityTimer();
+    }
+  }, [startInactivityTimer, isAppLocked]);
 
   const setSetupCompleteState = useCallback((complete: boolean) => {
     if (user) {
@@ -227,6 +205,15 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(`pin_setup_${user.id}`, setup.toString());
     }
   }, [user]);
+
+  // Legacy functions for compatibility (no-op)
+  const pauseLocking = useCallback(() => {
+    console.log('⏸️ pauseLocking called (no-op in new implementation)');
+  }, []);
+
+  const resumeLocking = useCallback(() => {
+    console.log('▶️ resumeLocking called (no-op in new implementation)');
+  }, []);
 
   return (
     <AppSecurityContext.Provider value={{
