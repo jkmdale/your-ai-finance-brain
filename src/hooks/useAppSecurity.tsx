@@ -1,4 +1,5 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
+
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AppSecurityContextType {
@@ -29,7 +30,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [isPinSetup, setIsPinSetup] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [visibilityTimer, setVisibilityTimer] = useState<NodeJS.Timeout | null>(null);
-  const [pauseCount, setPauseCount] = useState(0);
+  
+  // Use refs for immediate synchronous access
+  const securityDisabledRef = useRef(false);
+  const pauseCountRef = useRef(0);
+  const eventListenersActiveRef = useRef(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -61,48 +66,43 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [inactivityTimer, visibilityTimer]);
 
-  // Check if security is effectively disabled
+  // Check if security is effectively disabled - SYNCHRONOUS check
   const isSecurityDisabled = useCallback(() => {
-    return pauseCount > 0;
-  }, [pauseCount]);
+    return securityDisabledRef.current || pauseCountRef.current > 0;
+  }, []);
 
-  // Enhanced pause and resume locking functions with reference counting
+  // IMMEDIATE synchronous pause and resume functions
   const pauseLocking = useCallback(() => {
-    setPauseCount(prev => {
-      const newCount = prev + 1;
-      console.log('🔓 Pausing app locking (count:', newCount, ')');
-      
-      if (newCount === 1) {
-        // First pause call - immediately disable all security monitoring
-        clearAllTimers();
-        console.log('🔓 Security monitoring COMPLETELY DISABLED');
-      }
-      
-      return newCount;
-    });
+    pauseCountRef.current++;
+    console.log('🔓 IMMEDIATELY pausing app locking (count:', pauseCountRef.current, ')');
+    
+    if (pauseCountRef.current === 1) {
+      // First pause call - IMMEDIATELY disable all security
+      securityDisabledRef.current = true;
+      clearAllTimers();
+      console.log('🔓 Security IMMEDIATELY DISABLED');
+    }
   }, [clearAllTimers]);
 
   const resumeLocking = useCallback(() => {
-    setPauseCount(prev => {
-      const newCount = Math.max(0, prev - 1);
-      console.log('🔒 Resuming app locking (count:', newCount, ')');
-      
-      if (newCount === 0) {
-        // Last resume call - re-enable security monitoring
+    pauseCountRef.current = Math.max(0, pauseCountRef.current - 1);
+    console.log('🔒 Resuming app locking (count:', pauseCountRef.current, ')');
+    
+    if (pauseCountRef.current === 0) {
+      // Last resume call - re-enable security with delay
+      setTimeout(() => {
+        securityDisabledRef.current = false;
         console.log('🔒 Security monitoring RE-ENABLED');
-        // Restart inactivity timer if app is not locked
+        
+        // Restart inactivity timer if conditions are right
         if (!isAppLocked && setupComplete) {
-          setTimeout(() => {
-            resetInactivityTimer();
-          }, 100);
+          resetInactivityTimer();
         }
-      }
-      
-      return newCount;
-    });
+      }, 1000); // Give time for any pending operations
+    }
   }, [isAppLocked, setupComplete]);
 
-  // Reset inactivity timer
+  // Reset inactivity timer with immediate security check
   const resetInactivityTimer = useCallback(() => {
     if (!setupComplete || isAppLocked || isSecurityDisabled()) {
       return;
@@ -120,10 +120,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     setInactivityTimer(timer);
   }, [setupComplete, isAppLocked, isSecurityDisabled, clearAllTimers]);
 
-  // Set up activity listeners for inactivity detection
+  // Activity listener setup with immediate security checks
   useEffect(() => {
-    if (!user || !setupComplete || isAppLocked || isSecurityDisabled()) {
+    if (!user || !setupComplete || isAppLocked) {
       clearAllTimers();
+      eventListenersActiveRef.current = false;
       return;
     }
 
@@ -132,43 +133,48 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       'touchstart', 'touchmove', 'click', 'wheel'
     ];
     
-    // Reset timer on any activity
+    // Activity handler with immediate security check
     const handleActivity = () => {
       if (!isSecurityDisabled()) {
         resetInactivityTimer();
       }
     };
 
-    // Set initial timer
-    resetInactivityTimer();
+    // Only set up listeners if security is not disabled
+    if (!isSecurityDisabled()) {
+      resetInactivityTimer();
+      eventListenersActiveRef.current = true;
 
-    // Add event listeners
-    activities.forEach(activity => {
-      document.addEventListener(activity, handleActivity, { passive: true });
-    });
-
-    return () => {
       activities.forEach(activity => {
-        document.removeEventListener(activity, handleActivity);
+        document.addEventListener(activity, handleActivity, { passive: true });
       });
-      clearAllTimers();
-    };
-  }, [user, setupComplete, isAppLocked, isSecurityDisabled, resetInactivityTimer, clearAllTimers]);
 
-  // Handle page visibility change (tab switching, app backgrounding)
+      return () => {
+        activities.forEach(activity => {
+          document.removeEventListener(activity, handleActivity);
+        });
+        clearAllTimers();
+        eventListenersActiveRef.current = false;
+      };
+    } else {
+      eventListenersActiveRef.current = false;
+    }
+  }, [user, setupComplete, isAppLocked, resetInactivityTimer, clearAllTimers]);
+
+  // Visibility change handler with immediate security checks
   useEffect(() => {
-    if (!user || !setupComplete || isSecurityDisabled()) {
+    if (!user || !setupComplete) {
       return;
     }
 
     const handleVisibilityChange = () => {
+      // IMMEDIATE synchronous check
       if (isSecurityDisabled()) {
         console.log('👀 Visibility change ignored - security is disabled');
         return;
       }
 
       if (document.hidden) {
-        // App is hidden/backgrounded
         console.log('🌙 App hidden, starting background timer');
         clearAllTimers();
         
@@ -181,23 +187,18 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
         
         setVisibilityTimer(timer);
       } else {
-        // App is visible again
         console.log('☀️ App visible again');
         if (visibilityTimer) {
           clearTimeout(visibilityTimer);
           setVisibilityTimer(null);
         }
         
-        // Resume inactivity timer if app is not locked and not paused
         if (!isAppLocked && !isSecurityDisabled()) {
           resetInactivityTimer();
         }
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Also handle window focus/blur for desktop PWAs
     const handleFocus = () => {
       if (!document.hidden && !isAppLocked && !isSecurityDisabled()) {
         resetInactivityTimer();
@@ -215,23 +216,26 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
         setVisibilityTimer(timer);
       }
     };
-    
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
-      clearAllTimers();
-    };
-  }, [user, setupComplete, isAppLocked, isSecurityDisabled, resetInactivityTimer, visibilityTimer, clearAllTimers]);
+
+    // Only add listeners if security should be active
+    if (!isSecurityDisabled()) {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('blur', handleBlur);
+      
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('blur', handleBlur);
+        clearAllTimers();
+      };
+    }
+  }, [user, setupComplete, isAppLocked, resetInactivityTimer, visibilityTimer, clearAllTimers]);
 
   // Handle page unload/beforeunload
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (setupComplete) {
-        // Set app as locked in localStorage for next session
         localStorage.setItem(`app_locked_${user?.id}`, 'true');
       }
     };

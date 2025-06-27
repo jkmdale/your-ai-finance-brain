@@ -13,16 +13,17 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
   const { pauseLocking, resumeLocking } = useAppSecurity();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lockingPausedRef = useRef(false);
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const openFilePicker = useCallback(() => {
-    console.log('🔓 Opening file picker, disabling app security IMMEDIATELY');
+    console.log('🔓 IMMEDIATELY disabling app security before file picker');
     
-    // Pause locking IMMEDIATELY before any other operations
+    // STEP 1: Pause locking IMMEDIATELY and SYNCHRONOUSLY
     pauseLocking();
     lockingPausedRef.current = true;
     setIsPickerOpen(true);
 
-    // Create or reuse file input SYNCHRONOUSLY
+    // STEP 2: Create or reuse file input
     if (!fileInputRef.current) {
       const input = document.createElement('input');
       input.type = 'file';
@@ -35,7 +36,7 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
 
     const input = fileInputRef.current;
     
-    // Set up file picker event handlers
+    // STEP 3: Set up handlers
     const handleFileSelect = (event: Event) => {
       const target = event.target as HTMLInputElement;
       const files = target.files;
@@ -47,14 +48,14 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
         options.onFilesSelected(files);
       }
       
-      // Resume locking after file selection with delay
-      setTimeout(() => {
+      // Resume locking after successful selection with extended delay
+      cleanupTimeoutRef.current = setTimeout(() => {
         if (lockingPausedRef.current) {
           console.log('🔒 Resuming app security after file selection');
           resumeLocking();
           lockingPausedRef.current = false;
         }
-      }, 3000); // Longer delay to ensure file processing completes
+      }, 5000); // Longer delay for file processing
       
       cleanup();
     };
@@ -63,14 +64,14 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       console.log('❌ File picker cancelled');
       setIsPickerOpen(false);
       
-      // Resume locking after cancellation with delay
-      setTimeout(() => {
+      // Resume locking after cancellation with shorter delay
+      cleanupTimeoutRef.current = setTimeout(() => {
         if (lockingPausedRef.current) {
           console.log('🔒 Resuming app security after cancellation');
           resumeLocking();
           lockingPausedRef.current = false;
         }
-      }, 1000);
+      }, 2000);
       
       cleanup();
     };
@@ -79,41 +80,61 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
       input.removeEventListener('change', handleFileSelect);
       input.removeEventListener('cancel', handleCancel);
       window.removeEventListener('focus', handleWindowFocus);
-      // Don't remove the input element, reuse it
-      input.value = ''; // Clear the value for next use
+      input.value = ''; // Clear for reuse
     };
 
-    // Handle focus events to detect picker close without selection
+    // Enhanced cancellation detection
     const handleWindowFocus = () => {
-      // Only check for cancellation if picker was open and no files selected
+      // Wait longer to ensure we don't interfere with file selection
       setTimeout(() => {
-        if (isPickerOpen && !input.files?.length) {
-          console.log('🔍 Window focused but no files selected, assuming cancelled');
+        // Only treat as cancellation if picker is still marked as open AND no files were selected
+        if (isPickerOpen && (!input.files || input.files.length === 0)) {
+          console.log('🔍 File picker likely cancelled (focus without files)');
           handleCancel();
         }
-      }, 500);
+      }, 1000); // Increased delay
     };
 
-    // Add event listeners
+    // STEP 4: Add event listeners
     input.addEventListener('change', handleFileSelect);
     input.addEventListener('cancel', handleCancel);
-    window.addEventListener('focus', handleWindowFocus, { once: true });
+    
+    // Delay the focus listener to avoid immediate triggering
+    setTimeout(() => {
+      window.addEventListener('focus', handleWindowFocus, { once: true });
+    }, 500);
 
-    // Trigger file picker IMMEDIATELY after setting up handlers
-    input.click();
+    // STEP 5: Trigger file picker LAST
+    setTimeout(() => {
+      input.click();
+    }, 100); // Small delay to ensure all setup is complete
+
   }, [options, pauseLocking, resumeLocking, isPickerOpen]);
 
-  // Cleanup on unmount
+  // Enhanced cleanup on unmount
   const cleanup = useCallback(() => {
+    // Clear any pending timeouts
+    if (cleanupTimeoutRef.current) {
+      clearTimeout(cleanupTimeoutRef.current);
+      cleanupTimeoutRef.current = null;
+    }
+
+    // Remove file input if it exists
     if (fileInputRef.current) {
-      document.body.removeChild(fileInputRef.current);
+      if (document.body.contains(fileInputRef.current)) {
+        document.body.removeChild(fileInputRef.current);
+      }
       fileInputRef.current = null;
     }
     
+    // Ensure locking is resumed if it was paused
     if (lockingPausedRef.current) {
+      console.log('🔒 Cleanup: Resuming app security');
       resumeLocking();
       lockingPausedRef.current = false;
     }
+
+    setIsPickerOpen(false);
   }, [resumeLocking]);
 
   return {
