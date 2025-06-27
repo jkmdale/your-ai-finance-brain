@@ -64,7 +64,7 @@ export const useFilePicker = (options: UseFilePickerOptions = {}) => {
           console.log('🔍 File picker cancelled (focus without files)');
           handleCancel();
         }
-      }, 1000); // 1 second delay to avoid false positives
+      }, 1000);
     };
 
     // Add event listeners

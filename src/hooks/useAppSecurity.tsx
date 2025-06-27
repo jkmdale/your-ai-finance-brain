@@ -29,7 +29,6 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   const [isPinSetup, setIsPinSetup] = useState(false);
   
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isLockedByInactivityRef = useRef(false);
 
   // Initialize security settings from localStorage
   useEffect(() => {
@@ -49,7 +48,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Clear timer function
+  // Clear inactivity timer
   const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
       console.log('⏰ Clearing inactivity timer');
@@ -58,10 +57,10 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Start inactivity timer
+  // Start 5-minute inactivity timer
   const startInactivityTimer = useCallback(() => {
-    // Don't start timer if not setup, already locked, or app is hidden
-    if (!setupComplete || isAppLocked || document.hidden) {
+    // Only start timer if setup is complete and app is not already locked
+    if (!setupComplete || isAppLocked) {
       return;
     }
 
@@ -70,35 +69,35 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     console.log('⏰ Starting 5-minute inactivity timer');
     inactivityTimerRef.current = setTimeout(() => {
       console.log('🔒 Locking app due to 5 minutes of inactivity');
-      isLockedByInactivityRef.current = true;
       setIsAppLocked(true);
     }, INACTIVITY_TIMEOUT);
   }, [setupComplete, isAppLocked, clearInactivityTimer]);
 
-  // Handle visibility change
+  // Handle visibility change - start timer when hidden, clear when visible
   const handleVisibilityChange = useCallback(() => {
     if (!setupComplete) return;
 
     if (document.hidden) {
-      // App became hidden - start the timer
-      console.log('📱 App hidden - starting inactivity timer');
+      // App became hidden - start the 5-minute timer
+      console.log('📱 App hidden - starting 5-minute inactivity timer');
       startInactivityTimer();
     } else {
-      // App became visible - cancel timer if running
+      // App became visible - cancel the timer (user is back)
       console.log('📱 App visible - canceling inactivity timer');
       clearInactivityTimer();
     }
   }, [setupComplete, startInactivityTimer, clearInactivityTimer]);
 
-  // Handle user activity
+  // Handle user activity - cancel timer on any interaction
   const handleUserActivity = useCallback(() => {
-    if (!setupComplete || isAppLocked || document.hidden) return;
+    if (!setupComplete || isAppLocked) return;
 
-    // Reset the timer on user activity
-    startInactivityTimer();
-  }, [setupComplete, isAppLocked, startInactivityTimer]);
+    // Cancel timer on user activity (they're actively using the app)
+    console.log('👆 User activity detected - canceling inactivity timer');
+    clearInactivityTimer();
+  }, [setupComplete, isAppLocked, clearInactivityTimer]);
 
-  // Setup visibility and activity listeners
+  // Setup event listeners for visibility and user activity
   useEffect(() => {
     if (!user || !setupComplete) {
       clearInactivityTimer();
@@ -113,15 +112,10 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     // Add visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Add activity listeners
+    // Add activity listeners to cancel timer on user interaction
     activityEvents.forEach(event => {
       document.addEventListener(event, handleUserActivity, { passive: true });
     });
-
-    // Start initial timer if app is visible
-    if (!document.hidden && !isAppLocked) {
-      startInactivityTimer();
-    }
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -130,7 +124,7 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
       });
       clearInactivityTimer();
     };
-  }, [user, setupComplete, isAppLocked, handleVisibilityChange, handleUserActivity, startInactivityTimer, clearInactivityTimer]);
+  }, [user, setupComplete, handleVisibilityChange, handleUserActivity, clearInactivityTimer]);
 
   // Handle page unload - save lock state
   useEffect(() => {
@@ -167,14 +161,9 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
 
   const unlockApp = useCallback(() => {
     console.log('🔓 App unlocked');
-    isLockedByInactivityRef.current = false;
     setIsAppLocked(false);
-    
-    // Start timer if app is currently visible
-    if (!document.hidden) {
-      startInactivityTimer();
-    }
-  }, [startInactivityTimer]);
+    clearInactivityTimer();
+  }, [clearInactivityTimer]);
 
   const lockApp = useCallback(() => {
     console.log('🔒 App locked manually');
@@ -183,10 +172,11 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
   }, [clearInactivityTimer]);
 
   const resetInactivityTimer = useCallback(() => {
-    if (!document.hidden && !isAppLocked) {
+    // Reset timer only if app is visible and not locked
+    if (!document.hidden && !isAppLocked && setupComplete) {
       startInactivityTimer();
     }
-  }, [startInactivityTimer, isAppLocked]);
+  }, [startInactivityTimer, isAppLocked, setupComplete]);
 
   const setSetupCompleteState = useCallback((complete: boolean) => {
     if (user) {
@@ -206,13 +196,13 @@ export const AppSecurityProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Legacy functions for compatibility (no-op)
+  // Legacy compatibility functions (no-op)
   const pauseLocking = useCallback(() => {
-    console.log('⏸️ pauseLocking called (no-op in new implementation)');
+    console.log('⏸️ pauseLocking called (legacy compatibility)');
   }, []);
 
   const resumeLocking = useCallback(() => {
-    console.log('▶️ resumeLocking called (no-op in new implementation)');
+    console.log('▶️ resumeLocking called (legacy compatibility)');
   }, []);
 
   return (
