@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
