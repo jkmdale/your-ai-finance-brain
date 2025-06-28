@@ -96,7 +96,7 @@ export const CSVUpload = () => {
 
     setCreatingBudget(true);
     try {
-      console.log('Creating smart budget from transactions...');
+      console.log(`💰 Creating smart budget from ${transactions.length} transactions (preserve: ${preserveExisting})`);
       
       if (preserveExisting) {
         // Try incremental update first
@@ -119,10 +119,10 @@ export const CSVUpload = () => {
         `Smart Budget - ${new Date().toLocaleDateString()}`
       );
       
-      console.log('Budget created successfully:', budgetResult);
+      console.log('💰 Budget created successfully:', budgetResult);
       return budgetResult;
     } catch (error: any) {
-      console.error('Budget creation error:', error);
+      console.error('❌ Budget creation error:', error);
       return null;
     } finally {
       setCreatingBudget(false);
@@ -297,7 +297,7 @@ export const CSVUpload = () => {
             // Collect ALL transactions from this file
             if (data.transactions && Array.isArray(data.transactions)) {
               allTransactions.push(...data.transactions);
-              console.log(`📊 Added ${data.transactions.length} transactions from ${file.name}`);
+              console.log(`📊 Added ${data.transactions.length} transactions from ${file.name}, total: ${allTransactions.length}`);
             }
             
             if (data.errors) {
@@ -377,19 +377,32 @@ export const CSVUpload = () => {
 
         console.log(`🎉 Upload complete: ${totalProcessed} transactions processed from ${files.length} files`);
 
+        // Enhanced event dispatch with comprehensive data for dashboard
+        const eventDetail = { 
+          processed: totalProcessed,
+          skipped: totalSkipped,
+          transactions: allTransactions,
+          budgetCreated: !!budgetResult,
+          budgetUpdated: preserveExisting && !!budgetResult,
+          goalsCreated: goalResult?.createdGoals?.length || 0,
+          goalsUpdated: preserveExisting,
+          filesProcessed: files.length,
+          preserveExisting,
+          totalTransactions: allTransactions.length,
+          hasAnalysis: !!analysisResult,
+          timestamp: new Date().toISOString(),
+          // Add transaction breakdown for better dashboard calculations
+          incomeTransactions: allTransactions.filter(t => t.is_income).length,
+          expenseTransactions: allTransactions.filter(t => !t.is_income).length,
+          totalIncomeAmount: allTransactions.filter(t => t.is_income).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+          totalExpenseAmount: allTransactions.filter(t => !t.is_income).reduce((sum, t) => sum + Math.abs(t.amount), 0)
+        };
+
         // Notify other components with comprehensive data
-        window.dispatchEvent(new CustomEvent('csv-upload-complete', {
-          detail: { 
-            processed: totalProcessed,
-            skipped: totalSkipped,
-            transactions: allTransactions,
-            budgetCreated: !!budgetResult,
-            goalsCreated: goalResult?.createdGoals?.length || 0,
-            filesProcessed: files.length,
-            preserveExisting,
-            totalTransactions: allTransactions.length
-          }
-        }));
+        window.dispatchEvent(new CustomEvent('csv-upload-complete', { detail: eventDetail }));
+        
+        // Also store in localStorage as backup
+        localStorage.setItem('csv-upload-complete', JSON.stringify(eventDetail));
         
       } else {
         setUploadStatus('error');

@@ -39,6 +39,7 @@ export const Dashboard = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [processingInsights, setProcessingInsights] = useState(false);
+  const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
   const { user } = useAuth();
   const isMobile = useIsMobile();
 
@@ -52,17 +53,22 @@ export const Dashboard = () => {
     return colorMap[color as keyof typeof colorMap] || 'from-gray-400 to-gray-500';
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (forceRefresh = false) => {
     if (!user) {
       setLoading(false);
       return;
     }
 
     try {
-      console.log('Fetching dashboard data for user:', user.id);
+      console.log(`🔄 Fetching dashboard data for user: ${user.id} ${forceRefresh ? '(forced refresh)' : ''}`);
 
-      // Fetch recent transactions with categories, excluding transfers
-      const { data: transactions } = await supabase
+      // Add a small delay if this is a forced refresh to ensure DB operations are complete
+      if (forceRefresh) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Fetch ALL transactions (not just 10) to get accurate calculations
+      const { data: allTransactions } = await supabase
         .from('transactions')
         .select(`
           *,
@@ -70,10 +76,23 @@ export const Dashboard = () => {
         `)
         .eq('user_id', user.id)
         .not('tags', 'cs', '{transfer}')
-        .order('transaction_date', { ascending: false })
-        .limit(10);
+        .order('transaction_date', { ascending: false });
 
-      console.log('Fetched transactions (excluding transfers):', transactions);
+      console.log(`📊 Fetched ${allTransactions?.length || 0} transactions (excluding transfers)`);
+
+      // Fetch recent transactions for display (limit 10)
+      const recentTransactionsData = allTransactions?.slice(0, 10) || [];
+
+      // Fetch current active budgets for more accurate balance calculation
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      console.log('📋 Active budget found:', budgets?.length > 0);
 
       // Fetch bank accounts for balance
       const { data: accounts } = await supabase
@@ -82,29 +101,35 @@ export const Dashboard = () => {
         .eq('user_id', user.id)
         .eq('is_active', true);
 
-      console.log('Fetched accounts:', accounts);
+      console.log('🏦 Bank accounts:', accounts?.length || 0);
 
-      if (transactions && transactions.length > 0) {
-        // Calculate current month's income and expenses
+      if (allTransactions && allTransactions.length > 0) {
+        // Calculate stats using ALL transactions for accuracy
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         
-        const currentMonthTransactions = transactions.filter(t => {
+        // Get current month transactions
+        const currentMonthTransactions = allTransactions.filter(t => {
           const transactionDate = new Date(t.transaction_date);
           return transactionDate.getMonth() === currentMonth && 
                  transactionDate.getFullYear() === currentYear &&
                  (!t.tags || !t.tags.includes('transfer'));
         });
 
+        // Calculate totals from current month
         const monthlyIncome = currentMonthTransactions
           .filter(t => t.is_income)
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         const monthlyExpenses = currentMonthTransactions
           .filter(t => !t.is_income)
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-        const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+        // Use budget total balance if available, otherwise use bank accounts
+        const totalBalance = budgets && budgets.length > 0 
+          ? (budgets[0].total_income || 0) - (budgets[0].total_expenses || 0)
+          : accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+
         const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
 
         const dashboardStats: DashboardStats = {
@@ -112,27 +137,33 @@ export const Dashboard = () => {
           monthlyIncome,
           monthlyExpenses,
           savingsRate,
-          transactionCount: transactions.length,
+          transactionCount: allTransactions.length,
           isValidated: true,
           warnings: []
         };
 
-        console.log('Calculated stats (excluding transfers):', dashboardStats);
+        console.log('📈 Calculated dashboard stats:', {
+          ...dashboardStats,
+          currentMonthTransactions: currentMonthTransactions.length,
+          totalTransactions: allTransactions.length
+        });
 
         setStats(dashboardStats);
-        setRecentTransactions(transactions);
+        setRecentTransactions(recentTransactionsData);
+        setLastDataRefresh(new Date());
         
-        // Generate AI insights if we have new data
-        if (!aiInsights && transactions.length > 5) {
-          generateAIInsights(transactions.slice(0, 20));
+        // Generate AI insights for new data or if we don't have insights yet
+        if (forceRefresh || (!aiInsights && allTransactions.length > 5)) {
+          generateAIInsights(allTransactions.slice(0, 20));
         }
       } else {
-        console.log('No non-transfer transactions found, setting stats to null');
+        console.log('📊 No non-transfer transactions found');
         setStats(null);
         setRecentTransactions([]);
+        setLastDataRefresh(new Date());
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('❌ Error fetching dashboard data:', error);
       setStats(null);
       setRecentTransactions([]);
     } finally {
@@ -172,26 +203,43 @@ export const Dashboard = () => {
   };
 
   useEffect(() => {
+    console.log('🔄 Dashboard useEffect triggered - initial load');
     fetchDashboardData();
-  }, [user, refreshKey]);
+  }, [user]);
+
+  // Separate effect for refresh key changes
+  useEffect(() => {
+    if (refreshKey > 0) {
+      console.log(`🔄 Dashboard refresh triggered (key: ${refreshKey})`);
+      fetchDashboardData(true);
+    }
+  }, [refreshKey]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'csv-upload-complete') {
-        console.log('CSV upload detected, refreshing dashboard...');
+        console.log('📂 CSV upload detected via storage, refreshing dashboard...');
         setTimeout(() => {
           setRefreshKey(prev => prev + 1);
           setAiInsights(null); // Reset insights to trigger regeneration
-        }, 1000);
+        }, 2000); // Increased delay to ensure DB operations complete
       }
     };
 
-    const handleCustomEvent = () => {
-      console.log('Custom CSV upload event detected, refreshing dashboard...');
+    const handleCustomEvent = (event: any) => {
+      console.log('📂 Custom CSV upload event detected:', event.detail);
+      const detail = event.detail || {};
+      
+      console.log(`📊 Processing ${detail.totalTransactions || 0} transactions from ${detail.filesProcessed || 0} files`);
+      
+      // Longer delay for multiple files or large transaction counts
+      const delay = detail.totalTransactions > 100 || detail.filesProcessed > 1 ? 3000 : 2000;
+      
       setTimeout(() => {
+        console.log('🔄 Refreshing dashboard after CSV upload...');
         setRefreshKey(prev => prev + 1);
         setAiInsights(null);
-      }, 1000);
+      }, delay);
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -206,7 +254,15 @@ export const Dashboard = () => {
   if (loading) {
     return (
       <section className="min-h-screen w-full flex items-center justify-center p-4">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white/70">Loading your financial data...</p>
+          {lastDataRefresh && (
+            <p className="text-white/50 text-sm mt-2">
+              Last updated: {lastDataRefresh.toLocaleTimeString()}
+            </p>
+          )}
+        </div>
       </section>
     );
   }
@@ -221,6 +277,11 @@ export const Dashboard = () => {
           <p className="text-lg text-white/70">
             Start your intelligent financial journey by uploading your first transaction file
           </p>
+          {lastDataRefresh && (
+            <p className="text-white/50 text-sm mt-2">
+              System ready - Last checked: {lastDataRefresh.toLocaleTimeString()}
+            </p>
+          )}
         </div>
 
         {/* Empty State Cards */}
@@ -262,6 +323,11 @@ export const Dashboard = () => {
         <p className="text-lg text-white/70">
           Smart insights powered by advanced AI analysis and bank format detection
         </p>
+        {lastDataRefresh && (
+          <p className="text-white/50 text-sm mt-2">
+            Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed
+          </p>
+        )}
       </div>
 
       {/* AI Insights Card */}
@@ -303,7 +369,7 @@ export const Dashboard = () => {
           </div>
           <h3 className="text-white/70 text-sm font-medium mb-1">Total Balance</h3>
           <p className="text-lg font-bold text-white">${stats.totalBalance.toLocaleString()}</p>
-          <p className="text-xs text-green-400 mt-1">AI-validated</p>
+          <p className="text-xs text-green-400 mt-1">AI-calculated</p>
         </div>
 
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
@@ -314,7 +380,7 @@ export const Dashboard = () => {
           </div>
           <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Income</h3>
           <p className="text-lg font-bold text-white">${stats.monthlyIncome.toLocaleString()}</p>
-          <p className="text-xs text-green-400 mt-1">Smart categorized</p>
+          <p className="text-xs text-green-400 mt-1">Current month</p>
         </div>
 
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
@@ -325,7 +391,7 @@ export const Dashboard = () => {
           </div>
           <h3 className="text-white/70 text-sm font-medium mb-1">Monthly Expenses</h3>
           <p className="text-lg font-bold text-white">${stats.monthlyExpenses.toLocaleString()}</p>
-          <p className="text-xs text-red-400 mt-1">Auto-tracked</p>
+          <p className="text-xs text-red-400 mt-1">Current month</p>
         </div>
 
         <div className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-4">
@@ -337,7 +403,7 @@ export const Dashboard = () => {
           <h3 className="text-white/70 text-sm font-medium mb-1">Savings Rate</h3>
           <p className="text-lg font-bold text-white">{stats.savingsRate.toFixed(1)}%</p>
           <p className={`text-xs mt-1 ${stats.savingsRate > 20 ? 'text-green-400' : 'text-yellow-400'}`}>
-            {stats.savingsRate > 20 ? 'AI: Excellent!' : 'AI: Optimize'}
+            {stats.savingsRate > 20 ? 'AI: Excellent!' : 'AI: Can improve'}
           </p>
         </div>
       </div>
@@ -352,8 +418,8 @@ export const Dashboard = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">Recent Transactions</h3>
               <div className="flex items-center space-x-2">
-                <span className="text-white/60 text-sm">{recentTransactions.length} transactions</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="AI-categorized"></div>
+                <span className="text-white/60 text-sm">{stats.transactionCount} total</span>
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Live data"></div>
               </div>
             </div>
           </div>
