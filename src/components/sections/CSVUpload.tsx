@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -349,15 +348,52 @@ export const CSVUpload = () => {
       
       // Combine all valid transactions from all files
       const allTransactions = processedFiles.flatMap(f => f.data.transactions);
+      console.log(`📊 Total transactions to process: ${allTransactions.length}`);
+      
       const duplicates = duplicateDetector.findDuplicates(allTransactions);
       
       setProgress(30);
 
-      // Process all files through backend
+      // Process transactions directly without CSV conversion
       let totalProcessed = 0;
       let allStoredTransactions: any[] = [];
       const fileResults: any[] = [];
 
+      // Get or create bank account
+      let { data: accounts } = await supabase
+        .from('bank_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      let accountId;
+      if (!accounts || accounts.length === 0) {
+        const { data: newAccount } = await supabase
+          .from('bank_accounts')
+          .insert({
+            user_id: user.id,
+            bank_name: 'CSV Import',
+            account_type: 'checking',
+            account_name: 'Main Account',
+            currency: 'NZD'
+          })
+          .select('id')
+          .single();
+        
+        accountId = newAccount?.id;
+      } else {
+        accountId = accounts[0].id;
+      }
+
+      // Get user's categories for mapping
+      const { data: categories } = await supabase
+        .from('categories')
+        .select('id, name, is_income')
+        .eq('user_id', user.id);
+
+      const categoryMap = new Map(categories?.map(c => [`${c.name}_${c.is_income}`, c.id]) || []);
+
+      // Process each file's transactions directly
       for (let i = 0; i < processedFiles.length; i++) {
         const processedFile = processedFiles[i];
         
@@ -366,42 +402,61 @@ export const CSVUpload = () => {
           continue;
         }
 
-        setUploadMessage(`Uploading file ${i + 1}/${processedFiles.length}: ${processedFile.name}`);
+        setUploadMessage(`Processing file ${i + 1}/${processedFiles.length}: ${processedFile.name}`);
+        console.log(`📄 Processing ${processedFile.name} with ${processedFile.data.transactions.length} transactions`);
         
         try {
-          // Convert transactions to CSV format for backend
-          const csvData = generateCSVFromTransactions(processedFile.data.transactions);
-          const { data, error } = await supabase.functions.invoke('process-csv', {
-            body: { 
-              csvData,
-              fileName: processedFile.name,
-              userId: user.id
-            }
+          // Convert transactions to database format
+          const transactionData = processedFile.data.transactions.map(transaction => {
+            const categoryId = categoryMap.get(`${transaction.category}_${transaction.isIncome}`);
+            
+            return {
+              user_id: user.id,
+              account_id: accountId,
+              category_id: categoryId,
+              amount: Math.abs(transaction.amount),
+              description: transaction.description,
+              merchant: transaction.merchant,
+              transaction_date: transaction.date,
+              is_income: transaction.isIncome,
+              imported_from: 'csv'
+            };
           });
 
-          if (error) {
-            console.error(`Backend error for ${processedFile.name}:`, error);
-            fileResults.push({ file: processedFile.name, error: error.message, processed: 0 });
-            continue;
+          // Insert transactions in batches
+          const batchSize = 100;
+          let fileProcessed = 0;
+          
+          for (let j = 0; j < transactionData.length; j += batchSize) {
+            const batch = transactionData.slice(j, j + batchSize);
+            console.log(`📦 Inserting batch ${Math.floor(j/batchSize) + 1} with ${batch.length} transactions`);
+            
+            const { data, error } = await supabase
+              .from('transactions')
+              .insert(batch)
+              .select();
+
+            if (error) {
+              console.error('Batch insert error:', error);
+              throw error;
+            }
+            
+            if (data) {
+              allStoredTransactions.push(...data);
+              fileProcessed += data.length;
+            }
           }
 
-          const fileProcessed = data.processed || 0;
           totalProcessed += fileProcessed;
-          
-          if (data.transactions) {
-            allStoredTransactions.push(...data.transactions);
-          }
-          
           fileResults.push({ 
             file: processedFile.name, 
-            processed: fileProcessed, 
-            balance: data.accountBalance 
+            processed: fileProcessed 
           });
 
           console.log(`✅ ${processedFile.name}: ${fileProcessed} transactions stored`);
 
         } catch (fileError: any) {
-          console.error(`Error uploading ${processedFile.name}:`, fileError);
+          console.error(`Error processing ${processedFile.name}:`, fileError);
           fileResults.push({ file: processedFile.name, error: fileError.message, processed: 0 });
         }
       }
@@ -409,6 +464,27 @@ export const CSVUpload = () => {
       setProgress(60);
 
       if (totalProcessed > 0) {
+        // Update account balance
+        const totalAmount = allStoredTransactions.reduce((sum, t) => 
+          sum + (t.is_income ? t.amount : -t.amount), 0
+        );
+
+        const { data: currentAccount } = await supabase
+          .from('bank_accounts')
+          .select('balance')
+          .eq('id', accountId)
+          .single();
+
+        const newBalance = (currentAccount?.balance || 0) + totalAmount;
+
+        await supabase
+          .from('bank_accounts')
+          .update({ 
+            balance: newBalance,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', accountId);
+
         setUploadStatus('success');
         setUploadMessage('Running AI analysis and creating smart budget...');
         
@@ -432,7 +508,7 @@ export const CSVUpload = () => {
           processed: totalProcessed,
           skipped: totalSkipped,
           transactions: allStoredTransactions,
-          accountBalance: fileResults[fileResults.length - 1]?.balance || 0,
+          accountBalance: newBalance,
           duplicates,
           errors: processedFiles.flatMap(f => f.data.errors),
           warnings: processedFiles.flatMap(f => f.data.warnings),
@@ -453,6 +529,8 @@ export const CSVUpload = () => {
         setUploadMessage(
           `✅ Successfully processed ${totalProcessed} transactions from ${successfulFiles}/${processedFiles.length} files and created ${features.join(', ')}`
         );
+
+        console.log(`🎉 Upload complete: ${totalProcessed} transactions processed from ${successfulFiles} files`);
 
         // Notify other components
         window.dispatchEvent(new CustomEvent('csv-upload-complete', {
@@ -488,20 +566,6 @@ export const CSVUpload = () => {
     setUploadStatus('idle');
     setUploadMessage('');
     setProgress(0);
-  };
-
-  // Helper function to convert our Transaction format back to CSV for backend
-  const generateCSVFromTransactions = (transactions: any[]): string => {
-    const headers = ['Date', 'Description', 'Amount'];
-    const rows = transactions.map(t => [
-      t.date,
-      t.description,
-      t.isIncome ? t.amount.toString() : (-t.amount).toString()
-    ]);
-    
-    return [headers, ...rows].map(row => 
-      row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
   };
 
   // Create consolidated preview data

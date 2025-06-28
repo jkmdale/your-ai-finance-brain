@@ -168,17 +168,20 @@ export class CSVProcessor {
           if (hasHeaderTerms || i === 0) {
             headers = parseResult.cells;
             headerRowIndex = i;
+            console.log(`📋 Headers found at row ${i + 1}: ${headers.join(', ')}`);
             break;
           }
         }
       }
 
       if (headerRowIndex === -1) {
+        // If no clear headers found, use first non-empty row
         for (let i = 0; i < Math.min(3, lines.length); i++) {
           const parseResult = parseCSVLine(lines[i], i + 1);
           if (parseResult.cells.length >= 2) {
             headers = parseResult.cells;
             headerRowIndex = i;
+            console.log(`📋 Using row ${i + 1} as headers: ${headers.join(', ')}`);
             break;
           }
         }
@@ -188,9 +191,7 @@ export class CSVProcessor {
         throw new Error('No valid header row found in first 10 lines');
       }
 
-      console.log(`📋 Headers found at row ${headerRowIndex + 1}: ${headers.join(', ')}`);
-
-      // Parse data rows
+      // Parse ALL data rows - this is crucial for getting all transactions
       const rows: string[][] = [];
       const skippedRows: SkippedRow[] = [];
       
@@ -199,20 +200,22 @@ export class CSVProcessor {
         const rowNumber = i + 1;
         
         if (!line.trim()) {
-          continue;
+          continue; // Skip empty lines
         }
 
         const parseResult = parseCSVLine(line, rowNumber);
         const cells = parseResult.cells;
         
         if (cells.length === 0 || cells.every(cell => !cell.trim())) {
-          continue;
+          continue; // Skip completely empty rows
         }
 
+        // Pad row to match header length
         while (cells.length < headers.length) {
           cells.push('');
         }
 
+        // Check if row has any meaningful data
         const hasAnyData = cells.some(cell => cell.trim().length > 0);
         if (!hasAnyData) {
           continue;
@@ -395,23 +398,26 @@ export class CSVProcessor {
         return this.createEmptyResult(errors, warnings, allSkippedRows);
       }
 
-      // Process transactions with AI categorization
+      // Process ALL transactions with AI categorization
       let processedCount = 0;
       const dates: string[] = [];
       const rowWarnings: string[] = [];
 
-      // Batch prepare transactions for AI categorization
+      // Batch prepare ALL transactions for AI categorization
       const transactionDrafts = [];
+
+      console.log(`🔄 Processing ALL ${rows.length} rows...`);
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const rowNumber = i + 2;
+        const rowNumber = i + 2; // +2 for header and 0-indexing
         
         try {
           const rawDate = dateMapping.index >= 0 ? row[dateMapping.index]?.trim() || '' : '';
           const description = descMapping.index >= 0 ? row[descMapping.index]?.trim() || '' : '';
           const rawAmount = amountMapping.index >= 0 ? row[amountMapping.index]?.trim() || '' : '';
 
+          // Skip only if ALL fields are empty
           if (!rawDate && !description && !rawAmount && row.every(cell => !cell?.trim())) {
             continue;
           }
@@ -437,6 +443,8 @@ export class CSVProcessor {
             rawData: { rawDate, rawAmount, description }
           });
 
+          console.log(`📝 Row ${rowNumber}: ${finalDescription} - ${amount}`);
+
         } catch (rowError: any) {
           console.warn(`⚠️ Row ${rowNumber} error:`, rowError);
           allSkippedRows.push({
@@ -448,9 +456,9 @@ export class CSVProcessor {
         }
       }
 
-      // Batch AI categorization for better performance
       console.log(`🏷️ Starting batch AI categorization for ${transactionDrafts.length} transactions...`);
       
+      // Batch AI categorization for better performance
       const categorizationInput = transactionDrafts.map(draft => ({
         description: draft.description,
         amount: draft.amount
