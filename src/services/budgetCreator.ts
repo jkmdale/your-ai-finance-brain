@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { keyManagerService } from './keyManagerService';
 import { ClaudeAIService, type CategorizationResult } from './claude-ai-service';
@@ -379,7 +378,7 @@ export class BudgetCreator {
           .eq('category_id', categoryId);
 
         if (error) {
-          console.warn('Error updating budget category:', error);
+          console.warn('Error updating budget category:', error.message);
         }
       }
 
