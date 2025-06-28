@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { TrendingUp, Target, PieChart, CreditCard, Upload, User, Settings, Bell, HelpCircle, LogOut } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -20,32 +21,32 @@ import { useAuth } from '@/hooks/useAuth';
 const menuItems = [
   {
     title: 'Dashboard',
-    url: '#dashboard',
+    url: '/#dashboard',
     icon: TrendingUp,
   },
   {
     title: 'Goals',
-    url: '#goals',
+    url: '/#goals',
     icon: Target,
   },
   {
     title: 'Budget',
-    url: '#budget',
+    url: '/#budget',
     icon: PieChart,
   },
   {
     title: 'AI Insights',
-    url: '#insights',
+    url: '/#insights',
     icon: 'ai-icon', // Special case for AI icon
   },
   {
     title: 'Transactions',
-    url: '#transactions',
+    url: '/#transactions',
     icon: CreditCard,
   },
   {
     title: 'Upload CSV',
-    url: '#upload',
+    url: '/#upload',
     icon: Upload,
   },
 ];
@@ -53,38 +54,49 @@ const menuItems = [
 const accountItems = [
   {
     title: 'Profile',
-    url: '#profile',
+    url: '/profile',
     icon: User,
+    isRoute: true,
   },
   {
     title: 'Notifications',
-    url: '#notifications',
+    url: '/#notifications',
     icon: Bell,
   },
   {
     title: 'Settings',
-    url: '#settings',
+    url: '/settings',
     icon: Settings,
+    isRoute: true,
   },
 ];
 
 export const AppSidebar = () => {
   const { user, signOut } = useAuth();
   const { setOpenMobile, isMobile } = useSidebar();
+  const location = useLocation();
 
-  const handleItemClick = (url: string) => {
-    const element = document.querySelector(url);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleItemClick = (url: string, isRoute: boolean = false) => {
+    if (isRoute) {
+      // For actual routes, let React Router handle navigation
+      if (isMobile) {
+        setOpenMobile(false);
+      }
     } else {
-      // If element doesn't exist, scroll to top and let user know
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      console.log(`Section ${url} not found, scrolling to top`);
-    }
-    
-    // Close mobile sidebar after navigation
-    if (isMobile) {
-      setOpenMobile(false);
+      // For hash links, handle scrolling
+      const element = document.querySelector(url.replace('/', ''));
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        // If element doesn't exist, scroll to top and let user know
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        console.log(`Section ${url} not found, scrolling to top`);
+      }
+      
+      // Close mobile sidebar after navigation
+      if (isMobile) {
+        setOpenMobile(false);
+      }
     }
   };
 
@@ -151,15 +163,30 @@ export const AppSidebar = () => {
             <SidebarMenu>
               {accountItems.map((item) => {
                 const IconComponent = item.icon;
+                const isActive = item.isRoute && location.pathname === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      onClick={() => handleItemClick(item.url)}
-                      className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
-                    >
-                      <IconComponent className="w-4 h-4 text-purple-200" />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
+                    {item.isRoute ? (
+                      <SidebarMenuButton
+                        asChild
+                        className={`w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200 ${
+                          isActive ? 'bg-purple-600/40 text-purple-100' : ''
+                        }`}
+                      >
+                        <Link to={item.url} onClick={() => { if (isMobile) setOpenMobile(false); }}>
+                          <IconComponent className="w-4 h-4 text-purple-200" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton
+                        onClick={() => handleItemClick(item.url, item.isRoute)}
+                        className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
+                      >
+                        <IconComponent className="w-4 h-4 text-purple-200" />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    )}
                   </SidebarMenuItem>
                 );
               })}
@@ -174,11 +201,15 @@ export const AppSidebar = () => {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleItemClick('#help')}
-                  className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
+                  asChild
+                  className={`w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200 ${
+                    location.pathname === '/help' ? 'bg-purple-600/40 text-purple-100' : ''
+                  }`}
                 >
-                  <HelpCircle className="w-4 h-4 text-purple-200" />
-                  <span>Help & Support</span>
+                  <Link to="/help" onClick={() => { if (isMobile) setOpenMobile(false); }}>
+                    <HelpCircle className="w-4 h-4 text-purple-200" />
+                    <span>Help & Support</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {user && (

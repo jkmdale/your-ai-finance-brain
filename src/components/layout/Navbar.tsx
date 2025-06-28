@@ -1,5 +1,7 @@
+
 import React, { useState } from 'react';
 import { Menu, X, ChevronDown, User, Settings, CreditCard, TrendingUp, PieChart, Target, Bell, HelpCircle, LogOut } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SmartFinanceIcon } from '@/components/ui/smart-finance-icon';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,6 +9,21 @@ import { useAuth } from '@/hooks/useAuth';
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const location = useLocation();
+
+  const scrollToSection = (sectionId: string) => {
+    if (location.pathname !== '/') {
+      // If not on home page, navigate to home first
+      window.location.href = `/#${sectionId}`;
+      return;
+    }
+    
+    const element = document.querySelector(`#${sectionId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setIsOpen(false);
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-black/30 border-b border-white/10">
@@ -22,43 +39,67 @@ export const Navbar = () => {
                   <ChevronDown className="w-4 h-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 bg-black/80 backdrop-blur-xl border-white/20 text-white">
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('dashboard')}
+                  >
                     <TrendingUp className="w-4 h-4 mr-3" />
                     Dashboard
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('goals')}
+                  >
                     <Target className="w-4 h-4 mr-3" />
                     Goals
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('budget')}
+                  >
                     <PieChart className="w-4 h-4 mr-3" />
                     Budget
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('insights')}
+                  >
                     <SmartFinanceIcon size={16} className="mr-3" />
                     AI Insights
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('transactions')}
+                  >
                     <CreditCard className="w-4 h-4 mr-3" />
                     Transactions
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-white/20" />
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <User className="w-4 h-4 mr-3" />
-                    Profile
+                  <DropdownMenuItem asChild className="hover:bg-white/10 cursor-pointer">
+                    <Link to="/profile">
+                      <User className="w-4 h-4 mr-3" />
+                      Profile
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="hover:bg-white/10 cursor-pointer"
+                    onClick={() => scrollToSection('notifications')}
+                  >
                     <Bell className="w-4 h-4 mr-3" />
                     Notifications
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <Settings className="w-4 h-4 mr-3" />
-                    Settings
+                  <DropdownMenuItem asChild className="hover:bg-white/10 cursor-pointer">
+                    <Link to="/settings">
+                      <Settings className="w-4 h-4 mr-3" />
+                      Settings
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-white/20" />
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <HelpCircle className="w-4 h-4 mr-3" />
-                    Help & Support
+                  <DropdownMenuItem asChild className="hover:bg-white/10 cursor-pointer">
+                    <Link to="/help">
+                      <HelpCircle className="w-4 h-4 mr-3" />
+                      Help & Support
+                    </Link>
                   </DropdownMenuItem>
                   {user && (
                     <DropdownMenuItem 
@@ -85,7 +126,7 @@ export const Navbar = () => {
           </div>
 
           {/* Center - Logo */}
-          <div className="flex items-center space-x-3">
+          <Link to="/" className="flex items-center space-x-3">
             <div className="relative w-14 h-14 group cursor-pointer">
               {/* Outer glow ring */}
               <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500"></div>
@@ -113,7 +154,7 @@ export const Navbar = () => {
               <span className="text-xl font-bold text-white drop-shadow-sm">SmartFinanceAI</span>
               <span className="text-xs text-white/70 font-medium tracking-wider">INTELLIGENT FINANCIAL OS</span>
             </div>
-          </div>
+          </Link>
 
           {/* Right side - Auth Button or User Menu */}
           <div className="hidden md:block">
@@ -127,13 +168,17 @@ export const Navbar = () => {
                   <ChevronDown className="w-4 h-4 text-white/60" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-48 bg-black/80 backdrop-blur-xl border-white/20 text-white">
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <User className="w-4 h-4 mr-3" />
-                    Profile
+                  <DropdownMenuItem asChild className="hover:bg-white/10 cursor-pointer">
+                    <Link to="/profile">
+                      <User className="w-4 h-4 mr-3" />
+                      Profile
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                    <Settings className="w-4 h-4 mr-3" />
-                    Settings
+                  <DropdownMenuItem asChild className="hover:bg-white/10 cursor-pointer">
+                    <Link to="/settings">
+                      <Settings className="w-4 h-4 mr-3" />
+                      Settings
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-white/20" />
                   <DropdownMenuItem 
@@ -158,26 +203,65 @@ export const Navbar = () => {
       {isOpen && (
         <div className="md:hidden backdrop-blur-xl bg-black/30 border-b border-white/10">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <a href="#dashboard" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
+            <button
+              onClick={() => scrollToSection('dashboard')}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
+            >
               <TrendingUp className="w-5 h-5 mr-3" />
               Dashboard
-            </a>
-            <a href="#goals" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
+            </button>
+            <button
+              onClick={() => scrollToSection('goals')}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
+            >
               <Target className="w-5 h-5 mr-3" />
               Goals
-            </a>
-            <a href="#budget" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
+            </button>
+            <button
+              onClick={() => scrollToSection('budget')}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
+            >
               <PieChart className="w-5 h-5 mr-3" />
               Budget
-            </a>
-            <a href="#insights" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
+            </button>
+            <button
+              onClick={() => scrollToSection('insights')}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
+            >
               <SmartFinanceIcon size={20} className="mr-3" />
               AI Insights
-            </a>
-            <a href="#transactions" className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200">
+            </button>
+            <button
+              onClick={() => scrollToSection('transactions')}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
+            >
               <CreditCard className="w-5 h-5 mr-3" />
               Transactions
-            </a>
+            </button>
+            <Link
+              to="/profile"
+              onClick={() => setIsOpen(false)}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200"
+            >
+              <User className="w-5 h-5 mr-3" />
+              Profile
+            </Link>
+            <Link
+              to="/settings"
+              onClick={() => setIsOpen(false)}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200"
+            >
+              <Settings className="w-5 h-5 mr-3" />
+              Settings
+            </Link>
+            <Link
+              to="/help"
+              onClick={() => setIsOpen(false)}
+              className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200"
+            >
+              <HelpCircle className="w-5 h-5 mr-3" />
+              Help & Support
+            </Link>
             {user ? (
               <button 
                 onClick={() => signOut()}
