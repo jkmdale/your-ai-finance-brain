@@ -9,6 +9,11 @@ import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
 import { budgetCreator } from '@/services/budgetCreator';
 
+interface GoalRecommendationResult {
+  aiRecommendations?: string;
+  createdGoals?: any[];
+}
+
 interface UploadResult {
   success: boolean;
   processed: number;
@@ -20,7 +25,7 @@ interface UploadResult {
   errors?: string[];
   warnings?: string[];
   budgetCreated?: boolean;
-  goalsRecommended?: any[];
+  goalsRecommended?: GoalRecommendationResult;
 }
 
 export const CSVUpload = () => {
@@ -92,8 +97,8 @@ export const CSVUpload = () => {
     }
   };
 
-  const recommendSmartGoals = async (transactions: any[], budgetResult: any) => {
-    if (!transactions.length || !user) return [];
+  const recommendSmartGoals = async (transactions: any[], budgetResult: any): Promise<GoalRecommendationResult> => {
+    if (!transactions.length || !user) return {};
 
     setRecommendingGoals(true);
     try {
@@ -146,16 +151,16 @@ export const CSVUpload = () => {
 
       if (goalError) {
         console.error('Error creating goals:', goalError);
-        return [];
+        return { aiRecommendations: data?.response };
       }
 
       return {
-        aiRecommendations: data.response,
+        aiRecommendations: data?.response,
         createdGoals: createdGoals || []
       };
     } catch (error: any) {
       console.error('Goal recommendation error:', error);
-      return [];
+      return {};
     } finally {
       setRecommendingGoals(false);
     }
@@ -269,15 +274,13 @@ export const CSVUpload = () => {
         // Run AI analysis, budget creation, and goal recommendations in parallel
         setUploadMessage('Running AI analysis and creating smart budget...');
         
-        const [analysisResult, budgetResult, goalResult] = await Promise.all([
+        const [analysisResult, budgetResult] = await Promise.all([
           analyzeTransactions(allTransactions),
-          createSmartBudget(allTransactions),
-          recommendSmartGoals(allTransactions, null).then(result => 
-            createSmartBudget(allTransactions).then(budget => 
-              recommendSmartGoals(allTransactions, budget)
-            )
-          )
+          createSmartBudget(allTransactions)
         ]);
+
+        // Then create goals based on budget result
+        const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
 
         // Update final results
         setUploadResults({
@@ -298,7 +301,9 @@ export const CSVUpload = () => {
         const features = [];
         if (analysisResult) features.push('AI insights');
         if (budgetResult) features.push('smart budget');
-        if (goalResult && goalResult.createdGoals?.length > 0) features.push(`${goalResult.createdGoals.length} SMART goals`);
+        if (goalResult?.createdGoals && goalResult.createdGoals.length > 0) {
+          features.push(`${goalResult.createdGoals.length} SMART goals`);
+        }
         
         setUploadMessage(
           `✅ Successfully processed ${totalProcessed} transactions and created ${features.join(', ')}`
@@ -526,7 +531,7 @@ export const CSVUpload = () => {
             <p className="text-white/80 text-sm leading-relaxed mb-3">
               {uploadResults.goalsRecommended.aiRecommendations}
             </p>
-            {uploadResults.goalsRecommended.createdGoals?.length > 0 && (
+            {uploadResults.goalsRecommended.createdGoals && uploadResults.goalsRecommended.createdGoals.length > 0 && (
               <div className="mt-3 pt-3 border-t border-white/20">
                 <p className="text-green-300 text-xs font-medium mb-2">
                   ✓ Created {uploadResults.goalsRecommended.createdGoals.length} goals automatically
