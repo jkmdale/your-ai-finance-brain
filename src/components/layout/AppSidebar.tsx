@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TrendingUp, Target, PieChart, CreditCard, Upload, User, Settings, Bell, HelpCircle, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -76,27 +75,20 @@ export const AppSidebar = () => {
   const { setOpenMobile, isMobile } = useSidebar();
   const location = useLocation();
 
-  const handleItemClick = (url: string, isRoute: boolean = false) => {
-    if (isRoute) {
-      // For actual routes, let React Router handle navigation
-      if (isMobile) {
-        setOpenMobile(false);
-      }
+  const handleSectionClick = (url: string) => {
+    // For hash links, handle scrolling
+    const element = document.querySelector(url.replace('/', ''));
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-      // For hash links, handle scrolling
-      const element = document.querySelector(url.replace('/', ''));
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else {
-        // If element doesn't exist, scroll to top and let user know
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        console.log(`Section ${url} not found, scrolling to top`);
-      }
-      
-      // Close mobile sidebar after navigation
-      if (isMobile) {
-        setOpenMobile(false);
-      }
+      // If element doesn't exist, scroll to top and let user know
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      console.log(`Section ${url} not found, scrolling to top`);
+    }
+    
+    // Close mobile sidebar after navigation
+    if (isMobile) {
+      setOpenMobile(false);
     }
   };
 
@@ -138,7 +130,7 @@ export const AppSidebar = () => {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                      onClick={() => handleItemClick(item.url)}
+                      onClick={() => handleSectionClick(item.url)}
                       className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 cursor-pointer transition-colors duration-200"
                     >
                       {item.icon === 'ai-icon' ? (
@@ -180,7 +172,7 @@ export const AppSidebar = () => {
                       </SidebarMenuButton>
                     ) : (
                       <SidebarMenuButton
-                        onClick={() => handleItemClick(item.url, item.isRoute)}
+                        onClick={() => handleSectionClick(item.url)}
                         className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 cursor-pointer transition-colors duration-200"
                       >
                         <IconComponent className="w-4 h-4 text-purple-200" />
