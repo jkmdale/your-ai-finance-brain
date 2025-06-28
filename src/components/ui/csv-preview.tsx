@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { CheckCircle, AlertTriangle, X, Info } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './table';
 import { Badge } from './badge';
-import { ProcessedCSV, SkippedRow } from '@/utils/csvProcessor';
+import { ProcessedCSV, SkippedRow } from '@/utils/csv/types';
 
 interface CSVPreviewProps {
   processedData: ProcessedCSV;

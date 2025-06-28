@@ -148,7 +148,6 @@ export const CSVUpload = () => {
         }
       }
 
-      // ... keep existing goal creation logic for new users
       const totalIncome = transactions.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0);
       const totalExpenses = transactions.filter(t => !t.is_income).reduce((sum, t) => sum + t.amount, 0);
       const monthlyNet = totalIncome - totalExpenses;

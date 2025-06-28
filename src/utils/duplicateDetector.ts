@@ -1,5 +1,4 @@
-
-import { Transaction } from './csvProcessor';
+import { Transaction } from './csv/types';
 
 export interface DuplicateMatch {
   existing: any; // Database transaction format
@@ -57,92 +56,27 @@ export class DuplicateDetector {
     return Math.abs(amount1 - amount2) <= tolerance;
   }
 
-  public findDuplicates(newTransactions: Transaction[]): DuplicateMatch[] {
-    const duplicates: DuplicateMatch[] = [];
+  public detect(transactions: Transaction[]): { duplicates: Transaction[], unique: Transaction[] } {
+    const seen = new Map<string, Transaction>();
+    const duplicates: Transaction[] = [];
+    const unique: Transaction[] = [];
 
-    for (const newTxn of newTransactions) {
-      for (const existingTxn of this.existingTransactions) {
-        if (newTxn.id === existingTxn.id) continue;
-
-        const reasons: string[] = [];
-        let confidence = 0;
-
-        // Convert existing transaction date to comparable format
-        const existingDate = existingTxn.transaction_date || existingTxn.date;
-        const existingDesc = existingTxn.description || '';
-        const existingAmount = existingTxn.amount || 0;
-
-        if (!existingDate || !existingDesc) continue;
-
-        // Exact match criteria
-        if (newTxn.date === existingDate && 
-            newTxn.amount === existingAmount && 
-            newTxn.description === existingDesc) {
-          confidence = 1.0;
-          reasons.push('Exact match: same date, amount, and description');
-        } else {
-          // Fuzzy matching
-          let score = 0;
-
-          // Date similarity
-          if (newTxn.date === existingDate) {
-            score += 0.4;
-            reasons.push('Same date');
-          } else if (this.areDatesClose(newTxn.date, existingDate)) {
-            score += 0.2;
-            reasons.push('Similar date (within 1 day)');
-          }
-
-          // Amount similarity
-          if (newTxn.amount === existingAmount) {
-            score += 0.4;
-            reasons.push('Same amount');
-          } else if (this.areAmountsClose(newTxn.amount, existingAmount)) {
-            score += 0.2;
-            reasons.push('Similar amount (within $0.01)');
-          }
-
-          // Description similarity
-          const descSimilarity = this.calculateSimilarity(
-            newTxn.description.toLowerCase(),
-            existingDesc.toLowerCase()
-          );
-          if (descSimilarity >= 0.9) {
-            score += 0.3;
-            reasons.push('Very similar description');
-          } else if (descSimilarity >= 0.7) {
-            score += 0.2;
-            reasons.push('Similar description');
-          }
-
-          // Merchant similarity
-          if (newTxn.merchant && existingTxn.merchant) {
-            const merchantSimilarity = this.calculateSimilarity(
-              newTxn.merchant.toLowerCase(),
-              existingTxn.merchant.toLowerCase()
-            );
-            if (merchantSimilarity >= 0.8) {
-              score += 0.1;
-              reasons.push('Similar merchant');
-            }
-          }
-
-          confidence = Math.min(score, 1.0);
-        }
-
-        // Consider it a duplicate if confidence is above threshold
-        if (confidence >= 0.7) {
-          duplicates.push({
-            existing: existingTxn,
-            new: newTxn,
-            confidence,
-            reasons
-          });
-        }
+    for (const transaction of transactions) {
+      const key = this.generateKey(transaction);
+      
+      if (seen.has(key)) {
+        duplicates.push(transaction);
+      } else {
+        seen.set(key, transaction);
+        unique.push(transaction);
       }
     }
 
-    return duplicates;
+    return { duplicates, unique };
+  }
+
+  private generateKey(transaction: Transaction): string {
+    return `${transaction.date}-${transaction.amount}-${transaction.description.substring(0, 50)}`;
   }
 
   public removeDuplicates(transactions: Transaction[], duplicates: DuplicateMatch[]): Transaction[] {
