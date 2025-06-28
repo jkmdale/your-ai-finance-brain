@@ -340,10 +340,10 @@ const categorizeTransaction = (description: string, amount: number): { category:
     }
   }
   
-  return { category: 'Uncategorised', isIncome: false };
+  return { category: 'Other', isIncome: false };
 };
 
-// Enhanced flexible column finder with better scoring
+// Enhanced flexible column finder with much better scoring and fallbacks
 const findColumnIndex = (headers: string[], possibleNames: string[]): { index: number, confidence: number, matchedName?: string } => {
   const normalizedHeaders = headers.map(h => h.toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
   
@@ -357,22 +357,25 @@ const findColumnIndex = (headers: string[], possibleNames: string[]): { index: n
       
       let confidence = 0;
       
-      // Exact match
+      // Exact match gets highest score
       if (normalizedHeader === normalizedName) {
         confidence = 1.0;
       }
-      // Contains match
-      else if (normalizedHeader.includes(normalizedName) || normalizedName.includes(normalizedHeader)) {
-        confidence = Math.min(normalizedName.length, normalizedHeader.length) / 
-                    Math.max(normalizedName.length, normalizedHeader.length) * 0.9;
+      // Partial matches with good scoring
+      else if (normalizedHeader.includes(normalizedName)) {
+        confidence = normalizedName.length / normalizedHeader.length * 0.9;
       }
-      // Word match
+      else if (normalizedName.includes(normalizedHeader) && normalizedHeader.length > 2) {
+        confidence = normalizedHeader.length / normalizedName.length * 0.8;
+      }
+      // Word-based matching for compound terms
       else {
-        const words1 = normalizedHeader.split(/\W+/);
-        const words2 = normalizedName.split(/\W+/);
-        const commonWords = words1.filter(w => words2.includes(w) && w.length > 2);
+        const headerWords = normalizedHeader.split(/\W+/).filter(w => w.length > 1);
+        const nameWords = normalizedName.split(/\W+/).filter(w => w.length > 1);
+        const commonWords = headerWords.filter(w => nameWords.some(nw => nw.includes(w) || w.includes(nw)));
+        
         if (commonWords.length > 0) {
-          confidence = (commonWords.length / Math.max(words1.length, words2.length)) * 0.7;
+          confidence = (commonWords.length / Math.max(headerWords.length, nameWords.length)) * 0.7;
         }
       }
       
@@ -381,6 +384,42 @@ const findColumnIndex = (headers: string[], possibleNames: string[]): { index: n
       }
     }
   });
+  
+  // If we didn't find a good match, try position-based fallbacks for common CSV formats
+  if (bestMatch.confidence < 0.5) {
+    // For date columns, try first few columns if they contain numbers or dates
+    if (possibleNames.includes('date')) {
+      for (let i = 0; i < Math.min(3, headers.length); i++) {
+        const header = headers[i].toLowerCase();
+        if (/\d|date|time|when/.test(header)) {
+          bestMatch = { index: i, confidence: 0.4, matchedName: headers[i] };
+          break;
+        }
+      }
+    }
+    
+    // For description, try middle columns with text-like names
+    if (possibleNames.includes('description') && bestMatch.confidence < 0.3) {
+      for (let i = 1; i < headers.length - 1; i++) {
+        const header = headers[i].toLowerCase();
+        if (/text|desc|detail|memo|ref|narr/.test(header) || header.length > 8) {
+          bestMatch = { index: i, confidence: 0.3, matchedName: headers[i] };
+          break;
+        }
+      }
+    }
+    
+    // For amount, try last few columns or columns with currency-like names
+    if (possibleNames.includes('amount') && bestMatch.confidence < 0.3) {
+      for (let i = headers.length - 1; i >= Math.max(0, headers.length - 3); i--) {
+        const header = headers[i].toLowerCase();
+        if (/amount|money|value|sum|total|\$|balance/.test(header)) {
+          bestMatch = { index: i, confidence: 0.4, matchedName: headers[i] };
+          break;
+        }
+      }
+    }
+  }
   
   return bestMatch;
 };
@@ -448,6 +487,7 @@ serve(async (req) => {
 
     const { headers, rows } = parsedCSV;
     console.log(`📊 Successfully parsed: ${headers.length} headers, ${rows.length} rows`);
+    console.log(`📋 Headers: ${headers.join(', ')}`);
     
     if (rows.length === 0) {
       result.warnings.push('No data rows found in CSV');
@@ -461,18 +501,21 @@ serve(async (req) => {
     // Enhanced flexible column detection with expanded search terms
     const dateResult = findColumnIndex(headers, [
       'date', 'transactiondate', 'postingdate', 'valuedate', 'transdate', 
-      'dated', 'transaction_date', 'posting_date', 'dt', 'timestamp', 'when'
+      'dated', 'transaction_date', 'posting_date', 'dt', 'timestamp', 'when',
+      'processdate', 'settledate', 'bookingdate'
     ]);
     
     const descResult = findColumnIndex(headers, [
       'description', 'details', 'particulars', 'transactiondetails', 'memo', 
       'reference', 'narrative', 'desc', 'payee', 'merchant', 'vendor',
-      'transaction', 'detail', 'narration', 'purpose'
+      'transaction', 'detail', 'narration', 'purpose', 'comment', 'note',
+      'transactiondescription', 'transactiondetail'
     ]);
     
     const amountResult = findColumnIndex(headers, [
       'amount', 'value', 'debit', 'credit', 'transactionamount', 'sum', 'total',
-      'amt', 'balance', 'money', 'cash', 'payment', 'withdrawal', 'deposit'
+      'amt', 'balance', 'money', 'cash', 'payment', 'withdrawal', 'deposit',
+      'transactionvalue', 'netamount', 'grossamount'
     ]);
 
     console.log('🔍 Enhanced column detection results:');
@@ -480,12 +523,12 @@ serve(async (req) => {
     console.log(`  📝 Description: ${descResult.index >= 0 ? `column ${descResult.index} (${Math.round(descResult.confidence * 100)}%) - "${descResult.matchedName}"` : 'NOT FOUND'}`);
     console.log(`  💰 Amount: ${amountResult.index >= 0 ? `column ${amountResult.index} (${Math.round(amountResult.confidence * 100)}%) - "${amountResult.matchedName}"` : 'NOT FOUND'}`);
 
-    // Require at least 2 out of 3 key columns with reasonable confidence
-    const foundColumns = [dateResult, descResult, amountResult].filter(col => col.index >= 0 && col.confidence > 0.3);
-    if (foundColumns.length < 2) {
+    // More lenient column requirements - only need 1 column to proceed
+    const foundColumns = [dateResult, descResult, amountResult].filter(col => col.index >= 0 && col.confidence > 0.2);
+    if (foundColumns.length < 1) {
       const availableColumns = headers.join(', ');
-      result.errors.push(`Insufficient key columns found (need 2/3 with >30% confidence). Found ${foundColumns.length}/3. Available columns: ${availableColumns}`);
-      result.fileValidation!.reason = `Missing required columns. Found ${foundColumns.length}/3 key columns with sufficient confidence`;
+      result.errors.push(`No recognizable columns found. Available columns: ${availableColumns}`);
+      result.fileValidation!.reason = `Could not identify any required columns (date, description, or amount) from available columns`;
       return new Response(JSON.stringify(result), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -502,7 +545,7 @@ serve(async (req) => {
     let accountId;
     if (!accounts || accounts.length === 0) {
       console.log('🏦 Creating new bank account for user');
-      const { data: newAccount } = await supabaseClient
+      const { data: newAccount, error: accountError } = await supabaseClient
         .from('bank_accounts')
         .insert({
           user_id: user.id,
@@ -514,9 +557,26 @@ serve(async (req) => {
         .select('id')
         .single();
       
+      if (accountError) {
+        console.error('❌ Failed to create bank account:', accountError);
+        result.errors.push(`Failed to create bank account: ${accountError.message}`);
+        return new Response(JSON.stringify(result), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
       accountId = newAccount?.id;
     } else {
       accountId = accounts[0].id;
+    }
+
+    if (!accountId) {
+      result.errors.push('Could not create or find bank account');
+      return new Response(JSON.stringify(result), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     // Get user's categories for mapping
@@ -548,23 +608,23 @@ serve(async (req) => {
 
         console.log(`📋 Row ${rowNumber}: Processing - Date:"${rawDate}" | Desc:"${description}" | Amount:"${rawAmount}"`);
 
-        // Enhanced validation - only skip truly empty rows
-        const hasAnyData = rawDate || description || rawAmount || row.some(cell => cell?.trim());
-        if (!hasAnyData) {
-          console.log(`⏭️ Row ${rowNumber}: Completely empty, skipping`);
+        // More flexible validation - allow rows with at least some data
+        const hasUsefulData = rawDate || description || rawAmount;
+        if (!hasUsefulData) {
+          console.log(`⏭️ Row ${rowNumber}: No useful data, skipping`);
           skippedDetails.push({ 
             row: rowNumber, 
-            reason: 'All fields empty', 
+            reason: 'No useful data found', 
             data: row.slice(0, 3),
-            suggestion: 'Ensure row contains at least date, description, or amount data'
+            suggestion: 'Ensure row contains date, description, or amount data'
           });
           result.skipped++;
           continue;
         }
 
         // Parse with detailed error tracking
-        const { date, warning: dateWarning } = parseDate(rawDate, rowNumber);
-        const { amount, warning: amountWarning } = parseAmount(rawAmount, rowNumber);
+        const { date, warning: dateWarning } = parseDate(rawDate || new Date().toISOString().split('T')[0], rowNumber);
+        const { amount, warning: amountWarning } = parseAmount(rawAmount || '0', rowNumber);
         
         if (dateWarning) {
           result.warnings.push(dateWarning);
@@ -583,29 +643,37 @@ serve(async (req) => {
         if (!description && rawDate) {
           finalDescription = `Transaction on ${rawDate}`;
         }
+        
+        // If still no meaningful description, use first non-empty cell
+        if (finalDescription === `Transaction ${rowNumber}`) {
+          const firstData = row.find(cell => cell?.trim());
+          if (firstData) {
+            finalDescription = `${firstData.trim().substring(0, 50)}`;
+          }
+        }
 
         // Enhanced categorization
         const { category, isIncome } = categorizeTransaction(finalDescription, amount);
         const categoryId = categoryMap.get(`${category}_${isIncome}`);
         
         if (!categoryId) {
-          console.log(`⚠️ Row ${rowNumber}: No category mapping found for "${category}" (isIncome: ${isIncome})`);
+          console.log(`⚠️ Row ${rowNumber}: No category mapping found for "${category}" (isIncome: ${isIncome}), will use default`);
         }
         
         const transactionData = {
           user_id: user.id,
           account_id: accountId,
-          category_id: categoryId,
+          category_id: categoryId || null, // Allow null category
           amount: Math.abs(amount),
           description: finalDescription.substring(0, 200), // Ensure it fits in database
           merchant: finalDescription.split(' ')[0] || null,
           transaction_date: date,
-          is_income: isIncome,
+          is_income: amount > 0 ? isIncome : false, // Use amount sign as fallback
           imported_from: 'csv'
         };
         
         processedTransactions.push(transactionData);
-        console.log(`✅ Row ${rowNumber}: Prepared for upload - ${isIncome ? '+' : '-'}$${Math.abs(amount)} - ${category}`);
+        console.log(`✅ Row ${rowNumber}: Prepared for upload - ${transactionData.is_income ? '+' : '-'}$${Math.abs(amount)} - ${category} - "${finalDescription.substring(0, 30)}"`);
         
       } catch (rowError: any) {
         console.error(`❌ Row ${rowNumber} processing error:`, rowError.message);
@@ -635,7 +703,7 @@ serve(async (req) => {
     }
 
     // Enhanced batch insert with retry logic and detailed error tracking
-    const batchSize = 50; // Smaller batches for better error handling
+    const batchSize = 25; // Smaller batches for better error handling
     const batchResults = [];
     let totalUploaded = 0;
     
@@ -663,7 +731,7 @@ serve(async (req) => {
         if (error) {
           console.error(`❌ Batch ${batchNumber} failed:`, error);
           batchResult.failed = batch.length;
-          batchResult.errors.push(`Batch insert failed: ${error.message}`);
+          batchResult.errors.push(`Batch insert failed: ${error.message} - ${error.details || ''}`);
           
           // Try individual inserts for this batch
           console.log(`🔄 Retrying batch ${batchNumber} with individual inserts...`);
@@ -677,7 +745,7 @@ serve(async (req) => {
               
               if (singleError) {
                 console.error(`❌ Individual insert failed for transaction ${j + 1}:`, singleError);
-                batchResult.errors.push(`Transaction ${i + j + 1}: ${singleError.message}`);
+                batchResult.errors.push(`Transaction ${i + j + 1}: ${singleError.message} - Details: ${JSON.stringify(transaction).substring(0, 100)}`);
               } else {
                 batchResult.succeeded++;
                 batchResult.failed--;
