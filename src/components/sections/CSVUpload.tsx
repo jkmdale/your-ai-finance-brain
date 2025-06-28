@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFilePicker } from '@/hooks/useFilePicker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
 import { budgetCreator } from '@/services/budgetCreator';
@@ -16,6 +17,7 @@ interface GoalRecommendationResult {
 interface UploadResult {
   success: boolean;
   processed: number;
+  skipped: number;
   transactions: any[];
   accountBalance: number;
   analysis?: string;
@@ -27,10 +29,20 @@ interface UploadResult {
   goalsRecommended?: GoalRecommendationResult;
 }
 
+interface ValidationResult {
+  isValid: boolean;
+  rowCount: number;
+  columnCount: number;
+  headers: string[];
+  errors: string[];
+  warnings: string[];
+  preview: string[][];
+}
+
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'validating'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
   const [processedCSV, setProcessedCSV] = useState<ProcessedCSV | null>(null);
@@ -39,6 +51,9 @@ export const CSVUpload = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [creatingBudget, setCreatingBudget] = useState(false);
   const [recommendingGoals, setRecommendingGoals] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const { user } = useAuth();
 
   const csvProcessor = new CSVProcessor();
@@ -49,6 +64,116 @@ export const CSVUpload = () => {
     multiple: true,
     onFilesSelected: handleFilesSelected
   });
+
+  // Client-side CSV validation
+  const validateCSV = async (file: File): Promise<ValidationResult> => {
+    try {
+      const text = await file.text();
+      const lines = text.trim().split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        return {
+          isValid: false,
+          rowCount: lines.length,
+          columnCount: 0,
+          headers: [],
+          errors: ['CSV must have at least a header row and one data row'],
+          warnings: [],
+          preview: []
+        };
+      }
+
+      // Parse header
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      
+      // Parse first few rows for preview
+      const preview = lines.slice(0, 6).map(line => 
+        line.split(',').map(cell => cell.trim().replace(/"/g, ''))
+      );
+
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      // Check for required columns
+      const normalizedHeaders = headers.map(h => h.toLowerCase());
+      const hasDate = normalizedHeaders.some(h => 
+        h.includes('date') || h.includes('transaction') || h.includes('posting')
+      );
+      const hasDescription = normalizedHeaders.some(h => 
+        h.includes('description') || h.includes('details') || h.includes('particulars')
+      );
+      const hasAmount = normalizedHeaders.some(h => 
+        h.includes('amount') || h.includes('value') || h.includes('debit') || h.includes('credit')
+      );
+
+      if (!hasDate) warnings.push('No date column detected');
+      if (!hasDescription) warnings.push('No description column detected');
+      if (!hasAmount) errors.push('No amount column detected');
+
+      // Check data consistency
+      const expectedColumns = headers.length;
+      let inconsistentRows = 0;
+      for (let i = 1; i < Math.min(lines.length, 10); i++) {
+        const cells = lines[i].split(',');
+        if (cells.length !== expectedColumns) {
+          inconsistentRows++;
+        }
+      }
+
+      if (inconsistentRows > 0) {
+        warnings.push(`${inconsistentRows} rows have inconsistent column counts`);
+      }
+
+      return {
+        isValid: errors.length === 0,
+        rowCount: lines.length - 1, // Exclude header
+        columnCount: headers.length,
+        headers,
+        errors,
+        warnings,
+        preview
+      };
+    } catch (error: any) {
+      return {
+        isValid: false,
+        rowCount: 0,
+        columnCount: 0,
+        headers: [],
+        errors: [`Failed to parse CSV: ${error.message}`],
+        warnings: [],
+        preview: []
+      };
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFilesSelected(files);
+    }
+  }, []);
 
   const analyzeTransactions = async (transactions: any[]) => {
     if (!transactions.length) return;
@@ -185,15 +310,48 @@ export const CSVUpload = () => {
       return;
     }
 
+    // Client-side validation first
+    setUploadStatus('validating');
+    setUploadMessage('Validating CSV files...');
+    setProgress(10);
+
+    const validationResults: ValidationResult[] = [];
+    for (const file of Array.from(files)) {
+      const result = await validateCSV(file);
+      validationResults.push(result);
+    }
+
+    setValidationResults(validationResults);
+    setProgress(25);
+
+    // Check if any files failed validation
+    const failedFiles = validationResults.filter(r => !r.isValid);
+    if (failedFiles.length > 0) {
+      setUploadStatus('error');
+      setUploadMessage(`Validation failed for ${failedFiles.length} file(s). Please fix the issues and try again.`);
+      setProgress(0);
+      return;
+    }
+
+    // Show validation summary
+    const totalRows = validationResults.reduce((sum, r) => sum + r.rowCount, 0);
+    const totalWarnings = validationResults.reduce((sum, r) => sum + r.warnings.length, 0);
+    
+    setUploadMessage(`✅ Validation complete: ${totalRows} transactions ready to process${totalWarnings > 0 ? ` (${totalWarnings} warnings)` : ''}`);
+    setProgress(40);
+
+    // Continue with processing
     setUploading(true);
     setProcessing(true);
     setUploadStatus('processing');
     setUploadResults(null);
     setProcessedCSV(null);
     setUploadMessage('Processing CSV files with AI...');
+    setProgress(50);
 
     try {
       let totalProcessed = 0;
+      let totalSkipped = 0;
       const allTransactions: any[] = [];
       const allErrors: string[] = [];
       const allWarnings: string[] = [];
@@ -208,9 +366,11 @@ export const CSVUpload = () => {
         .limit(1000);
 
       const duplicateDetector = new DuplicateDetector(existingTransactions || []);
+      setProgress(60);
 
       // Process each file
-      for (const file of Array.from(files)) {
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+        const file = files[fileIndex];
         console.log(`📄 Processing: ${file.name}`);
         
         try {
@@ -222,6 +382,7 @@ export const CSVUpload = () => {
           }
 
           setUploadMessage(`Processing ${file.name} with AI categorization...`);
+          setProgress(60 + (fileIndex / files.length) * 20);
 
           // Enhanced CSV processing
           const processed = await csvProcessor.processCSV(text);
@@ -255,8 +416,10 @@ export const CSVUpload = () => {
             if (error) {
               console.error('❌ Backend error:', error);
               allErrors.push(`Error storing ${file.name}: ${error.message}`);
+              totalSkipped += processed.transactions.length;
             } else {
               totalProcessed += data.processed || 0;
+              totalSkipped += (processed.transactions.length - (data.processed || 0));
               allTransactions.push(...(data.transactions || []));
             }
           }
@@ -266,25 +429,30 @@ export const CSVUpload = () => {
         }
       }
 
+      setProgress(80);
+
       if (totalProcessed > 0) {
         setUploadStatus('success');
-        setUploadMessage(`Successfully processed ${totalProcessed} transactions`);
+        setUploadMessage(`Processing AI analysis and creating smart budget...`);
         
         // Run AI analysis, budget creation, and goal recommendations in parallel
-        setUploadMessage('Running AI analysis and creating smart budget...');
-        
         const [analysisResult, budgetResult] = await Promise.all([
           analyzeTransactions(allTransactions),
           createSmartBudget(allTransactions)
         ]);
 
+        setProgress(90);
+
         // Then create goals based on budget result
         const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
+
+        setProgress(100);
 
         // Update final results
         setUploadResults({
           success: true,
           processed: totalProcessed,
+          skipped: totalSkipped,
           transactions: allTransactions,
           accountBalance: 0,
           bankFormat: processedCSV?.bankFormat,
@@ -296,7 +464,7 @@ export const CSVUpload = () => {
           goalsRecommended: goalResult
         });
 
-        // Update success message
+        // Update success message with detailed feedback
         const features = [];
         if (analysisResult) features.push('AI insights');
         if (budgetResult) features.push('smart budget');
@@ -305,13 +473,14 @@ export const CSVUpload = () => {
         }
         
         setUploadMessage(
-          `✅ Successfully processed ${totalProcessed} transactions and created ${features.join(', ')}`
+          `✅ Successfully processed ${totalProcessed} transactions${totalSkipped > 0 ? `, ${totalSkipped} skipped` : ''} and created ${features.join(', ')}`
         );
 
         // Notify other components
         window.dispatchEvent(new CustomEvent('csv-upload-complete', {
           detail: { 
-            processed: totalProcessed, 
+            processed: totalProcessed,
+            skipped: totalSkipped,
             transactions: allTransactions,
             budgetCreated: !!budgetResult,
             goalsCreated: goalResult?.createdGoals?.length || 0
@@ -323,16 +492,19 @@ export const CSVUpload = () => {
         setUploadMessage(
           allErrors.length > 0 
             ? `Processing failed: ${allErrors.join('; ')}`
-            : `No transactions found. ${allWarnings.join('; ')}`
+            : `No transactions processed. ${allWarnings.join('; ')}`
         );
+        setProgress(0);
       }
     } catch (error: any) {
       console.error('❌ Upload error:', error);
       setUploadStatus('error');
       setUploadMessage(`Upload failed: ${error.message}`);
+      setProgress(0);
     } finally {
       setUploading(false);
       setProcessing(false);
+      setTimeout(() => setProgress(0), 2000); // Reset progress after delay
     }
   }
 
@@ -367,12 +539,18 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
+        {/* Enhanced Drop Zone */}
         <div className="relative">
-          <button
+          <div
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
             onClick={openFilePicker}
-            disabled={uploading || !user || isPickerOpen}
             className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              uploading || !user || isPickerOpen
+              dragActive
+                ? 'border-blue-400 bg-blue-500/20 scale-105'
+                : uploading || !user || isPickerOpen
                 ? 'border-white/20 bg-white/5 cursor-not-allowed'
                 : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
             }`}
@@ -381,39 +559,144 @@ export const CSVUpload = () => {
               {processing || isPickerOpen ? (
                 <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
               ) : (
-                <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+                <div className="relative">
+                  <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+                  {dragActive && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
+                  )}
+                </div>
               )}
               <p className="text-white/80 font-medium">
                 {processing ? 'Processing with AI...' : 
                  isPickerOpen ? 'Opening file picker...' :
-                 !user ? 'Please log in to upload' : 'Click to upload CSV files'}
+                 dragActive ? 'Drop CSV files here!' :
+                 !user ? 'Please log in to upload' : 'Click to upload or drag & drop CSV files'}
               </p>
               <p className="text-white/50 text-sm mt-1">
                 {!user ? 'Authentication required' : 'Auto-categorization + Budget + SMART Goals'}
               </p>
             </div>
-          </button>
+          </div>
+
+          {/* Progress Bar */}
+          {progress > 0 && (
+            <div className="mt-3">
+              <Progress value={progress} className="h-2" />
+              <p className="text-white/60 text-xs mt-1 text-center">{progress}% complete</p>
+            </div>
+          )}
         </div>
 
-        {uploadStatus !== 'idle' && (
+        {/* Validation Results */}
+        {validationResults.length > 0 && uploadStatus === 'error' && (
+          <div className="space-y-3">
+            {validationResults.map((result, index) => (
+              <div key={index} className={`p-4 rounded-lg border ${
+                result.isValid 
+                  ? 'bg-green-500/20 border-green-500/30' 
+                  : 'bg-red-500/20 border-red-500/30'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-white font-medium">File {index + 1} Validation</h4>
+                  {result.isValid ? (
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                  <div>
+                    <span className="text-white/70">Rows:</span>
+                    <p className="text-white">{result.rowCount}</p>
+                  </div>
+                  <div>
+                    <span className="text-white/70">Columns:</span>
+                    <p className="text-white">{result.columnCount}</p>
+                  </div>
+                  <div>
+                    <span className="text-white/70">Status:</span>
+                    <p className={result.isValid ? 'text-green-400' : 'text-red-400'}>
+                      {result.isValid ? 'Valid' : 'Invalid'}
+                    </p>
+                  </div>
+                </div>
+
+                {result.errors.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-red-300 text-sm font-medium mb-1">Errors:</p>
+                    <ul className="text-red-300 text-xs space-y-1">
+                      {result.errors.map((error, i) => (
+                        <li key={i}>• {error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.warnings.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-yellow-300 text-sm font-medium mb-1">Warnings:</p>
+                    <ul className="text-yellow-300 text-xs space-y-1">
+                      {result.warnings.map((warning, i) => (
+                        <li key={i}>• {warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.preview.length > 0 && (
+                  <div>
+                    <p className="text-white/70 text-sm mb-2">Preview:</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-white/20">
+                            {result.headers.map((header, i) => (
+                              <th key={i} className="text-left text-white/70 p-1">{header}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.preview.slice(1, 4).map((row, i) => (
+                            <tr key={i} className="border-b border-white/10">
+                              {row.map((cell, j) => (
+                                <td key={j} className="text-white/80 p-1">{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Status Messages */}
+        {uploadStatus !== 'idle' && uploadStatus !== 'error' && (
           <div className={`flex items-start space-x-2 p-4 rounded-lg ${
             uploadStatus === 'success' 
               ? 'bg-green-500/20 border border-green-500/30' 
               : uploadStatus === 'processing'
               ? 'bg-blue-500/20 border border-blue-500/30'
+              : uploadStatus === 'validating'
+              ? 'bg-purple-500/20 border border-purple-500/30'
               : 'bg-red-500/20 border border-red-500/30'
           }`}>
             {uploadStatus === 'success' ? (
               <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-            ) : uploadStatus === 'processing' ? (
-              <Loader2 className="w-5 h-5 text-blue-400 animate-spin mt-0.5 flex-shrink-0" />
+            ) : uploadStatus === 'validating' ? (
+              <Loader2 className="w-5 h-5 text-purple-400 animate-spin mt-0.5 flex-shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+              <Loader2 className="w-5 h-5 text-blue-400 animate-spin mt-0.5 flex-shrink-0" />
             )}
             <div className="flex-1">
               <span className={`text-sm ${
                 uploadStatus === 'success' ? 'text-green-300' : 
-                uploadStatus === 'processing' ? 'text-blue-300' : 'text-red-300'
+                uploadStatus === 'validating' ? 'text-purple-300' :
+                'text-blue-300'
               }`}>
                 {uploadMessage}
               </span>
@@ -482,10 +765,14 @@ export const CSVUpload = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div className="text-center">
-                <div className="text-xl font-bold text-white mb-1">{uploadResults.processed}</div>
-                <div className="text-white/60 text-xs">Transactions</div>
+                <div className="text-xl font-bold text-green-400 mb-1">{uploadResults.processed}</div>
+                <div className="text-white/60 text-xs">Processed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-yellow-400 mb-1">{uploadResults.skipped}</div>
+                <div className="text-white/60 text-xs">Skipped</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-green-400 mb-1">
@@ -500,7 +787,7 @@ export const CSVUpload = () => {
                 <div className="text-white/60 text-xs">SMART Goals</div>
               </div>
               <div className="text-center">
-                <div className="text-xl font-bold text-yellow-400 mb-1">
+                <div className="text-xl font-bold text-red-400 mb-1">
                   {uploadResults.duplicates?.length || 0}
                 </div>
                 <div className="text-white/60 text-xs">Duplicates</div>
@@ -597,6 +884,9 @@ export const CSVUpload = () => {
         <div className="bg-white/10 rounded-lg p-4">
           <h4 className="text-white font-medium mb-2">🚀 Smart Finance Features:</h4>
           <ul className="text-white/70 text-sm space-y-1">
+            <li>• <strong>Client-side Validation:</strong> Instant CSV format validation before upload</li>
+            <li>• <strong>Drag & Drop:</strong> Easy file upload with progress tracking</li>
+            <li>• <strong>Detailed Feedback:</strong> Complete processing summary with skipped transactions</li>
             <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization with confidence scoring</li>
             <li>• <strong>Smart Budget Creation:</strong> Automatic budget generation based on spending patterns</li>
             <li>• <strong>SMART Goals:</strong> Personalized financial goals (Specific, Measurable, Achievable, Relevant, Time-bound)</li>
