@@ -556,6 +556,39 @@ Return ONLY a JSON object mapping original names to cleaned names. Remove transa
       };
     }
   }
+
+  private fallbackCategorization(transaction: Transaction): CategorizationResult {
+    const description = transaction.description.toLowerCase();
+    const merchant = transaction.merchant?.toLowerCase() || '';
+    
+    // Income patterns
+    if (transaction.is_income || description.includes('salary') || description.includes('payroll')) {
+      return { category: 'Salary', confidence: 0.8, rationale: 'Income transaction' };
+    }
+    
+    // Housing patterns
+    if (description.includes('rent') || description.includes('mortgage') || merchant.includes('property')) {
+      return { category: 'Housing', confidence: 0.9, rationale: 'Housing-related expense' };
+    }
+    
+    // Food patterns
+    if (description.includes('restaurant') || description.includes('food') || merchant.includes('mcdonald') || merchant.includes('subway')) {
+      return { category: 'Food & Dining', confidence: 0.8, rationale: 'Food or dining expense' };
+    }
+    
+    // Transportation patterns
+    if (description.includes('gas') || description.includes('fuel') || merchant.includes('shell') || description.includes('uber')) {
+      return { category: 'Transportation', confidence: 0.8, rationale: 'Transportation expense' };
+    }
+    
+    // Shopping patterns
+    if (merchant.includes('amazon') || merchant.includes('walmart') || description.includes('purchase')) {
+      return { category: 'Shopping', confidence: 0.7, rationale: 'Shopping expense' };
+    }
+    
+    // Default fallback
+    return { category: 'Other', confidence: 0.5, rationale: 'Could not determine specific category' };
+  }
 }
 
 export { ClaudeAIService };

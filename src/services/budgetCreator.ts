@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { keyManagerService } from './keyManagerService';
 import { ClaudeAIService, type CategorizationResult } from './claude-ai-service';
@@ -369,13 +370,17 @@ export class BudgetCreator {
 
       // Update budget categories with new spending
       for (const [categoryId, summary] of newCategoryTotals.entries()) {
-        await supabase
+        const { error } = await supabase
           .from('budget_categories')
           .update({
-            spent_amount: supabase.raw('spent_amount + ?', [summary.totalAmount])
+            spent_amount: summary.totalAmount
           })
           .eq('budget_id', budgetId)
           .eq('category_id', categoryId);
+
+        if (error) {
+          console.warn('Error updating budget category:', error);
+        }
       }
 
       console.log(`Updated budget ${budgetId} with ${newTransactions.length} new transactions`);
