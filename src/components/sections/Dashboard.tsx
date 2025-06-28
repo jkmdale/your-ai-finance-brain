@@ -59,7 +59,7 @@ export const Dashboard = () => {
     try {
       console.log('Fetching dashboard data for user:', user.id);
 
-      // Fetch recent transactions with categories, excluding transfers
+      // Fetch recent transactions with categories, excluding transfers using proper PostgreSQL array syntax
       const { data: transactions } = await supabase
         .from('transactions')
         .select(`
@@ -67,7 +67,7 @@ export const Dashboard = () => {
           categories(name, color)
         `)
         .eq('user_id', user.id)
-        .not('tags', 'cs', '["transfer"]') // Exclude transactions tagged as transfers
+        .not('tags', 'cs', '{transfer}') // Use proper PostgreSQL array syntax
         .order('transaction_date', { ascending: false })
         .limit(10);
 
