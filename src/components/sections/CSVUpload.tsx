@@ -6,6 +6,7 @@ import { useFilePicker } from '@/hooks/useFilePicker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { CSVProcessor, ProcessedCSV } from '@/utils/csvProcessor';
+import { CSVPreview } from '@/components/ui/csv-preview';
 import { DuplicateDetector, DuplicateMatch } from '@/utils/duplicateDetector';
 import { budgetCreator } from '@/services/budgetCreator';
 
@@ -42,12 +43,13 @@ interface ValidationResult {
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'validating'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'validating' | 'preview'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
   const [processedCSV, setProcessedCSV] = useState<ProcessedCSV | null>(null);
   const [showTransactions, setShowTransactions] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [creatingBudget, setCreatingBudget] = useState(false);
   const [recommendingGoals, setRecommendingGoals] = useState(false);
@@ -64,87 +66,6 @@ export const CSVUpload = () => {
     multiple: true,
     onFilesSelected: handleFilesSelected
   });
-
-  // Client-side CSV validation
-  const validateCSV = async (file: File): Promise<ValidationResult> => {
-    try {
-      const text = await file.text();
-      const lines = text.trim().split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
-        return {
-          isValid: false,
-          rowCount: lines.length,
-          columnCount: 0,
-          headers: [],
-          errors: ['CSV must have at least a header row and one data row'],
-          warnings: [],
-          preview: []
-        };
-      }
-
-      // Parse header
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-      
-      // Parse first few rows for preview
-      const preview = lines.slice(0, 6).map(line => 
-        line.split(',').map(cell => cell.trim().replace(/"/g, ''))
-      );
-
-      const errors: string[] = [];
-      const warnings: string[] = [];
-
-      // Check for required columns
-      const normalizedHeaders = headers.map(h => h.toLowerCase());
-      const hasDate = normalizedHeaders.some(h => 
-        h.includes('date') || h.includes('transaction') || h.includes('posting')
-      );
-      const hasDescription = normalizedHeaders.some(h => 
-        h.includes('description') || h.includes('details') || h.includes('particulars')
-      );
-      const hasAmount = normalizedHeaders.some(h => 
-        h.includes('amount') || h.includes('value') || h.includes('debit') || h.includes('credit')
-      );
-
-      if (!hasDate) warnings.push('No date column detected');
-      if (!hasDescription) warnings.push('No description column detected');
-      if (!hasAmount) errors.push('No amount column detected');
-
-      // Check data consistency
-      const expectedColumns = headers.length;
-      let inconsistentRows = 0;
-      for (let i = 1; i < Math.min(lines.length, 10); i++) {
-        const cells = lines[i].split(',');
-        if (cells.length !== expectedColumns) {
-          inconsistentRows++;
-        }
-      }
-
-      if (inconsistentRows > 0) {
-        warnings.push(`${inconsistentRows} rows have inconsistent column counts`);
-      }
-
-      return {
-        isValid: errors.length === 0,
-        rowCount: lines.length - 1, // Exclude header
-        columnCount: headers.length,
-        headers,
-        errors,
-        warnings,
-        preview
-      };
-    } catch (error: any) {
-      return {
-        isValid: false,
-        rowCount: 0,
-        columnCount: 0,
-        headers: [],
-        errors: [`Failed to parse CSV: ${error.message}`],
-        warnings: [],
-        preview: []
-      };
-    }
-  };
 
   // Drag and drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -310,53 +231,72 @@ export const CSVUpload = () => {
       return;
     }
 
-    // Client-side validation first
+    // Start processing the first file for preview
+    const file = files[0]; // For now, handle one file at a time
+    
     setUploadStatus('validating');
-    setUploadMessage('Validating CSV files...');
-    setProgress(10);
-
-    const validationResults: ValidationResult[] = [];
-    for (const file of Array.from(files)) {
-      const result = await validateCSV(file);
-      validationResults.push(result);
-    }
-
-    setValidationResults(validationResults);
+    setUploadMessage('Analyzing CSV structure...');
     setProgress(25);
 
-    // Check if any files failed validation
-    const failedFiles = validationResults.filter(r => !r.isValid);
-    if (failedFiles.length > 0) {
+    try {
+      const text = await file.text();
+      
+      if (!text.trim()) {
+        setUploadStatus('error');
+        setUploadMessage('CSV file is empty');
+        return;
+      }
+
+      setUploadMessage('Processing CSV with AI categorization...');
+      setProgress(50);
+
+      // Process CSV for preview
+      const processed = await csvProcessor.processCSV(text);
+      console.log('✅ CSV processed for preview:', processed);
+
+      setProcessedCSV(processed);
+      setProgress(75);
+
+      if (processed.errors.length > 0) {
+        setUploadStatus('error');
+        setUploadMessage(`Processing errors: ${processed.errors.join('; ')}`);
+        setProgress(0);
+        return;
+      }
+
+      if (processed.transactions.length === 0) {
+        setUploadStatus('error');
+        setUploadMessage(`No valid transactions found. ${processed.skippedRows.length} rows were skipped. Check the preview for details.`);
+        setProgress(100);
+        setShowPreview(true);
+        return;
+      }
+
+      // Show preview
+      setUploadStatus('preview');
+      setUploadMessage(`Ready to process ${processed.transactions.length} transactions (${processed.skippedRows.length} rows will be skipped)`);
+      setShowPreview(true);
+      setProgress(100);
+
+    } catch (error: any) {
+      console.error('❌ Processing error:', error);
       setUploadStatus('error');
-      setUploadMessage(`Validation failed for ${failedFiles.length} file(s). Please fix the issues and try again.`);
+      setUploadMessage(`Processing failed: ${error.message}`);
       setProgress(0);
-      return;
     }
+  }
 
-    // Show validation summary
-    const totalRows = validationResults.reduce((sum, r) => sum + r.rowCount, 0);
-    const totalWarnings = validationResults.reduce((sum, r) => sum + r.warnings.length, 0);
-    
-    setUploadMessage(`✅ Validation complete: ${totalRows} transactions ready to process${totalWarnings > 0 ? ` (${totalWarnings} warnings)` : ''}`);
-    setProgress(40);
+  const handleConfirmUpload = async () => {
+    if (!processedCSV || !user) return;
 
-    // Continue with processing
+    setShowPreview(false);
     setUploading(true);
     setProcessing(true);
     setUploadStatus('processing');
-    setUploadResults(null);
-    setProcessedCSV(null);
-    setUploadMessage('Processing CSV files with AI...');
-    setProgress(50);
+    setUploadMessage('Storing transactions and creating budget...');
+    setProgress(10);
 
     try {
-      let totalProcessed = 0;
-      let totalSkipped = 0;
-      const allTransactions: any[] = [];
-      const allErrors: string[] = [];
-      const allWarnings: string[] = [];
-      const allDuplicates: DuplicateMatch[] = [];
-
       // Get existing transactions for duplicate detection
       console.log('🔍 Fetching existing transactions...');
       const { data: existingTransactions } = await supabase
@@ -366,76 +306,34 @@ export const CSVUpload = () => {
         .limit(1000);
 
       const duplicateDetector = new DuplicateDetector(existingTransactions || []);
-      setProgress(60);
+      const duplicates = duplicateDetector.findDuplicates(processedCSV.transactions);
+      
+      setProgress(30);
 
-      // Process each file
-      for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
-        const file = files[fileIndex];
-        console.log(`📄 Processing: ${file.name}`);
-        
-        try {
-          const text = await file.text();
-          
-          if (!text.trim()) {
-            allErrors.push(`File ${file.name} is empty`);
-            continue;
-          }
-
-          setUploadMessage(`Processing ${file.name} with AI categorization...`);
-          setProgress(60 + (fileIndex / files.length) * 20);
-
-          // Enhanced CSV processing
-          const processed = await csvProcessor.processCSV(text);
-          console.log('✅ CSV processed:', processed.transactions.length, 'transactions');
-          
-          if (processed.errors.length > 0) {
-            allErrors.push(...processed.errors);
-          }
-          
-          if (processed.warnings.length > 0) {
-            allWarnings.push(...processed.warnings);
-          }
-
-          if (processed.transactions.length > 0) {
-            // Check for duplicates
-            const duplicates = duplicateDetector.findDuplicates(processed.transactions);
-            allDuplicates.push(...duplicates);
-            
-            setProcessedCSV(processed);
-            
-            // Send to backend for storage
-            setUploadMessage('Storing transactions and creating budget...');
-            const { data, error } = await supabase.functions.invoke('process-csv', {
-              body: { 
-                csvData: text,
-                fileName: file.name,
-                userId: user.id
-              }
-            });
-
-            if (error) {
-              console.error('❌ Backend error:', error);
-              allErrors.push(`Error storing ${file.name}: ${error.message}`);
-              totalSkipped += processed.transactions.length;
-            } else {
-              totalProcessed += data.processed || 0;
-              totalSkipped += (processed.transactions.length - (data.processed || 0));
-              allTransactions.push(...(data.transactions || []));
-            }
-          }
-        } catch (fileError: any) {
-          console.error(`❌ File error:`, fileError);
-          allErrors.push(`Error processing ${file.name}: ${fileError.message}`);
+      // Send to backend for storage (convert our Transaction format to backend format)
+      const csvData = generateCSVFromTransactions(processedCSV.transactions);
+      const { data, error } = await supabase.functions.invoke('process-csv', {
+        body: { 
+          csvData,
+          fileName: 'processed_transactions.csv',
+          userId: user.id
         }
+      });
+
+      if (error) {
+        throw new Error(`Backend storage failed: ${error.message}`);
       }
 
-      setProgress(80);
+      setProgress(60);
+
+      const totalProcessed = data.processed || 0;
+      const allTransactions = data.transactions || [];
 
       if (totalProcessed > 0) {
         setUploadStatus('success');
-        setUploadMessage(`Processing AI analysis and creating smart budget...`);
+        setUploadMessage('Running AI analysis and creating smart budget...');
         
-        // Run AI analysis, budget creation, and goal recommendations in parallel
+        // Run AI analysis, budget creation, and goal recommendations
         const [analysisResult, budgetResult] = await Promise.all([
           analyzeTransactions(allTransactions),
           createSmartBudget(allTransactions)
@@ -443,28 +341,26 @@ export const CSVUpload = () => {
 
         setProgress(90);
 
-        // Then create goals based on budget result
         const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
-
         setProgress(100);
 
         // Update final results
         setUploadResults({
           success: true,
           processed: totalProcessed,
-          skipped: totalSkipped,
+          skipped: processedCSV.skippedRows.length,
           transactions: allTransactions,
-          accountBalance: 0,
-          bankFormat: processedCSV?.bankFormat,
-          duplicates: allDuplicates,
-          errors: allErrors,
-          warnings: allWarnings,
+          accountBalance: data.accountBalance || 0,
+          bankFormat: processedCSV.bankFormat,
+          duplicates,
+          errors: processedCSV.errors,
+          warnings: processedCSV.warnings,
           analysis: analysisResult,
           budgetCreated: !!budgetResult,
           goalsRecommended: goalResult
         });
 
-        // Update success message with detailed feedback
+        // Update success message
         const features = [];
         if (analysisResult) features.push('AI insights');
         if (budgetResult) features.push('smart budget');
@@ -473,14 +369,14 @@ export const CSVUpload = () => {
         }
         
         setUploadMessage(
-          `✅ Successfully processed ${totalProcessed} transactions${totalSkipped > 0 ? `, ${totalSkipped} skipped` : ''} and created ${features.join(', ')}`
+          `✅ Successfully processed ${totalProcessed} transactions and created ${features.join(', ')}`
         );
 
         // Notify other components
         window.dispatchEvent(new CustomEvent('csv-upload-complete', {
           detail: { 
             processed: totalProcessed,
-            skipped: totalSkipped,
+            skipped: processedCSV.skippedRows.length,
             transactions: allTransactions,
             budgetCreated: !!budgetResult,
             goalsCreated: goalResult?.createdGoals?.length || 0
@@ -489,12 +385,7 @@ export const CSVUpload = () => {
         
       } else {
         setUploadStatus('error');
-        setUploadMessage(
-          allErrors.length > 0 
-            ? `Processing failed: ${allErrors.join('; ')}`
-            : `No transactions processed. ${allWarnings.join('; ')}`
-        );
-        setProgress(0);
+        setUploadMessage('No transactions were stored successfully');
       }
     } catch (error: any) {
       console.error('❌ Upload error:', error);
@@ -504,20 +395,30 @@ export const CSVUpload = () => {
     } finally {
       setUploading(false);
       setProcessing(false);
-      setTimeout(() => setProgress(0), 2000); // Reset progress after delay
+      setTimeout(() => setProgress(0), 2000);
     }
-  }
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.9) return 'text-green-400';
-    if (confidence >= 0.7) return 'text-yellow-400';
-    return 'text-red-400';
   };
 
-  const getConfidenceBadge = (confidence: number) => {
-    if (confidence >= 0.9) return 'bg-green-500/20 text-green-300';
-    if (confidence >= 0.7) return 'bg-yellow-500/20 text-yellow-300';
-    return 'bg-red-500/20 text-red-300';
+  const handleCancelPreview = () => {
+    setShowPreview(false);
+    setProcessedCSV(null);
+    setUploadStatus('idle');
+    setUploadMessage('');
+    setProgress(0);
+  };
+
+  // Helper function to convert our Transaction format back to CSV for backend
+  const generateCSVFromTransactions = (transactions: any[]): string => {
+    const headers = ['Date', 'Description', 'Amount'];
+    const rows = transactions.map(t => [
+      t.date,
+      t.description,
+      t.isIncome ? t.amount.toString() : (-t.amount).toString()
+    ]);
+    
+    return [headers, ...rows].map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
   };
 
   return (
@@ -528,7 +429,7 @@ export const CSVUpload = () => {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Smart CSV Import</h3>
-          <p className="text-white/60 text-sm">AI-powered categorization, budget creation & SMART goals</p>
+          <p className="text-white/60 text-sm">Enhanced parser with preview & detailed feedback</p>
         </div>
       </div>
 
@@ -539,143 +440,67 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
-        {/* Enhanced Drop Zone */}
-        <div className="relative">
-          <div
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={openFilePicker}
-            className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              dragActive
-                ? 'border-blue-400 bg-blue-500/20 scale-105'
-                : uploading || !user || isPickerOpen
-                ? 'border-white/20 bg-white/5 cursor-not-allowed'
-                : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
-            }`}
-          >
-            <div className="text-center">
-              {processing || isPickerOpen ? (
-                <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
-              ) : (
-                <div className="relative">
-                  <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
-                  {dragActive && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
-                  )}
-                </div>
-              )}
-              <p className="text-white/80 font-medium">
-                {processing ? 'Processing with AI...' : 
-                 isPickerOpen ? 'Opening file picker...' :
-                 dragActive ? 'Drop CSV files here!' :
-                 !user ? 'Please log in to upload' : 'Click to upload or drag & drop CSV files'}
-              </p>
-              <p className="text-white/50 text-sm mt-1">
-                {!user ? 'Authentication required' : 'Auto-categorization + Budget + SMART Goals'}
-              </p>
-            </div>
-          </div>
+        {/* Show CSV Preview */}
+        {showPreview && processedCSV && (
+          <CSVPreview
+            processedData={processedCSV}
+            onConfirm={handleConfirmUpload}
+            onCancel={handleCancelPreview}
+          />
+        )}
 
-          {/* Progress Bar */}
-          {progress > 0 && (
-            <div className="mt-3">
-              <Progress value={progress} className="h-2" />
-              <p className="text-white/60 text-xs mt-1 text-center">{progress}% complete</p>
-            </div>
-          )}
-        </div>
-
-        {/* Validation Results */}
-        {validationResults.length > 0 && uploadStatus === 'error' && (
-          <div className="space-y-3">
-            {validationResults.map((result, index) => (
-              <div key={index} className={`p-4 rounded-lg border ${
-                result.isValid 
-                  ? 'bg-green-500/20 border-green-500/30' 
-                  : 'bg-red-500/20 border-red-500/30'
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-white font-medium">File {index + 1} Validation</h4>
-                  {result.isValid ? (
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <AlertCircle className="w-5 h-5 text-red-400" />
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2 text-sm mb-3">
-                  <div>
-                    <span className="text-white/70">Rows:</span>
-                    <p className="text-white">{result.rowCount}</p>
-                  </div>
-                  <div>
-                    <span className="text-white/70">Columns:</span>
-                    <p className="text-white">{result.columnCount}</p>
-                  </div>
-                  <div>
-                    <span className="text-white/70">Status:</span>
-                    <p className={result.isValid ? 'text-green-400' : 'text-red-400'}>
-                      {result.isValid ? 'Valid' : 'Invalid'}
-                    </p>
-                  </div>
-                </div>
-
-                {result.errors.length > 0 && (
-                  <div className="mb-2">
-                    <p className="text-red-300 text-sm font-medium mb-1">Errors:</p>
-                    <ul className="text-red-300 text-xs space-y-1">
-                      {result.errors.map((error, i) => (
-                        <li key={i}>• {error}</li>
-                      ))}
-                    </ul>
+        {/* Enhanced Drop Zone - Hide when showing preview */}
+        {!showPreview && (
+          <div className="relative">
+            <div
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={openFilePicker}
+              className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
+                dragActive
+                  ? 'border-blue-400 bg-blue-500/20 scale-105'
+                  : uploading || !user || isPickerOpen
+                  ? 'border-white/20 bg-white/5 cursor-not-allowed'
+                  : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
+              }`}
+            >
+              <div className="text-center">
+                {processing || isPickerOpen ? (
+                  <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
+                ) : (
+                  <div className="relative">
+                    <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+                    {dragActive && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
+                    )}
                   </div>
                 )}
-
-                {result.warnings.length > 0 && (
-                  <div className="mb-2">
-                    <p className="text-yellow-300 text-sm font-medium mb-1">Warnings:</p>
-                    <ul className="text-yellow-300 text-xs space-y-1">
-                      {result.warnings.map((warning, i) => (
-                        <li key={i}>• {warning}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.preview.length > 0 && (
-                  <div>
-                    <p className="text-white/70 text-sm mb-2">Preview:</p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-white/20">
-                            {result.headers.map((header, i) => (
-                              <th key={i} className="text-left text-white/70 p-1">{header}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {result.preview.slice(1, 4).map((row, i) => (
-                            <tr key={i} className="border-b border-white/10">
-                              {row.map((cell, j) => (
-                                <td key={j} className="text-white/80 p-1">{cell}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                <p className="text-white/80 font-medium">
+                  {processing ? 'Processing with enhanced parser...' : 
+                   isPickerOpen ? 'Opening file picker...' :
+                   dragActive ? 'Drop CSV files here!' :
+                   !user ? 'Please log in to upload' : 'Click to upload or drag & drop CSV files'}
+                </p>
+                <p className="text-white/50 text-sm mt-1">
+                  {!user ? 'Authentication required' : 'Enhanced validation + Preview + Smart categorization'}
+                </p>
               </div>
-            ))}
+            </div>
+
+            {/* Progress Bar */}
+            {progress > 0 && !showPreview && (
+              <div className="mt-3">
+                <Progress value={progress} className="h-2" />
+                <p className="text-white/60 text-xs mt-1 text-center">{progress}% complete</p>
+              </div>
+            )}
           </div>
         )}
 
         {/* Status Messages */}
-        {uploadStatus !== 'idle' && uploadStatus !== 'error' && (
+        {uploadStatus !== 'idle' && uploadStatus !== 'preview' && (
           <div className={`flex items-start space-x-2 p-4 rounded-lg ${
             uploadStatus === 'success' 
               ? 'bg-green-500/20 border border-green-500/30' 
@@ -689,6 +514,8 @@ export const CSVUpload = () => {
               <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
             ) : uploadStatus === 'validating' ? (
               <Loader2 className="w-5 h-5 text-purple-400 animate-spin mt-0.5 flex-shrink-0" />
+            ) : uploadStatus === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
             ) : (
               <Loader2 className="w-5 h-5 text-blue-400 animate-spin mt-0.5 flex-shrink-0" />
             )}
@@ -696,10 +523,12 @@ export const CSVUpload = () => {
               <span className={`text-sm ${
                 uploadStatus === 'success' ? 'text-green-300' : 
                 uploadStatus === 'validating' ? 'text-purple-300' :
+                uploadStatus === 'error' ? 'text-red-300' :
                 'text-blue-300'
               }`}>
                 {uploadMessage}
               </span>
+              
               {/* Show processing status */}
               {(analyzing || creatingBudget || recommendingGoals) && (
                 <div className="mt-2 space-y-1">
@@ -727,174 +556,22 @@ export const CSVUpload = () => {
           </div>
         )}
 
-        {/* Bank Format Detection */}
-        {processedCSV?.bankFormat && (
-          <div className="bg-white/10 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <Info className="w-5 h-5 text-blue-400" />
-              <h4 className="text-white font-medium">Bank Format Detected</h4>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-white/70">Bank:</span>
-                <p className="text-white font-medium">{processedCSV.bankFormat.name}</p>
-              </div>
-              <div>
-                <span className="text-white/70">Confidence:</span>
-                <p className={`font-medium ${getConfidenceColor(processedCSV.bankFormat.confidence)}`}>
-                  {Math.round(processedCSV.bankFormat.confidence * 100)}%
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Enhanced Results Summary */}
-        {uploadResults && (
-          <div className="bg-white/10 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-white font-medium">Smart Processing Results</h4>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setShowTransactions(!showTransactions)}
-                  className="flex items-center space-x-2 text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  <span className="text-sm">{showTransactions ? 'Hide' : 'View'} Transactions</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-xl font-bold text-green-400 mb-1">{uploadResults.processed}</div>
-                <div className="text-white/60 text-xs">Processed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-yellow-400 mb-1">{uploadResults.skipped}</div>
-                <div className="text-white/60 text-xs">Skipped</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-green-400 mb-1">
-                  {uploadResults.budgetCreated ? '✓' : '✗'}
-                </div>
-                <div className="text-white/60 text-xs">Smart Budget</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-blue-400 mb-1">
-                  {uploadResults.goalsRecommended?.createdGoals?.length || 0}
-                </div>
-                <div className="text-white/60 text-xs">SMART Goals</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-red-400 mb-1">
-                  {uploadResults.duplicates?.length || 0}
-                </div>
-                <div className="text-white/60 text-xs">Duplicates</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AI Analysis Results */}
-        {uploadResults?.analysis && (
-          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <TrendingUp className="w-5 h-5 text-purple-400" />
-              <h4 className="text-white font-medium">AI Financial Analysis</h4>
-            </div>
-            <p className="text-white/80 text-sm leading-relaxed">{uploadResults.analysis}</p>
-          </div>
-        )}
-
-        {/* SMART Goals Recommendations */}
-        {uploadResults?.goalsRecommended?.aiRecommendations && (
-          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <Target className="w-5 h-5 text-green-400" />
-              <h4 className="text-white font-medium">SMART Goals Recommendations</h4>
-            </div>
-            <p className="text-white/80 text-sm leading-relaxed mb-3">
-              {uploadResults.goalsRecommended.aiRecommendations}
-            </p>
-            {uploadResults.goalsRecommended.createdGoals && uploadResults.goalsRecommended.createdGoals.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-white/20">
-                <p className="text-green-300 text-xs font-medium mb-2">
-                  ✓ Created {uploadResults.goalsRecommended.createdGoals.length} goals automatically
-                </p>
-                <div className="space-y-2">
-                  {uploadResults.goalsRecommended.createdGoals.map((goal: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between text-xs">
-                      <span className="text-white/70">{goal.name}</span>
-                      <span className="text-green-300">${goal.target_amount?.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Transaction Table */}
-        {showTransactions && processedCSV?.transactions && processedCSV.transactions.length > 0 && (
-          <div className="bg-white/10 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-3">AI Categorized Transactions</h4>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/20">
-                    <TableHead className="text-white/70">Date</TableHead>
-                    <TableHead className="text-white/70">Description</TableHead>
-                    <TableHead className="text-white/70">Amount</TableHead>
-                    <TableHead className="text-white/70">Category</TableHead>
-                    <TableHead className="text-white/70">Confidence</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {processedCSV.transactions.slice(0, 10).map((transaction, index) => (
-                    <TableRow key={index} className="border-white/10">
-                      <TableCell className="text-white/80 text-sm">
-                        {new Date(transaction.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-white/80 text-sm">{transaction.description}</TableCell>
-                      <TableCell className={`text-sm font-medium ${transaction.isIncome ? 'text-green-400' : 'text-white'}`}>
-                        {transaction.isIncome ? '+' : '-'}${transaction.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          transaction.isIncome ? 'bg-green-500/20 text-green-300' : 'bg-purple-500/20 text-purple-300'
-                        }`}>
-                          {transaction.category || 'Other'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 text-xs rounded-full ${getConfidenceBadge(transaction.confidence)}`}>
-                          {Math.round(transaction.confidence * 100)}%
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
-
         {/* Enhanced Features List */}
-        <div className="bg-white/10 rounded-lg p-4">
-          <h4 className="text-white font-medium mb-2">🚀 Smart Finance Features:</h4>
-          <ul className="text-white/70 text-sm space-y-1">
-            <li>• <strong>Client-side Validation:</strong> Instant CSV format validation before upload</li>
-            <li>• <strong>Drag & Drop:</strong> Easy file upload with progress tracking</li>
-            <li>• <strong>Detailed Feedback:</strong> Complete processing summary with skipped transactions</li>
-            <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization with confidence scoring</li>
-            <li>• <strong>Smart Budget Creation:</strong> Automatic budget generation based on spending patterns</li>
-            <li>• <strong>SMART Goals:</strong> Personalized financial goals (Specific, Measurable, Achievable, Relevant, Time-bound)</li>
-            <li>• <strong>Bank Format Detection:</strong> Supports 50+ bank formats with auto-detection</li>
-            <li>• <strong>Duplicate Detection:</strong> Advanced duplicate detection with fuzzy matching</li>
-            <li>• <strong>Financial Analysis:</strong> AI-powered insights and recommendations</li>
-          </ul>
-        </div>
+        {!showPreview && (
+          <div className="bg-white/10 rounded-lg p-4">
+            <h4 className="text-white font-medium mb-2">🚀 Enhanced CSV Processing Features:</h4>
+            <ul className="text-white/70 text-sm space-y-1">
+              <li>• <strong>Tolerant Parser:</strong> Handles various CSV formats, separators, and edge cases</li>
+              <li>• <strong>Detailed Preview:</strong> See exactly what will be processed before uploading</li>
+              <li>• <strong>Smart Error Recovery:</strong> Identifies and explains skipped rows with suggestions</li>
+              <li>• <strong>Flexible Date Parsing:</strong> Supports multiple date formats with auto-detection</li>
+              <li>• <strong>Advanced Amount Parsing:</strong> Handles different currency symbols and separators</li>
+              <li>• <strong>Comprehensive Logging:</strong> Detailed processing information for debugging</li>
+              <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization with confidence scoring</li>
+              <li>• <strong>Bank Format Detection:</strong> Automatically detects and adapts to bank-specific formats</li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
