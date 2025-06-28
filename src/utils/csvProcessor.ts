@@ -1,3 +1,4 @@
+
 import { BankFormat, detectBankFormat } from './bankFormats';
 
 export interface Transaction {
@@ -12,8 +13,8 @@ export interface Transaction {
   reference?: string;
   isIncome: boolean;
   confidence: number;
-  rowNumber?: number; // Track original row for debugging
-  parseWarnings?: string[]; // Track any parsing issues
+  rowNumber?: number;
+  parseWarnings?: string[];
 }
 
 export interface SkippedRow {
@@ -47,9 +48,8 @@ export class CSVProcessor {
 
   private parseCSV(csvText: string): { headers: string[], rows: string[][], skippedRows: SkippedRow[] } {
     try {
-      console.log('📄 Starting CSV parsing...');
+      console.log('📄 Starting flexible CSV parsing...');
       
-      // Handle different line endings and clean up
       const normalizedText = csvText
         .replace(/\r\n/g, '\n')
         .replace(/\r/g, '\n')
@@ -59,23 +59,33 @@ export class CSVProcessor {
         throw new Error('CSV file is empty');
       }
 
-      // Split into lines and filter out completely empty lines
-      const lines = normalizedText.split('\n').filter(line => line.trim().length > 0);
-      
-      if (lines.length < 2) {
-        throw new Error('CSV file must have at least a header row and one data row');
-      }
+      const lines = normalizedText.split('\n');
+      console.log(`📊 Found ${lines.length} total lines`);
 
-      console.log(`📊 Found ${lines.length} non-empty lines`);
+      // Auto-detect separator by analyzing first few lines
+      const detectSeparator = (sampleLines: string[]): string => {
+        const separators = [',', ';', '\t', '|'];
+        const separatorCounts = separators.map(sep => ({
+          separator: sep,
+          avgCount: sampleLines.reduce((sum, line) => sum + (line.split(sep).length - 1), 0) / sampleLines.length
+        }));
+        
+        // Find separator with highest average count (and at least 2 columns)
+        const bestSeparator = separatorCounts
+          .filter(s => s.avgCount >= 1)
+          .sort((a, b) => b.avgCount - a.avgCount)[0];
+        
+        return bestSeparator?.separator || ',';
+      };
+
+      const sampleLines = lines.slice(0, Math.min(5, lines.length)).filter(line => line.trim());
+      const separator = detectSeparator(sampleLines);
+      console.log(`🔍 Detected separator: "${separator === '\t' ? '\\t' : separator}"`);
 
       const parseCSVLine = (line: string, lineNumber: number): { cells: string[], error?: string } => {
         try {
-          // Handle different separators (comma, semicolon, tab)
-          let separator = ',';
-          if (line.includes(';') && line.split(';').length > line.split(',').length) {
-            separator = ';';
-          } else if (line.includes('\t') && line.split('\t').length > line.split(',').length) {
-            separator = '\t';
+          if (!line.trim()) {
+            return { cells: [] };
           }
 
           const result: string[] = [];
@@ -93,7 +103,7 @@ export class CSVProcessor {
             } else if (char === quoteChar && inQuotes) {
               if (nextChar === quoteChar) {
                 current += quoteChar;
-                i++; // Skip next quote
+                i++;
               } else {
                 inQuotes = false;
               }
@@ -107,9 +117,8 @@ export class CSVProcessor {
           
           result.push(current.trim());
           
-          // Clean up cells
+          // Clean up cells - remove surrounding quotes
           const cleanedCells = result.map(cell => {
-            // Remove surrounding quotes if they exist
             if ((cell.startsWith('"') && cell.endsWith('"')) || 
                 (cell.startsWith("'") && cell.endsWith("'"))) {
               cell = cell.slice(1, -1);
@@ -120,85 +129,67 @@ export class CSVProcessor {
           return { cells: cleanedCells };
         } catch (error) {
           return { 
-            cells: line.split(',').map(c => c.trim()), 
+            cells: line.split(separator).map(c => c.trim()), 
             error: `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}` 
           };
         }
       };
 
-      // Parse header
-      const headerResult = parseCSVLine(lines[0], 1);
-      if (headerResult.error) {
-        throw new Error(`Header parsing failed: ${headerResult.error}`);
-      }
-      const headers = headerResult.cells;
+      // Find header row (skip empty lines and look for line with reasonable column count)
+      let headerRowIndex = -1;
+      let headers: string[] = [];
       
-      console.log(`📋 Headers found: ${headers.join(', ')}`);
+      for (let i = 0; i < Math.min(10, lines.length); i++) {
+        const parseResult = parseCSVLine(lines[i], i + 1);
+        if (parseResult.cells.length >= 3 && parseResult.cells.some(cell => cell.length > 0)) {
+          headers = parseResult.cells;
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      if (headerRowIndex === -1) {
+        throw new Error('No valid header row found in first 10 lines');
+      }
+
+      console.log(`📋 Headers found at row ${headerRowIndex + 1}: ${headers.join(', ')}`);
 
       // Parse data rows
       const rows: string[][] = [];
       const skippedRows: SkippedRow[] = [];
       
-      for (let i = 1; i < lines.length; i++) {
+      for (let i = headerRowIndex + 1; i < lines.length; i++) {
         const line = lines[i];
         const rowNumber = i + 1;
         
-        // Skip obviously empty rows
-        if (!line.trim() || line.trim() === ',' || line.trim() === ';;') {
-          skippedRows.push({
-            rowNumber,
-            data: [line],
-            reason: 'Empty row',
-            suggestions: ['Remove empty rows from CSV']
-          });
+        // Skip completely empty lines
+        if (!line.trim()) {
           continue;
         }
 
         const parseResult = parseCSVLine(line, rowNumber);
         const cells = parseResult.cells;
         
-        // Check for minimum data requirements
-        if (cells.length === 0) {
-          skippedRows.push({
-            rowNumber,
-            data: [line],
-            reason: 'No data found in row',
-            suggestions: ['Check CSV formatting']
-          });
+        // Skip rows with no meaningful data
+        if (cells.length === 0 || cells.every(cell => !cell.trim())) {
           continue;
         }
 
-        // Check if row has significantly fewer columns than header
-        if (cells.length < headers.length - 2) {
-          skippedRows.push({
-            rowNumber,
-            data: cells,
-            reason: `Too few columns (${cells.length} vs ${headers.length} expected)`,
-            suggestions: ['Check for missing commas or data', 'Verify CSV format consistency']
-          });
-          continue;
-        }
-
-        // Pad row with empty strings if needed
+        // Allow rows with fewer columns - pad with empty strings
         while (cells.length < headers.length) {
           cells.push('');
         }
 
-        // Check if row has any non-empty data
-        if (cells.every(cell => !cell.trim())) {
-          skippedRows.push({
-            rowNumber,
-            data: cells,
-            reason: 'All cells are empty',
-            suggestions: ['Remove empty data rows']
-          });
+        // Check if row has at least some data in key columns
+        const hasAnyData = cells.some(cell => cell.trim().length > 0);
+        if (!hasAnyData) {
           continue;
         }
 
         rows.push(cells);
       }
 
-      console.log(`✅ Parsed: ${headers.length} headers, ${rows.length} data rows, ${skippedRows.length} skipped rows`);
+      console.log(`✅ Flexible parsing complete: ${headers.length} headers, ${rows.length} data rows`);
       
       return { headers, rows, skippedRows };
     } catch (error) {
@@ -216,19 +207,24 @@ export class CSVProcessor {
     }
     
     const cleanDate = dateString.trim();
-    
     console.log(`🗓️ Parsing date: "${cleanDate}"`);
     
-    // Common date patterns with more flexibility
+    // Enhanced date patterns supporting multiple formats
     const patterns = [
+      // DD/MM/YYYY and DD-MM-YYYY
       { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy', name: 'DD/MM/YYYY' },
+      // MM/DD/YYYY (US format)
+      { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'mdy', name: 'MM/DD/YYYY (US)' },
+      // YYYY-MM-DD (ISO format)
+      { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd', name: 'YYYY-MM-DD' },
+      // DD/MM/YY
       { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy', name: 'DD/MM/YY' },
-      { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd', name: 'YYYY/MM/DD' },
+      // Compact formats
       { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy', name: 'DDMMYYYY' },
-      { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd', name: 'YYYYMMDD' },
-      { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, type: 'mdy', name: 'MM/DD/YYYY (US)' }
+      { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd', name: 'YYYYMMDD' }
     ];
 
+    // Try each pattern
     for (const pattern of patterns) {
       const match = cleanDate.match(pattern.regex);
       if (match) {
@@ -238,13 +234,18 @@ export class CSVProcessor {
           if (pattern.type === 'ymd') {
             [, year, month, day] = match;
           } else if (pattern.type === 'mdy') {
+            // For ambiguous cases, try both interpretations
             [, month, day, year] = match;
+            // If day > 12, assume DD/MM format instead
+            if (parseInt(day) > 12 && parseInt(month) <= 12) {
+              [day, month] = [month, day];
+              warnings.push(`Row ${rowNumber || 'unknown'}: Assumed DD/MM format due to day > 12`);
+            }
           } else {
             [, day, month, year] = match;
             if (year.length === 2) {
               const yearNum = parseInt(year);
               year = yearNum > 50 ? `19${year}` : `20${year}`;
-              warnings.push(`Row ${rowNumber || 'unknown'}: Assumed 20th century for year ${yearNum}`);
             }
           }
           
@@ -253,39 +254,27 @@ export class CSVProcessor {
           const monthNum = parseInt(month);
           const yearNum = parseInt(year);
           
-          if (monthNum < 1 || monthNum > 12) {
-            warnings.push(`Row ${rowNumber || 'unknown'}: Invalid month ${monthNum}`);
+          if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
             continue;
           }
           
-          if (dayNum < 1 || dayNum > 31) {
-            warnings.push(`Row ${rowNumber || 'unknown'}: Invalid day ${dayNum}`);
-            continue;
-          }
-          
-          if (yearNum < 1900 || yearNum > 2100) {
-            warnings.push(`Row ${rowNumber || 'unknown'}: Unusual year ${yearNum}`);
-          }
-          
-          // Create and validate date
+          // Create and validate actual date
           const dateObj = new Date(yearNum, monthNum - 1, dayNum);
           if (dateObj.getFullYear() === yearNum && 
               dateObj.getMonth() === monthNum - 1 && 
               dateObj.getDate() === dayNum) {
-            console.log(`✅ Date parsed as ${pattern.name}: ${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
-            return { 
-              date: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 
-              warnings 
-            };
+            
+            const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            console.log(`✅ Date parsed as ${pattern.name}: ${formattedDate}`);
+            return { date: formattedDate, warnings };
           }
         } catch (error) {
-          warnings.push(`Row ${rowNumber || 'unknown'}: Date parsing error with pattern ${pattern.name}`);
           continue;
         }
       }
     }
     
-    // Try JavaScript Date parsing as fallback
+    // Fallback to JavaScript Date parsing
     try {
       const jsDate = new Date(cleanDate);
       if (!isNaN(jsDate.getTime()) && jsDate.getFullYear() > 1900) {
@@ -293,7 +282,7 @@ export class CSVProcessor {
         return { date: jsDate.toISOString().split('T')[0], warnings };
       }
     } catch (error) {
-      // Ignore
+      // Continue to default
     }
     
     warnings.push(`Row ${rowNumber || 'unknown'}: Could not parse date "${cleanDate}", using today`);
@@ -304,39 +293,38 @@ export class CSVProcessor {
     const warnings: string[] = [];
     
     if (!amountString?.trim()) {
-      warnings.push(`Row ${rowNumber || 'unknown'}: Empty amount, using 0`);
       return { amount: 0, warnings };
     }
     
     console.log(`💰 Parsing amount: "${amountString}"`);
     
-    // Remove currency symbols, spaces, and commas
-    let cleaned = amountString.replace(/[£$€¥₹,\s]/g, '').trim();
+    const original = amountString.trim();
     
-    // Handle negative amounts in brackets or with minus
-    const isNegative = /^\(.*\)$/.test(amountString) || cleaned.startsWith('-');
-    cleaned = cleaned.replace(/[()]/g, '').replace(/^-/, '');
+    // Remove currency symbols and spaces
+    let cleaned = original.replace(/[£$€¥₹\s]/g, '');
     
-    // Handle different decimal separators
+    // Handle negative amounts - check for brackets or minus sign
+    const isNegative = /^\(.*\)$/.test(original) || cleaned.startsWith('-') || original.includes('DR') || original.includes('DEBIT');
+    cleaned = cleaned.replace(/[()]/g, '').replace(/^-/, '').replace(/DR|DEBIT/gi, '');
+    
+    // Handle different decimal/thousands separators
     if (cleaned.includes('.') && cleaned.includes(',')) {
-      // Assume comma is thousands separator if both present
+      // Both present - assume comma is thousands separator
       cleaned = cleaned.replace(/,/g, '');
     } else if (cleaned.includes(',')) {
-      // Check if comma is likely decimal separator
+      // Only comma - check if it's likely decimal separator
       const commaIndex = cleaned.lastIndexOf(',');
       const afterComma = cleaned.substring(commaIndex + 1);
       if (afterComma.length <= 2 && /^\d+$/.test(afterComma)) {
-        // Likely decimal separator
         cleaned = cleaned.replace(',', '.');
       } else {
-        // Likely thousands separator
         cleaned = cleaned.replace(/,/g, '');
       }
     }
     
     const numericValue = parseFloat(cleaned);
     if (isNaN(numericValue)) {
-      warnings.push(`Row ${rowNumber || 'unknown'}: Could not parse amount "${amountString}", using 0`);
+      warnings.push(`Row ${rowNumber || 'unknown'}: Could not parse amount "${original}", using 0`);
       return { amount: 0, warnings };
     }
     
@@ -348,7 +336,6 @@ export class CSVProcessor {
   private standardizeMerchant(description: string): string {
     if (!description) return '';
     
-    // Clean up common bank prefixes and suffixes
     const cleaned = description
       .replace(/^(TST\*|SQ \*|AMZN MKTP|PAYPAL \*|POS |ATM |EFTPOS |PURCHASE |PAYMENT |DEBIT |CREDIT )/i, '')
       .replace(/\*\w+$/, '')
@@ -356,14 +343,11 @@ export class CSVProcessor {
       .replace(/[^\w\s&'-]/g, '')
       .trim();
 
-    // Common merchant mappings
     const mappings: { [key: string]: string } = {
       'AMZN': 'Amazon', 'AMAZON': 'Amazon',
       'SPOTIFY': 'Spotify', 'NETFLIX': 'Netflix',
       'UBER': 'Uber', 'MCDONALD': 'McDonald\'s',
-      'STARBUCKS': 'Starbucks', 'PAYPAL': 'PayPal',
-      'COUNTDOWN': 'Countdown', 'PAKNSAVE': 'Pak\'nSave',
-      'NEWWORLD': 'New World'
+      'STARBUCKS': 'Starbucks', 'PAYPAL': 'PayPal'
     };
 
     const upperCleaned = cleaned.toUpperCase();
@@ -394,17 +378,16 @@ export class CSVProcessor {
       return { category: 'Other Income', confidence: 0.7 };
     }
 
-    // Expense categorization with more patterns
+    // Expense categorization
     const categories = [
       { pattern: /\b(rent|mortgage|property|utilities|electricity|gas|water|internet|phone|broadband)\b/, category: 'Housing & Utilities', confidence: 0.9 },
-      { pattern: /\b(countdown|paknsave|pak.n.save|newworld|new.world|woolworths|coles|grocery|supermarket|food|fresh.choice)\b/, category: 'Groceries', confidence: 0.9 },
-      { pattern: /\b(uber|taxi|bus|train|fuel|petrol|gas|parking|transport|bp|z.energy|mobil)\b/, category: 'Transportation', confidence: 0.85 },
-      { pattern: /\b(restaurant|cafe|takeaway|delivery|dining|mcdonald|kfc|starbucks|domino|pizza)\b/, category: 'Dining Out', confidence: 0.8 },
-      { pattern: /\b(netflix|spotify|subscription|entertainment|movie|cinema|games|steam)\b/, category: 'Entertainment', confidence: 0.85 },
-      { pattern: /\b(doctor|hospital|pharmacy|medical|health|dental|chemist)\b/, category: 'Healthcare', confidence: 0.9 },
-      { pattern: /\b(amazon|shopping|retail|clothing|electronics|warehouse|trademe|harvey.norman)\b/, category: 'Shopping', confidence: 0.75 },
-      { pattern: /\b(insurance|life|car|health|home|aia|southern.cross)\b/, category: 'Insurance', confidence: 0.9 },
-      { pattern: /\b(transfer|payment|loan|credit|atm|withdrawal|ird|tax)\b/, category: 'Transfers', confidence: 0.7 }
+      { pattern: /\b(grocery|supermarket|food|fresh|countdown|paknsave|woolworths|coles)\b/, category: 'Groceries', confidence: 0.9 },
+      { pattern: /\b(uber|taxi|bus|train|fuel|petrol|gas|parking|transport)\b/, category: 'Transportation', confidence: 0.85 },
+      { pattern: /\b(restaurant|cafe|takeaway|delivery|dining|mcdonald|kfc|starbucks)\b/, category: 'Dining Out', confidence: 0.8 },
+      { pattern: /\b(netflix|spotify|subscription|entertainment|movie|cinema|games)\b/, category: 'Entertainment', confidence: 0.85 },
+      { pattern: /\b(doctor|hospital|pharmacy|medical|health|dental)\b/, category: 'Healthcare', confidence: 0.9 },
+      { pattern: /\b(amazon|shopping|retail|clothing|electronics)\b/, category: 'Shopping', confidence: 0.75 },
+      { pattern: /\b(insurance|life|car|health|home)\b/, category: 'Insurance', confidence: 0.9 }
     ];
 
     for (const { pattern, category, confidence } of categories) {
@@ -416,6 +399,62 @@ export class CSVProcessor {
     return { category: 'Uncategorised', confidence: 0.5 };
   }
 
+  // Enhanced flexible column finding
+  private findColumnIndex(headers: string[], possibleNames: string[]): { index: number, matchedName?: string, confidence: number } {
+    const normalizedHeaders = headers.map(h => h.toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
+    
+    // Score each header against possible names
+    const scores = headers.map((header, index) => {
+      const normalizedHeader = normalizedHeaders[index];
+      let bestScore = 0;
+      let matchedName = '';
+      
+      for (const name of possibleNames) {
+        const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // Exact match
+        if (normalizedHeader === normalizedName) {
+          bestScore = Math.max(bestScore, 1.0);
+          matchedName = header;
+        }
+        // Contains match
+        else if (normalizedHeader.includes(normalizedName) || normalizedName.includes(normalizedHeader)) {
+          const containsScore = Math.min(normalizedName.length, normalizedHeader.length) / 
+                               Math.max(normalizedName.length, normalizedHeader.length);
+          if (containsScore > bestScore) {
+            bestScore = containsScore;
+            matchedName = header;
+          }
+        }
+        // Partial word match
+        else {
+          const words1 = normalizedHeader.split(/\W+/);
+          const words2 = normalizedName.split(/\W+/);
+          const commonWords = words1.filter(w => words2.includes(w) && w.length > 2);
+          if (commonWords.length > 0) {
+            const wordScore = commonWords.length / Math.max(words1.length, words2.length) * 0.7;
+            if (wordScore > bestScore) {
+              bestScore = wordScore;
+              matchedName = header;
+            }
+          }
+        }
+      }
+      
+      return { index, score: bestScore, matchedName };
+    });
+    
+    // Find best match
+    const bestMatch = scores.reduce((best, current) => 
+      current.score > best.score ? current : best, { index: -1, score: 0, matchedName: '' });
+    
+    if (bestMatch.score > 0.3) {
+      return { index: bestMatch.index, matchedName: bestMatch.matchedName, confidence: bestMatch.score };
+    }
+    
+    return { index: -1, confidence: 0 };
+  }
+
   public async processCSV(csvText: string): Promise<ProcessedCSV> {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -423,157 +462,114 @@ export class CSVProcessor {
     const allSkippedRows: SkippedRow[] = [];
 
     try {
-      console.log('🔄 Starting enhanced CSV processing...');
+      console.log('🔄 Starting enhanced flexible CSV processing...');
       
       const { headers, rows, skippedRows } = this.parseCSV(csvText);
       allSkippedRows.push(...skippedRows);
       
-      console.log(`📊 After parsing: ${headers.length} headers, ${rows.length} rows, ${skippedRows.length} initially skipped`);
+      console.log(`📊 Parsed: ${headers.length} headers, ${rows.length} rows`);
 
       if (rows.length === 0) {
-        throw new Error('No valid data rows found in CSV file after parsing');
+        warnings.push('No data rows found - file may be empty or contain only headers');
+        return this.createEmptyResult(errors, warnings, allSkippedRows);
       }
 
-      // Detect bank format with sample data
+      // Flexible bank format detection
       const sampleData = rows.slice(0, Math.min(5, rows.length));
       const bankFormat = detectBankFormat(headers, sampleData);
       
       if (bankFormat) {
         console.log(`✅ Bank format detected: ${bankFormat.name} (${Math.round(bankFormat.confidence * 100)}% confidence)`);
       } else {
-        console.log('⚠️ No specific bank format detected, using flexible parsing');
-        warnings.push('Could not detect specific bank format - using generic column mapping');
+        console.log('⚠️ No specific bank format detected, using flexible column mapping');
       }
 
-      // Enhanced column finding with flexible matching
-      const normalizedHeaders = headers.map(h => h.toLowerCase().trim().replace(/[^a-z]/g, ''));
+      // Enhanced flexible column mapping
+      const dateColumn = this.findColumnIndex(headers, [
+        'date', 'transactiondate', 'postingdate', 'valuedate', 'transdate', 
+        'dated', 'transaction_date', 'posting_date', 'value_date', 'dt'
+      ]);
       
-      const findColumnIndex = (possibleNames: string[]): { index: number, matchedName?: string } => {
-        for (const name of possibleNames) {
-          const normalizedName = name.toLowerCase().replace(/[^a-z]/g, '');
-          
-          // Exact match first
-          const exactIndex = normalizedHeaders.findIndex(h => h === normalizedName);
-          if (exactIndex >= 0) {
-            return { index: exactIndex, matchedName: headers[exactIndex] };
-          }
-          
-          // Partial match
-          const partialIndex = normalizedHeaders.findIndex(h => 
-            h.includes(normalizedName) || normalizedName.includes(h)
-          );
-          if (partialIndex >= 0) {
-            return { index: partialIndex, matchedName: headers[partialIndex] };
-          }
-        }
-        return { index: -1 };
-      };
+      const descColumn = this.findColumnIndex(headers, [
+        'description', 'details', 'particulars', 'transactiondetails', 'memo', 
+        'reference', 'narrative', 'transaction_description', 'desc', 'transaction_type',
+        'payee', 'merchant', 'vendor'
+      ]);
+      
+      const amountColumn = this.findColumnIndex(headers, [
+        'amount', 'value', 'debit', 'credit', 'transactionamount', 'sum', 'total',
+        'transaction_amount', 'amt', 'balance', 'money', 'cash', 'payment'
+      ]);
 
-      const dateColumnResult = findColumnIndex(['date', 'transactiondate', 'postingdate', 'valuedate', 'transdate', 'dated']);
-      const descColumnResult = findColumnIndex(['description', 'details', 'particulars', 'transactiondetails', 'memo', 'reference', 'narrative']);
-      const amountColumnResult = findColumnIndex(['amount', 'value', 'debit', 'credit', 'transactionamount', 'balance', 'sum', 'total']);
+      console.log(`📍 Flexible column mapping:`);
+      console.log(`  Date: ${dateColumn.index >= 0 ? `${dateColumn.index} (${dateColumn.matchedName}, confidence: ${Math.round(dateColumn.confidence * 100)}%)` : 'NOT FOUND'}`);
+      console.log(`  Description: ${descColumn.index >= 0 ? `${descColumn.index} (${descColumn.matchedName}, confidence: ${Math.round(descColumn.confidence * 100)}%)` : 'NOT FOUND'}`);
+      console.log(`  Amount: ${amountColumn.index >= 0 ? `${amountColumn.index} (${amountColumn.matchedName}, confidence: ${Math.round(amountColumn.confidence * 100)}%)` : 'NOT FOUND'}`);
 
-      console.log(`📍 Column mapping:`);
-      console.log(`  Date: ${dateColumnResult.index >= 0 ? `${dateColumnResult.index} (${dateColumnResult.matchedName})` : 'NOT FOUND'}`);
-      console.log(`  Description: ${descColumnResult.index >= 0 ? `${descColumnResult.index} (${descColumnResult.matchedName})` : 'NOT FOUND'}`);
-      console.log(`  Amount: ${amountColumnResult.index >= 0 ? `${amountColumnResult.index} (${amountColumnResult.matchedName})` : 'NOT FOUND'}`);
-
-      // Check for required columns
-      const missingColumns = [];
-      if (dateColumnResult.index === -1) missingColumns.push('date');
-      if (descColumnResult.index === -1) missingColumns.push('description');
-      if (amountColumnResult.index === -1) missingColumns.push('amount');
-
-      if (missingColumns.length > 0) {
-        const suggestion = `Available columns: ${headers.join(', ')}`;
-        throw new Error(`Required columns not found: ${missingColumns.join(', ')}. ${suggestion}`);
+      // Less strict requirements - proceed if we have at least 2 of 3 key columns
+      const foundColumns = [dateColumn, descColumn, amountColumn].filter(col => col.index >= 0);
+      if (foundColumns.length < 2) {
+        errors.push(`Cannot find enough key columns. Found: ${foundColumns.length}/3. Available columns: ${headers.join(', ')}`);
+        return this.createEmptyResult(errors, warnings, allSkippedRows);
       }
 
-      // Process transactions with detailed tracking
+      // Process transactions with fault tolerance
       let processedCount = 0;
       const dates: string[] = [];
       const rowWarnings: string[] = [];
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const rowNumber = i + 2; // +2 because we start from row 1 and skip header
+        const rowNumber = i + 2;
         
         try {
-          const rawDate = row[dateColumnResult.index]?.trim();
-          const description = row[descColumnResult.index]?.trim();
-          const rawAmount = row[amountColumnResult.index]?.trim();
+          // Extract data with fallbacks
+          const rawDate = dateColumn.index >= 0 ? row[dateColumn.index]?.trim() || '' : '';
+          const description = descColumn.index >= 0 ? row[descColumn.index]?.trim() || '' : `Transaction ${rowNumber}`;
+          const rawAmount = amountColumn.index >= 0 ? row[amountColumn.index]?.trim() || '' : '';
 
           console.log(`🔍 Processing row ${rowNumber}: date="${rawDate}", desc="${description}", amount="${rawAmount}"`);
 
-          // Check for completely empty required fields
+          // Skip only if all critical fields are empty
           if (!rawDate && !description && !rawAmount) {
             allSkippedRows.push({
               rowNumber,
               data: row,
-              reason: 'All required fields are empty',
-              suggestions: ['Remove empty rows', 'Ensure data is in correct columns']
+              reason: 'All key fields are empty',
+              suggestions: ['Ensure row contains date, description, or amount data']
             });
             continue;
           }
 
-          // Check individual required fields
-          const missingFields = [];
-          if (!rawDate) missingFields.push('date');
-          if (!description) missingFields.push('description');
-          if (!rawAmount) missingFields.push('amount');
+          // Parse with tolerance
+          const { date, warnings: dateWarnings } = this.parseDate(rawDate, bankFormat, rowNumber);
+          const { amount, warnings: amountWarnings } = this.parseAmount(rawAmount, rowNumber);
+          
+          rowWarnings.push(...dateWarnings, ...amountWarnings);
 
-          if (missingFields.length > 0) {
-            allSkippedRows.push({
-              rowNumber,
-              data: row,
-              reason: `Missing required fields: ${missingFields.join(', ')}`,
-              suggestions: ['Check data alignment with column headers', 'Ensure all required fields have values']
-            });
-            continue;
-          }
-
-          // Parse date with warnings - using unique variable name
-          const parsedDateResult = this.parseDate(rawDate, bankFormat, rowNumber);
-          const date = parsedDateResult.date;
-          rowWarnings.push(...parsedDateResult.warnings);
-
-          // Parse amount with warnings - using unique variable name
-          const parsedAmountResult = this.parseAmount(rawAmount, rowNumber);
-          const amount = parsedAmountResult.amount;
-          rowWarnings.push(...parsedAmountResult.warnings);
-
-          // Skip zero amounts only if original string suggests it should be zero
-          if (amount === 0 && rawAmount !== '0' && rawAmount !== '0.00' && rawAmount !== '0,00') {
-            allSkippedRows.push({
-              rowNumber,
-              data: row,
-              reason: `Could not parse amount: "${rawAmount}"`,
-              suggestions: ['Check amount format', 'Ensure proper decimal/thousands separators']
-            });
-            continue;
-          }
-
-          const merchant = this.standardizeMerchant(description);
-          const { category, confidence } = this.categorizeTransaction(description, amount);
+          // Use defaults for missing data
+          const finalDescription = description || `Transaction ${rowNumber}`;
+          const merchant = this.standardizeMerchant(finalDescription);
+          const { category, confidence } = this.categorizeTransaction(finalDescription, amount);
 
           const transaction: Transaction = {
-            id: this.generateTransactionId(date, amount, description),
+            id: this.generateTransactionId(date, amount, finalDescription),
             date,
             amount: Math.abs(amount),
-            description: description.substring(0, 200), // Limit description length
+            description: finalDescription.substring(0, 200),
             merchant,
             category,
             isIncome: amount > 0,
             confidence,
             rowNumber,
-            parseWarnings: parsedDateResult.warnings.concat(parsedAmountResult.warnings)
+            parseWarnings: [...dateWarnings, ...amountWarnings]
           };
 
           transactions.push(transaction);
           dates.push(date);
           processedCount++;
 
-          console.log(`✅ Row ${rowNumber}: ${transaction.isIncome ? '+' : '-'}$${transaction.amount} - ${transaction.category} (${Math.round(confidence * 100)}%)`);
+          console.log(`✅ Row ${rowNumber}: ${transaction.isIncome ? '+' : '-'}$${transaction.amount} - ${transaction.category}`);
 
         } catch (rowError: any) {
           console.error(`❌ Row ${rowNumber} error:`, rowError);
@@ -586,10 +582,9 @@ export class CSVProcessor {
         }
       }
 
-      // Add row-level warnings to main warnings
       warnings.push(...rowWarnings);
 
-      // Calculate comprehensive summary
+      // Calculate summary
       dates.sort();
       const totalAmount = transactions.reduce((sum, t) => sum + (t.isIncome ? t.amount : -t.amount), 0);
       const successRate = rows.length > 0 ? (processedCount / rows.length) * 100 : 0;
@@ -602,16 +597,15 @@ export class CSVProcessor {
           end: dates[dates.length - 1] || ''
         },
         totalAmount,
-        duplicates: 0, // TODO: Implement duplicate detection
+        duplicates: 0,
         successRate
       };
 
-      console.log(`✅ Processing complete:`);
+      console.log(`✅ Flexible processing complete:`);
       console.log(`  📊 Success rate: ${successRate.toFixed(1)}%`);
       console.log(`  ✅ Processed: ${processedCount} transactions`);
       console.log(`  ⚠️ Skipped: ${allSkippedRows.length} rows`);
       console.log(`  🗓️ Date range: ${summary.dateRange.start} to ${summary.dateRange.end}`);
-      console.log(`  💰 Net amount: $${totalAmount.toFixed(2)}`);
 
       return {
         transactions,
@@ -623,24 +617,28 @@ export class CSVProcessor {
       };
 
     } catch (error: any) {
-      console.error('❌ Fatal processing error:', error);
+      console.error('❌ Processing error:', error);
       errors.push(`Processing failed: ${error.message}`);
       
-      return {
-        transactions: [],
-        skippedRows: allSkippedRows,
-        bankFormat: null,
-        errors,
-        warnings,
-        summary: { 
-          totalRows: 0, 
-          totalTransactions: 0, 
-          dateRange: { start: '', end: '' }, 
-          totalAmount: 0, 
-          duplicates: 0,
-          successRate: 0
-        }
-      };
+      return this.createEmptyResult(errors, warnings, allSkippedRows);
     }
+  }
+
+  private createEmptyResult(errors: string[], warnings: string[], skippedRows: SkippedRow[]): ProcessedCSV {
+    return {
+      transactions: [],
+      skippedRows,
+      bankFormat: null,
+      errors,
+      warnings,
+      summary: { 
+        totalRows: 0, 
+        totalTransactions: 0, 
+        dateRange: { start: '', end: '' }, 
+        totalAmount: 0, 
+        duplicates: 0,
+        successRate: 0
+      }
+    };
   }
 }
