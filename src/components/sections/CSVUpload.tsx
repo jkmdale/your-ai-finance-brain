@@ -95,59 +95,92 @@ export const CSVUpload = () => {
       const allDuplicates: DuplicateMatch[] = [];
 
       // Get existing transactions for duplicate detection
-      const { data: existingTransactions } = await supabase
+      console.log('🔍 Fetching existing transactions for duplicate detection...');
+      const { data: existingTransactions, error: fetchError } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
         .limit(1000);
 
+      if (fetchError) {
+        console.error('❌ Error fetching existing transactions:', fetchError);
+        allWarnings.push(`Warning: Could not check for duplicates - ${fetchError.message}`);
+      }
+
       const duplicateDetector = new DuplicateDetector(existingTransactions || []);
 
       for (const file of Array.from(files)) {
-        const text = await file.text();
-
-        if (!text.trim()) {
-          allErrors.push(`File ${file.name} is empty`);
-          continue;
-        }
-
-        setUploadMessage(`Processing ${file.name}...`);
-
-        // Process CSV with new enhanced processor
-        const processed = await csvProcessor.processCSV(text);
+        console.log(`📄 Processing file: ${file.name} (${file.size} bytes)`);
         
-        if (processed.errors.length > 0) {
-          allErrors.push(...processed.errors);
-        }
-        
-        if (processed.warnings.length > 0) {
-          allWarnings.push(...processed.warnings);
-        }
+        try {
+          const text = await file.text();
+          console.log(`📝 File content length: ${text.length} characters`);
 
-        if (processed.transactions.length > 0) {
-          // Detect duplicates
-          const duplicates = duplicateDetector.findDuplicates(processed.transactions);
-          allDuplicates.push(...duplicates);
-
-          // Store processed data for preview
-          setProcessedCSV(processed);
-          
-          // For now, send to existing endpoint for actual storage
-          // This maintains compatibility while adding enhanced processing
-          const csvData = text; // Keep original format for backend processing
-          
-          const { data, error } = await supabase.functions.invoke('process-csv', {
-            body: { csvData, fileName: file.name }
-          });
-
-          if (error) {
-            allErrors.push(`Error processing ${file.name}: ${error.message}`);
-          } else {
-            totalProcessed += data.processed;
-            allTransactions.push(...(data.transactions || []));
+          if (!text.trim()) {
+            allErrors.push(`File ${file.name} is empty`);
+            continue;
           }
+
+          setUploadMessage(`Processing ${file.name}...`);
+
+          // Process CSV with enhanced processor
+          console.log('🔄 Processing CSV with enhanced processor...');
+          const processed = await csvProcessor.processCSV(text);
+          console.log('✅ CSV processing result:', {
+            transactions: processed.transactions.length,
+            errors: processed.errors.length,
+            warnings: processed.warnings.length,
+            bankFormat: processed.bankFormat?.name
+          });
+          
+          if (processed.errors.length > 0) {
+            console.error('❌ Processing errors:', processed.errors);
+            allErrors.push(...processed.errors);
+          }
+          
+          if (processed.warnings.length > 0) {
+            console.warn('⚠️ Processing warnings:', processed.warnings);
+            allWarnings.push(...processed.warnings);
+          }
+
+          if (processed.transactions.length > 0) {
+            // Detect duplicates
+            console.log('🔍 Checking for duplicates...');
+            const duplicates = duplicateDetector.findDuplicates(processed.transactions);
+            allDuplicates.push(...duplicates);
+            console.log(`🔍 Found ${duplicates.length} potential duplicates`);
+
+            // Store processed data for preview
+            setProcessedCSV(processed);
+            
+            // Send to backend for actual storage
+            console.log('💾 Sending to backend for storage...');
+            const { data, error } = await supabase.functions.invoke('process-csv', {
+              body: { 
+                csvData: text, 
+                fileName: file.name,
+                userId: user.id
+              }
+            });
+
+            if (error) {
+              console.error('❌ Backend processing error:', error);
+              allErrors.push(`Error processing ${file.name}: ${error.message}`);
+            } else {
+              console.log('✅ Backend processing successful:', data);
+              totalProcessed += data.processed || 0;
+              allTransactions.push(...(data.transactions || []));
+            }
+          } else {
+            allWarnings.push(`No valid transactions found in ${file.name}`);
+          }
+        } catch (fileError: any) {
+          console.error(`❌ Error processing file ${file.name}:`, fileError);
+          allErrors.push(`Error reading ${file.name}: ${fileError.message}`);
         }
       }
+
+      console.log(`📊 Final results: ${totalProcessed} transactions processed, ${allErrors.length} errors, ${allWarnings.length} warnings`);
 
       if (totalProcessed > 0) {
         setUploadStatus('success');
@@ -155,14 +188,14 @@ export const CSVUpload = () => {
         
         // Auto-create budget from transactions
         try {
-          console.log('Creating/updating budget from transactions...');
+          console.log('💰 Creating/updating budget from transactions...');
           const budgetResult = await budgetCreator.createBudgetFromTransactions(
             user.id,
             allTransactions,
             `Budget from ${new Date().toLocaleDateString()}`
           );
           
-          console.log('Budget creation result:', budgetResult);
+          console.log('✅ Budget creation result:', budgetResult);
           
           // Update success message to include budget creation
           setUploadMessage(
@@ -172,13 +205,12 @@ export const CSVUpload = () => {
           // Notify other components that data was uploaded and budget updated
           localStorage.setItem('csv-upload-complete', Date.now().toString());
           
-          // Dispatch storage event for other components
+          // Dispatch events for other components
           window.dispatchEvent(new StorageEvent('storage', {
             key: 'csv-upload-complete',
             newValue: Date.now().toString()
           }));
 
-          // Also dispatch a custom event for more reliable detection
           window.dispatchEvent(new CustomEvent('csv-upload-complete', {
             detail: { 
               processed: totalProcessed, 
@@ -189,7 +221,7 @@ export const CSVUpload = () => {
           }));
           
         } catch (budgetError) {
-          console.error('Error creating/updating budget:', budgetError);
+          console.error('❌ Error creating/updating budget:', budgetError);
           allWarnings.push('Transactions processed but budget update failed');
         }
         
@@ -210,12 +242,16 @@ export const CSVUpload = () => {
         }
       } else {
         setUploadStatus('error');
-        setUploadMessage(`Processing failed. Errors: ${allErrors.join('; ')}`);
+        const errorMessage = allErrors.length > 0 
+          ? `Processing failed. Errors: ${allErrors.join('; ')}`
+          : `No transactions could be processed. ${allWarnings.join('; ')}`;
+        setUploadMessage(errorMessage);
+        console.error('❌ Final error state:', errorMessage);
       }
     } catch (error: any) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       setUploadStatus('error');
-      setUploadMessage(error.message || 'Failed to process CSV files');
+      setUploadMessage(`Upload failed: ${error.message || 'Unknown error occurred'}`);
     } finally {
       setUploading(false);
       setProcessing(false);
@@ -282,7 +318,7 @@ export const CSVUpload = () => {
         </div>
 
         {uploadStatus !== 'idle' && (
-          <div className={`flex items-center space-x-2 p-3 rounded-lg ${
+          <div className={`flex items-start space-x-2 p-4 rounded-lg ${
             uploadStatus === 'success' 
               ? 'bg-green-500/20 border border-green-500/30' 
               : uploadStatus === 'processing'
@@ -290,21 +326,37 @@ export const CSVUpload = () => {
               : 'bg-red-500/20 border border-red-500/30'
           }`}>
             {uploadStatus === 'success' ? (
-              <CheckCircle className="w-5 h-5 text-green-400" />
+              <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
             ) : uploadStatus === 'processing' ? (
-              <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+              <Loader2 className="w-5 h-5 text-blue-400 animate-spin mt-0.5 flex-shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400" />
+              <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
             )}
-            <span className={`text-sm ${
-              uploadStatus === 'success' ? 'text-green-300' : 
-              uploadStatus === 'processing' ? 'text-blue-300' : 'text-red-300'
-            }`}>
-              {uploadMessage}
-            </span>
+            <div className="flex-1">
+              <span className={`text-sm ${
+                uploadStatus === 'success' ? 'text-green-300' : 
+                uploadStatus === 'processing' ? 'text-blue-300' : 'text-red-300'
+              }`}>
+                {uploadMessage}
+              </span>
+              {uploadStatus === 'error' && uploadResults?.errors && uploadResults.errors.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-red-400 text-xs font-medium mb-1">Detailed Errors:</p>
+                  <ul className="text-red-300 text-xs space-y-1">
+                    {uploadResults.errors.map((error, index) => (
+                      <li key={index} className="flex items-start space-x-1">
+                        <span className="text-red-400 mt-0.5">•</span>
+                        <span>{error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
+        
         {/* Bank Format Detection Results */}
         {processedCSV?.bankFormat && (
           <div className="bg-white/10 rounded-lg p-4">
@@ -368,16 +420,6 @@ export const CSVUpload = () => {
                 <span className="text-white/70">Duplicates Found:</span>
                 <p className="text-yellow-400 font-medium">{uploadResults.duplicates?.length || 0}</p>
               </div>
-              {uploadResults.errors && uploadResults.errors.length > 0 && (
-                <div className="col-span-2">
-                  <span className="text-white/70">Errors:</span>
-                  <ul className="text-red-300 text-xs mt-1">
-                    {uploadResults.errors.map((error, index) => (
-                      <li key={index}>• {error}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {uploadResults.warnings && uploadResults.warnings.length > 0 && (
                 <div className="col-span-2">
                   <span className="text-white/70">Warnings:</span>
@@ -391,6 +433,8 @@ export const CSVUpload = () => {
             </div>
           </div>
         )}
+
+        
 
         {/* Enhanced AI Analysis */}
         {analyzing && (
