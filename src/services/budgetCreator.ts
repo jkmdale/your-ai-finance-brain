@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { keyManagerService } from './keyManagerService';
 import { ClaudeAIService, type CategorizationResult } from './claude-ai-service';
@@ -359,8 +360,7 @@ export class BudgetCreator {
 
       // Decrypt and update budget data
       const decryptedData = await keyManagerService.decryptFromStorage(
-        budget.encrypted_data, 
-        budget.encryption_metadata
+        budget.encrypted_data
       );
 
       // Process new transactions and update categories
@@ -384,7 +384,7 @@ export class BudgetCreator {
 
       console.log(`Updated budget ${budgetId} with ${newTransactions.length} new transactions`);
     } catch (error) {
-      console.error('Error updating budget with new transactions:', error);
+      console.error(`Error updating budget with new transactions: ${error}`);
       throw error;
     }
   }
