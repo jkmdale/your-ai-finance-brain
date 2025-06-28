@@ -1,10 +1,10 @@
-
 import React, { useState, useCallback } from 'react';
 import { Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFilePicker } from '@/hooks/useFilePicker';
 import { budgetCreator } from '@/services/budgetCreator';
+import { incrementalUpdateService } from '@/services/incrementalUpdateService';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
 import { ProgressTracker } from '@/components/csv/ProgressTracker';
 import { StatusMessage } from '@/components/csv/StatusMessage';
@@ -91,13 +91,28 @@ export const CSVUpload = () => {
     }
   };
 
-  const createSmartBudget = async (transactions: any[]) => {
+  const createSmartBudget = async (transactions: any[], preserveExisting: boolean = true) => {
     if (!transactions.length || !user) return null;
 
     setCreatingBudget(true);
     try {
       console.log('Creating smart budget from transactions...');
       
+      if (preserveExisting) {
+        // Try incremental update first
+        const incrementalResult = await incrementalUpdateService.updateBudgetsIncrementally({
+          userId: user.id,
+          newTransactions: transactions,
+          preserveExisting: true
+        });
+        
+        if (incrementalResult) {
+          console.log('✅ Budget updated incrementally');
+          return incrementalResult;
+        }
+      }
+      
+      // Create new budget if incremental update not possible
       const budgetResult = await budgetCreator.createBudgetFromTransactions(
         user.id,
         transactions,
@@ -114,12 +129,26 @@ export const CSVUpload = () => {
     }
   };
 
-  const recommendSmartGoals = async (transactions: any[], budgetResult: any): Promise<GoalRecommendationResult> => {
+  const recommendSmartGoals = async (transactions: any[], budgetResult: any, preserveExisting: boolean = true): Promise<GoalRecommendationResult> => {
     if (!transactions.length || !user) return {};
 
     setRecommendingGoals(true);
     try {
-      // Analyze spending patterns for goal recommendations
+      if (preserveExisting) {
+        // Try incremental update first
+        const incrementalResult = await incrementalUpdateService.updateGoalsIncrementally({
+          userId: user.id,
+          newTransactions: transactions,
+          preserveExisting: true
+        });
+        
+        if (incrementalResult.createdGoals && incrementalResult.createdGoals.length > 0) {
+          console.log('✅ Goals updated incrementally');
+          return incrementalResult;
+        }
+      }
+
+      // ... keep existing goal creation logic for new users
       const totalIncome = transactions.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0);
       const totalExpenses = transactions.filter(t => !t.is_income).reduce((sum, t) => sum + t.amount, 0);
       const monthlyNet = totalIncome - totalExpenses;
@@ -203,10 +232,14 @@ export const CSVUpload = () => {
       return;
     }
 
+    // Check if we should preserve existing data
+    const preserveExisting = await incrementalUpdateService.shouldPreserveExistingData(user.id);
+    console.log(`📊 Preserve existing data: ${preserveExisting}`);
+
     setUploading(true);
     setProcessing(true);
     setUploadStatus('processing');
-    setUploadMessage(`Processing ${files.length} CSV file(s) directly via Supabase...`);
+    setUploadMessage(`Processing ${files.length} CSV file(s) - ${preserveExisting ? 'adding to existing data' : 'creating fresh analysis'}...`);
     setProgress(10);
 
     let totalProcessed = 0;
@@ -215,12 +248,13 @@ export const CSVUpload = () => {
     let allWarnings: string[] = [];
     let allTransactions: any[] = [];
     let detailedResults: DetailedResults | undefined;
+    let allBatchResults: any[] = [];
 
     try {
-      // Process files directly via Supabase edge function
+      // Process ALL files sequentially to ensure proper transaction collection
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileProgress = ((i + 1) / files.length) * 80; // Up to 80% for file processing
+        const fileProgress = 10 + ((i + 1) / files.length) * 70; // Progress from 10% to 80%
         
         setUploadMessage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
         setProgress(fileProgress);
@@ -239,7 +273,8 @@ export const CSVUpload = () => {
           const { data, error } = await supabase.functions.invoke('process-csv', {
             body: {
               csvData: text,
-              fileName: file.name
+              fileName: file.name,
+              preserveExisting: preserveExisting
             }
           });
 
@@ -250,11 +285,20 @@ export const CSVUpload = () => {
           }
 
           if (data) {
-            console.log(`✅ ${file.name} processed:`, data);
+            console.log(`✅ ${file.name} processed:`, {
+              processed: data.processed || 0,
+              skipped: data.skipped || 0,
+              transactions: data.transactions?.length || 0
+            });
             
             totalProcessed += data.processed || 0;
             totalSkipped += data.skipped || 0;
-            allTransactions.push(...(data.transactions || []));
+            
+            // Collect ALL transactions from this file
+            if (data.transactions && Array.isArray(data.transactions)) {
+              allTransactions.push(...data.transactions);
+              console.log(`📊 Added ${data.transactions.length} transactions from ${file.name}`);
+            }
             
             if (data.errors) {
               allErrors.push(...data.errors.map((e: string) => `${file.name}: ${e}`));
@@ -263,9 +307,12 @@ export const CSVUpload = () => {
               allWarnings.push(...data.warnings.map((w: string) => `${file.name}: ${w}`));
             }
             
-            // Capture detailed results from the last file (or combine them)
-            if (data.detailedResults) {
-              detailedResults = data.detailedResults;
+            // Collect batch results
+            if (data.detailedResults?.batchResults) {
+              allBatchResults.push(...data.detailedResults.batchResults.map((batch: any) => ({
+                ...batch,
+                fileName: file.name
+              })));
             }
           }
 
@@ -275,19 +322,29 @@ export const CSVUpload = () => {
         }
       }
 
-      setProgress(90);
+      // Combine all batch results into detailed results
+      if (allBatchResults.length > 0) {
+        detailedResults = {
+          totalParsed: totalProcessed,
+          totalUploaded: totalProcessed,
+          batchResults: allBatchResults
+        };
+      }
 
-      if (totalProcessed > 0) {
+      console.log(`📊 Final results: ${allTransactions.length} total transactions from ${files.length} files`);
+      setProgress(85);
+
+      if (totalProcessed > 0 && allTransactions.length > 0) {
         setUploadStatus('success');
-        setUploadMessage('Running AI analysis and creating smart budget...');
+        setUploadMessage(`Running AI analysis and ${preserveExisting ? 'updating' : 'creating'} smart budget...`);
         
-        // Run AI analysis, budget creation, and goal recommendations
+        // Run AI analysis, budget creation/update, and goal recommendations/updates
         const [analysisResult, budgetResult] = await Promise.all([
           analyzeTransactions(allTransactions),
-          createSmartBudget(allTransactions)
+          createSmartBudget(allTransactions, preserveExisting)
         ]);
 
-        const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
+        const goalResult = await recommendSmartGoals(allTransactions, budgetResult, preserveExisting);
         setProgress(100);
 
         // Update final results
@@ -296,7 +353,7 @@ export const CSVUpload = () => {
           processed: totalProcessed,
           skipped: totalSkipped,
           transactions: allTransactions,
-          accountBalance: 0, // This will be updated by the edge function
+          accountBalance: 0,
           errors: allErrors,
           warnings: allWarnings,
           analysis: analysisResult,
@@ -308,18 +365,19 @@ export const CSVUpload = () => {
         // Update success message
         const features = [];
         if (analysisResult) features.push('AI insights');
-        if (budgetResult) features.push('smart budget');
+        if (budgetResult) features.push(preserveExisting ? 'updated budget' : 'smart budget');
         if (goalResult?.createdGoals && goalResult.createdGoals.length > 0) {
-          features.push(`${goalResult.createdGoals.length} SMART goals`);
+          features.push(`${goalResult.createdGoals.length} ${preserveExisting ? 'updated' : 'SMART'} goals`);
         }
         
+        const actionText = preserveExisting ? 'updated' : 'created';
         setUploadMessage(
-          `✅ Successfully processed ${totalProcessed} transactions from ${files.length} file(s) and created ${features.join(', ')}`
+          `✅ Successfully processed ${totalProcessed} transactions from ${files.length} file(s) and ${actionText} ${features.join(', ')}`
         );
 
         console.log(`🎉 Upload complete: ${totalProcessed} transactions processed from ${files.length} files`);
 
-        // Notify other components
+        // Notify other components with comprehensive data
         window.dispatchEvent(new CustomEvent('csv-upload-complete', {
           detail: { 
             processed: totalProcessed,
@@ -327,7 +385,9 @@ export const CSVUpload = () => {
             transactions: allTransactions,
             budgetCreated: !!budgetResult,
             goalsCreated: goalResult?.createdGoals?.length || 0,
-            filesProcessed: files.length
+            filesProcessed: files.length,
+            preserveExisting,
+            totalTransactions: allTransactions.length
           }
         }));
         
