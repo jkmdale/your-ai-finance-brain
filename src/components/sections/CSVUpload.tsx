@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,13 +41,19 @@ interface ValidationResult {
   preview: string[][];
 }
 
+interface ProcessedFile {
+  name: string;
+  data: ProcessedCSV;
+  status: 'success' | 'error' | 'partial';
+}
+
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'validating' | 'preview'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
-  const [processedCSV, setProcessedCSV] = useState<ProcessedCSV | null>(null);
+  const [processedFiles, setProcessedFiles] = useState<ProcessedFile[]>([]);
   const [showTransactions, setShowTransactions] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -231,55 +238,88 @@ export const CSVUpload = () => {
       return;
     }
 
-    // Start processing the first file for preview
-    const file = files[0]; // For now, handle one file at a time
-    
     setUploadStatus('validating');
-    setUploadMessage('Analyzing CSV structure...');
-    setProgress(25);
+    setUploadMessage(`Analyzing ${files.length} CSV file(s)...`);
+    setProgress(10);
+
+    const processedFiles: ProcessedFile[] = [];
+    let totalTransactions = 0;
+    let totalSkipped = 0;
+    let allErrors: string[] = [];
+    let allWarnings: string[] = [];
 
     try {
-      const text = await file.text();
-      
-      if (!text.trim()) {
-        setUploadStatus('error');
-        setUploadMessage('CSV file is empty');
-        return;
+      // Process all files
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileProgress = ((i + 1) / files.length) * 60; // Up to 60% for file processing
+        
+        setUploadMessage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
+        setProgress(fileProgress);
+
+        try {
+          const text = await file.text();
+          
+          if (!text.trim()) {
+            processedFiles.push({
+              name: file.name,
+              data: csvProcessor.createEmptyResult([`File ${file.name} is empty`], [], []),
+              status: 'error'
+            });
+            continue;
+          }
+
+          // Process CSV with enhanced flexibility
+          const processed = await csvProcessor.processCSV(text);
+          console.log(`✅ File ${file.name} processed:`, processed.transactions.length, 'transactions');
+
+          totalTransactions += processed.transactions.length;
+          totalSkipped += processed.skippedRows.length;
+          allErrors.push(...processed.errors.map(e => `${file.name}: ${e}`));
+          allWarnings.push(...processed.warnings.map(w => `${file.name}: ${w}`));
+
+          processedFiles.push({
+            name: file.name,
+            data: processed,
+            status: processed.transactions.length > 0 ? 'success' : 
+                   processed.errors.length > 0 ? 'error' : 'partial'
+          });
+
+        } catch (fileError: any) {
+          console.error(`❌ Error processing ${file.name}:`, fileError);
+          allErrors.push(`${file.name}: ${fileError.message}`);
+          processedFiles.push({
+            name: file.name,
+            data: csvProcessor.createEmptyResult([fileError.message], [], []),
+            status: 'error'
+          });
+        }
       }
 
-      setUploadMessage('Processing CSV with AI categorization...');
-      setProgress(50);
+      setProcessedFiles(processedFiles);
+      setProgress(70);
 
-      // Process CSV for preview
-      const processed = await csvProcessor.processCSV(text);
-      console.log('✅ CSV processed for preview:', processed);
-
-      setProcessedCSV(processed);
-      setProgress(75);
-
-      if (processed.errors.length > 0) {
+      if (totalTransactions === 0) {
         setUploadStatus('error');
-        setUploadMessage(`Processing errors: ${processed.errors.join('; ')}`);
-        setProgress(0);
-        return;
-      }
-
-      if (processed.transactions.length === 0) {
-        setUploadStatus('error');
-        setUploadMessage(`No valid transactions found. ${processed.skippedRows.length} rows were skipped. Check the preview for details.`);
-        setProgress(100);
+        setUploadMessage(`No valid transactions found in any file. ${totalSkipped} rows were skipped across all files.`);
         setShowPreview(true);
+        setProgress(100);
         return;
       }
 
-      // Show preview
+      // Combine all transactions for preview
+      const allTransactions = processedFiles.flatMap(f => f.data.transactions);
+      
+      // Show consolidated preview
       setUploadStatus('preview');
-      setUploadMessage(`Ready to process ${processed.transactions.length} transactions (${processed.skippedRows.length} rows will be skipped)`);
+      setUploadMessage(
+        `Ready to process ${totalTransactions} transactions from ${processedFiles.filter(f => f.status === 'success').length}/${files.length} files (${totalSkipped} rows will be skipped)`
+      );
       setShowPreview(true);
       setProgress(100);
 
     } catch (error: any) {
-      console.error('❌ Processing error:', error);
+      console.error('❌ Multi-file processing error:', error);
       setUploadStatus('error');
       setUploadMessage(`Processing failed: ${error.message}`);
       setProgress(0);
@@ -287,13 +327,13 @@ export const CSVUpload = () => {
   }
 
   const handleConfirmUpload = async () => {
-    if (!processedCSV || !user) return;
+    if (processedFiles.length === 0 || !user) return;
 
     setShowPreview(false);
     setUploading(true);
     setProcessing(true);
     setUploadStatus('processing');
-    setUploadMessage('Storing transactions and creating budget...');
+    setUploadMessage('Storing all transactions and creating budget...');
     setProgress(10);
 
     try {
@@ -306,28 +346,67 @@ export const CSVUpload = () => {
         .limit(1000);
 
       const duplicateDetector = new DuplicateDetector(existingTransactions || []);
-      const duplicates = duplicateDetector.findDuplicates(processedCSV.transactions);
+      
+      // Combine all valid transactions from all files
+      const allTransactions = processedFiles.flatMap(f => f.data.transactions);
+      const duplicates = duplicateDetector.findDuplicates(allTransactions);
       
       setProgress(30);
 
-      // Send to backend for storage (convert our Transaction format to backend format)
-      const csvData = generateCSVFromTransactions(processedCSV.transactions);
-      const { data, error } = await supabase.functions.invoke('process-csv', {
-        body: { 
-          csvData,
-          fileName: 'processed_transactions.csv',
-          userId: user.id
-        }
-      });
+      // Process all files through backend
+      let totalProcessed = 0;
+      let allStoredTransactions: any[] = [];
+      const fileResults: any[] = [];
 
-      if (error) {
-        throw new Error(`Backend storage failed: ${error.message}`);
+      for (let i = 0; i < processedFiles.length; i++) {
+        const processedFile = processedFiles[i];
+        
+        if (processedFile.data.transactions.length === 0) {
+          console.log(`Skipping ${processedFile.name} - no transactions`);
+          continue;
+        }
+
+        setUploadMessage(`Uploading file ${i + 1}/${processedFiles.length}: ${processedFile.name}`);
+        
+        try {
+          // Convert transactions to CSV format for backend
+          const csvData = generateCSVFromTransactions(processedFile.data.transactions);
+          const { data, error } = await supabase.functions.invoke('process-csv', {
+            body: { 
+              csvData,
+              fileName: processedFile.name,
+              userId: user.id
+            }
+          });
+
+          if (error) {
+            console.error(`Backend error for ${processedFile.name}:`, error);
+            fileResults.push({ file: processedFile.name, error: error.message, processed: 0 });
+            continue;
+          }
+
+          const fileProcessed = data.processed || 0;
+          totalProcessed += fileProcessed;
+          
+          if (data.transactions) {
+            allStoredTransactions.push(...data.transactions);
+          }
+          
+          fileResults.push({ 
+            file: processedFile.name, 
+            processed: fileProcessed, 
+            balance: data.accountBalance 
+          });
+
+          console.log(`✅ ${processedFile.name}: ${fileProcessed} transactions stored`);
+
+        } catch (fileError: any) {
+          console.error(`Error uploading ${processedFile.name}:`, fileError);
+          fileResults.push({ file: processedFile.name, error: fileError.message, processed: 0 });
+        }
       }
 
       setProgress(60);
-
-      const totalProcessed = data.processed || 0;
-      const allTransactions = data.transactions || [];
 
       if (totalProcessed > 0) {
         setUploadStatus('success');
@@ -335,26 +414,28 @@ export const CSVUpload = () => {
         
         // Run AI analysis, budget creation, and goal recommendations
         const [analysisResult, budgetResult] = await Promise.all([
-          analyzeTransactions(allTransactions),
-          createSmartBudget(allTransactions)
+          analyzeTransactions(allStoredTransactions),
+          createSmartBudget(allStoredTransactions)
         ]);
 
         setProgress(90);
 
-        const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
+        const goalResult = await recommendSmartGoals(allStoredTransactions, budgetResult);
         setProgress(100);
+
+        // Calculate total skipped across all files
+        const totalSkipped = processedFiles.reduce((sum, f) => sum + f.data.skippedRows.length, 0);
 
         // Update final results
         setUploadResults({
           success: true,
           processed: totalProcessed,
-          skipped: processedCSV.skippedRows.length,
-          transactions: allTransactions,
-          accountBalance: data.accountBalance || 0,
-          bankFormat: processedCSV.bankFormat,
+          skipped: totalSkipped,
+          transactions: allStoredTransactions,
+          accountBalance: fileResults[fileResults.length - 1]?.balance || 0,
           duplicates,
-          errors: processedCSV.errors,
-          warnings: processedCSV.warnings,
+          errors: processedFiles.flatMap(f => f.data.errors),
+          warnings: processedFiles.flatMap(f => f.data.warnings),
           analysis: analysisResult,
           budgetCreated: !!budgetResult,
           goalsRecommended: goalResult
@@ -368,27 +449,29 @@ export const CSVUpload = () => {
           features.push(`${goalResult.createdGoals.length} SMART goals`);
         }
         
+        const successfulFiles = fileResults.filter(r => r.processed > 0).length;
         setUploadMessage(
-          `✅ Successfully processed ${totalProcessed} transactions and created ${features.join(', ')}`
+          `✅ Successfully processed ${totalProcessed} transactions from ${successfulFiles}/${processedFiles.length} files and created ${features.join(', ')}`
         );
 
         // Notify other components
         window.dispatchEvent(new CustomEvent('csv-upload-complete', {
           detail: { 
             processed: totalProcessed,
-            skipped: processedCSV.skippedRows.length,
-            transactions: allTransactions,
+            skipped: totalSkipped,
+            transactions: allStoredTransactions,
             budgetCreated: !!budgetResult,
-            goalsCreated: goalResult?.createdGoals?.length || 0
+            goalsCreated: goalResult?.createdGoals?.length || 0,
+            filesProcessed: successfulFiles
           }
         }));
         
       } else {
         setUploadStatus('error');
-        setUploadMessage('No transactions were stored successfully');
+        setUploadMessage(`No transactions were stored successfully from any file. Check individual file errors.`);
       }
     } catch (error: any) {
-      console.error('❌ Upload error:', error);
+      console.error('❌ Multi-file upload error:', error);
       setUploadStatus('error');
       setUploadMessage(`Upload failed: ${error.message}`);
       setProgress(0);
@@ -401,7 +484,7 @@ export const CSVUpload = () => {
 
   const handleCancelPreview = () => {
     setShowPreview(false);
-    setProcessedCSV(null);
+    setProcessedFiles([]);
     setUploadStatus('idle');
     setUploadMessage('');
     setProgress(0);
@@ -421,6 +504,39 @@ export const CSVUpload = () => {
     ).join('\n');
   };
 
+  // Create consolidated preview data
+  const getConsolidatedPreview = () => {
+    if (processedFiles.length === 0) return null;
+
+    const allTransactions = processedFiles.flatMap(f => f.data.transactions);
+    const allSkippedRows = processedFiles.flatMap(f => f.data.skippedRows);
+    const allErrors = processedFiles.flatMap(f => f.data.errors);
+    const allWarnings = processedFiles.flatMap(f => f.data.warnings);
+
+    return {
+      transactions: allTransactions,
+      skippedRows: allSkippedRows,
+      bankFormat: processedFiles.find(f => f.data.bankFormat)?.data.bankFormat || null,
+      errors: allErrors,
+      warnings: allWarnings,
+      summary: {
+        totalRows: processedFiles.reduce((sum, f) => sum + f.data.summary.totalRows, 0),
+        totalTransactions: allTransactions.length,
+        dateRange: {
+          start: allTransactions.reduce((earliest, t) => 
+            !earliest || t.date < earliest ? t.date : earliest, ''),
+          end: allTransactions.reduce((latest, t) => 
+            !latest || t.date > latest ? t.date : latest, '')
+        },
+        totalAmount: allTransactions.reduce((sum, t) => 
+          sum + (t.isIncome ? t.amount : -t.amount), 0),
+        duplicates: 0,
+        successRate: processedFiles.length > 0 ? 
+          (allTransactions.length / processedFiles.reduce((sum, f) => sum + f.data.summary.totalRows, 0)) * 100 : 0
+      }
+    };
+  };
+
   return (
     <div id="upload" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
       <div className="flex items-center space-x-3 mb-4">
@@ -429,7 +545,7 @@ export const CSVUpload = () => {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Smart CSV Import</h3>
-          <p className="text-white/60 text-sm">Enhanced parser with preview & detailed feedback</p>
+          <p className="text-white/60 text-sm">Multi-file processing with comprehensive transaction extraction</p>
         </div>
       </div>
 
@@ -440,13 +556,48 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
-        {/* Show CSV Preview */}
-        {showPreview && processedCSV && (
-          <CSVPreview
-            processedData={processedCSV}
-            onConfirm={handleConfirmUpload}
-            onCancel={handleCancelPreview}
-          />
+        {/* Show Multi-File Preview */}
+        {showPreview && processedFiles.length > 0 && (
+          <div className="space-y-4">
+            {/* File Summary */}
+            <div className="bg-white/10 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3">File Processing Summary</h4>
+              <div className="space-y-2">
+                {processedFiles.map((file, index) => (
+                  <div key={index} className={`flex items-center justify-between p-2 rounded ${
+                    file.status === 'success' ? 'bg-green-500/20' :
+                    file.status === 'error' ? 'bg-red-500/20' : 'bg-yellow-500/20'
+                  }`}>
+                    <span className="text-white/80 text-sm">{file.name}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-xs ${
+                        file.status === 'success' ? 'text-green-300' :
+                        file.status === 'error' ? 'text-red-300' : 'text-yellow-300'
+                      }`}>
+                        {file.data.transactions.length} transactions
+                      </span>
+                      {file.status === 'success' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : file.status === 'error' ? (
+                        <X className="w-4 h-4 text-red-400" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Consolidated Preview */}
+            {getConsolidatedPreview() && (
+              <CSVPreview
+                processedData={getConsolidatedPreview()!}
+                onConfirm={handleConfirmUpload}
+                onCancel={handleCancelPreview}
+              />
+            )}
+          </div>
         )}
 
         {/* Enhanced Drop Zone - Hide when showing preview */}
@@ -478,13 +629,13 @@ export const CSVUpload = () => {
                   </div>
                 )}
                 <p className="text-white/80 font-medium">
-                  {processing ? 'Processing with enhanced parser...' : 
+                  {processing ? 'Processing multiple files...' : 
                    isPickerOpen ? 'Opening file picker...' :
                    dragActive ? 'Drop CSV files here!' :
-                   !user ? 'Please log in to upload' : 'Click to upload or drag & drop CSV files'}
+                   !user ? 'Please log in to upload' : 'Click to upload or drag & drop multiple CSV files'}
                 </p>
                 <p className="text-white/50 text-sm mt-1">
-                  {!user ? 'Authentication required' : 'Enhanced validation + Preview + Smart categorization'}
+                  {!user ? 'Authentication required' : 'Multi-file support + Comprehensive transaction extraction'}
                 </p>
               </div>
             </div>
@@ -559,16 +710,16 @@ export const CSVUpload = () => {
         {/* Enhanced Features List */}
         {!showPreview && (
           <div className="bg-white/10 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-2">🚀 Enhanced CSV Processing Features:</h4>
+            <h4 className="text-white font-medium mb-2">🚀 Multi-File CSV Processing Features:</h4>
             <ul className="text-white/70 text-sm space-y-1">
-              <li>• <strong>Tolerant Parser:</strong> Handles various CSV formats, separators, and edge cases</li>
-              <li>• <strong>Detailed Preview:</strong> See exactly what will be processed before uploading</li>
-              <li>• <strong>Smart Error Recovery:</strong> Identifies and explains skipped rows with suggestions</li>
-              <li>• <strong>Flexible Date Parsing:</strong> Supports multiple date formats with auto-detection</li>
-              <li>• <strong>Advanced Amount Parsing:</strong> Handles different currency symbols and separators</li>
-              <li>• <strong>Comprehensive Logging:</strong> Detailed processing information for debugging</li>
-              <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization with confidence scoring</li>
-              <li>• <strong>Bank Format Detection:</strong> Automatically detects and adapts to bank-specific formats</li>
+              <li>• <strong>Multi-File Support:</strong> Process multiple CSV files simultaneously</li>
+              <li>• <strong>Comprehensive Extraction:</strong> Extract every valid transaction across all files</li>
+              <li>• <strong>Flexible Field Mapping:</strong> Auto-detect Date, Amount, Description columns</li>
+              <li>• <strong>Multiple Date Formats:</strong> DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD support</li>
+              <li>• <strong>Fault Tolerance:</strong> Skip invalid rows but continue processing valid data</li>
+              <li>• <strong>Detailed Reporting:</strong> Per-file and per-row error reporting</li>
+              <li>• <strong>Smart Categorization:</strong> AI-powered transaction categorization</li>
+              <li>• <strong>Consolidated Preview:</strong> Review all transactions before processing</li>
             </ul>
           </div>
         )}
