@@ -1,14 +1,12 @@
 
 import React from 'react';
 import { ProcessedCSV } from '@/utils/csv/types';
-import {
-  SummaryStats,
-  ErrorsWarnings,
-  SkippedRows,
-  TransactionPreview,
-  ActionButtons,
-  ProcessingTips
-} from './csv-preview';
+import { SummaryStats } from './csv-preview/summary-stats';
+import { ErrorsWarnings } from './csv-preview/errors-warnings';
+import { SkippedRows } from './csv-preview/skipped-rows';
+import { TransactionPreview } from './csv-preview/transaction-preview';
+import { ActionButtons } from './csv-preview/action-buttons';
+import { ProcessingTips } from './csv-preview/processing-tips';
 
 interface CSVPreviewProps {
   processedData: ProcessedCSV;
