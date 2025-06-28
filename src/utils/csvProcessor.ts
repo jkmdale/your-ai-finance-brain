@@ -470,20 +470,20 @@ export class CSVProcessor {
         return { index: -1 };
       };
 
-      const dateResult = findColumnIndex(['date', 'transactiondate', 'postingdate', 'valuedate', 'transdate', 'dated']);
-      const descResult = findColumnIndex(['description', 'details', 'particulars', 'transactiondetails', 'memo', 'reference', 'narrative']);
-      const amountResult = findColumnIndex(['amount', 'value', 'debit', 'credit', 'transactionamount', 'balance', 'sum', 'total']);
+      const dateColumnResult = findColumnIndex(['date', 'transactiondate', 'postingdate', 'valuedate', 'transdate', 'dated']);
+      const descColumnResult = findColumnIndex(['description', 'details', 'particulars', 'transactiondetails', 'memo', 'reference', 'narrative']);
+      const amountColumnResult = findColumnIndex(['amount', 'value', 'debit', 'credit', 'transactionamount', 'balance', 'sum', 'total']);
 
       console.log(`📍 Column mapping:`);
-      console.log(`  Date: ${dateResult.index >= 0 ? `${dateResult.index} (${dateResult.matchedName})` : 'NOT FOUND'}`);
-      console.log(`  Description: ${descResult.index >= 0 ? `${descResult.index} (${descResult.matchedName})` : 'NOT FOUND'}`);
-      console.log(`  Amount: ${amountResult.index >= 0 ? `${amountResult.index} (${amountResult.matchedName})` : 'NOT FOUND'}`);
+      console.log(`  Date: ${dateColumnResult.index >= 0 ? `${dateColumnResult.index} (${dateColumnResult.matchedName})` : 'NOT FOUND'}`);
+      console.log(`  Description: ${descColumnResult.index >= 0 ? `${descColumnResult.index} (${descColumnResult.matchedName})` : 'NOT FOUND'}`);
+      console.log(`  Amount: ${amountColumnResult.index >= 0 ? `${amountColumnResult.index} (${amountColumnResult.matchedName})` : 'NOT FOUND'}`);
 
       // Check for required columns
       const missingColumns = [];
-      if (dateResult.index === -1) missingColumns.push('date');
-      if (descResult.index === -1) missingColumns.push('description');
-      if (amountResult.index === -1) missingColumns.push('amount');
+      if (dateColumnResult.index === -1) missingColumns.push('date');
+      if (descColumnResult.index === -1) missingColumns.push('description');
+      if (amountColumnResult.index === -1) missingColumns.push('amount');
 
       if (missingColumns.length > 0) {
         const suggestion = `Available columns: ${headers.join(', ')}`;
@@ -500,9 +500,9 @@ export class CSVProcessor {
         const rowNumber = i + 2; // +2 because we start from row 1 and skip header
         
         try {
-          const rawDate = row[dateResult.index]?.trim();
-          const description = row[descResult.index]?.trim();
-          const rawAmount = row[amountResult.index]?.trim();
+          const rawDate = row[dateColumnResult.index]?.trim();
+          const description = row[descColumnResult.index]?.trim();
+          const rawAmount = row[amountColumnResult.index]?.trim();
 
           console.log(`🔍 Processing row ${rowNumber}: date="${rawDate}", desc="${description}", amount="${rawAmount}"`);
 
@@ -534,14 +534,14 @@ export class CSVProcessor {
           }
 
           // Parse date with warnings
-          const dateResult = this.parseDate(rawDate, bankFormat, rowNumber);
-          const date = dateResult.date;
-          rowWarnings.push(...dateResult.warnings);
+          const parsedDateResult = this.parseDate(rawDate, bankFormat, rowNumber);
+          const date = parsedDateResult.date;
+          rowWarnings.push(...parsedDateResult.warnings);
 
           // Parse amount with warnings
-          const amountResult = this.parseAmount(rawAmount, rowNumber);
-          const amount = amountResult.amount;
-          rowWarnings.push(...amountResult.warnings);
+          const parsedAmountResult = this.parseAmount(rawAmount, rowNumber);
+          const amount = parsedAmountResult.amount;
+          rowWarnings.push(...parsedAmountResult.warnings);
 
           // Skip zero amounts only if original string suggests it should be zero
           if (amount === 0 && rawAmount !== '0' && rawAmount !== '0.00' && rawAmount !== '0,00') {
@@ -567,7 +567,7 @@ export class CSVProcessor {
             isIncome: amount > 0,
             confidence,
             rowNumber,
-            parseWarnings: dateResult.warnings.concat(amountResult.warnings)
+            parseWarnings: parsedDateResult.warnings.concat(parsedAmountResult.warnings)
           };
 
           transactions.push(transaction);
