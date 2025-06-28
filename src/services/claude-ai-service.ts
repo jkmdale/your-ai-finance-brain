@@ -1,4 +1,3 @@
-
 interface ClaudeMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -31,6 +30,12 @@ interface Transaction {
   is_income: boolean;
 }
 
+interface CategorizationResult {
+  category: string;
+  confidence: number;
+  rationale?: string;
+}
+
 interface FinancialData {
   totalBalance: number;
   monthlyIncome: number;
@@ -49,6 +54,11 @@ class ClaudeAIService {
   private baseUrl = 'https://api.anthropic.com/v1/messages';
   private requestCount = 0;
   private maxRequestsPerHour = 100;
+  private fallbackCategories = [
+    'Housing', 'Transportation', 'Food & Dining', 'Shopping', 
+    'Entertainment', 'Healthcare', 'Utilities', 'Personal Care', 
+    'Other Income', 'Salary', 'Investment Income', 'Other'
+  ];
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -83,6 +93,8 @@ class ClaudeAIService {
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Claude API error (attempt ${attempt + 1}):`, response.status, errorText);
           throw new Error(`Claude API error: ${response.status} ${response.statusText}`);
         }
 
@@ -93,9 +105,11 @@ class ClaudeAIService {
       } catch (error) {
         console.error(`Claude API attempt ${attempt + 1} failed:`, error);
         if (attempt === retries - 1) {
+          console.error('All Claude API attempts failed, falling back to rule-based categorization');
           throw error;
         }
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
       }
     }
 
@@ -227,6 +241,70 @@ Suggest how to prioritize and accelerate goal achievement. Provide specific allo
     }
   }
 
+  async generateSmartBudgetRecommendations(userProfile: FinancialData): Promise<{
+    recommendations: string;
+    suggestedGoals: Array<{
+      name: string;
+      target_amount: number;
+      rationale: string;
+      priority: 'high' | 'medium' | 'low';
+    }>;
+  }> {
+    const sanitizedData = this.sanitizeFinancialData(userProfile);
+    
+    const messages: ClaudeMessage[] = [
+      {
+        role: 'user',
+        content: `Based on this financial data: ${sanitizedData}
+
+Provide:
+1. Budget optimization recommendations
+2. 3 SMART financial goals with specific amounts and rationale
+
+Format as JSON:
+{
+  "recommendations": "budget advice text",
+  "suggestedGoals": [
+    {
+      "name": "goal name",
+      "target_amount": amount,
+      "rationale": "why this goal",
+      "priority": "high/medium/low"
+    }
+  ]
+}`
+      }
+    ];
+
+    try {
+      const response = await this.makeClaudeRequest(messages, 'claude-3-5-sonnet-20241022', 0.3, 800);
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Smart budget recommendations failed:', error);
+      // Fallback recommendations
+      const monthlyExpenses = userProfile.monthlyExpenses;
+      const emergencyFund = monthlyExpenses * 6;
+      
+      return {
+        recommendations: "Consider the 50/30/20 rule: 50% needs, 30% wants, 20% savings. Review your largest expense categories for potential savings.",
+        suggestedGoals: [
+          {
+            name: "Emergency Fund",
+            target_amount: emergencyFund,
+            rationale: "Build 6 months of expenses for financial security",
+            priority: "high" as const
+          },
+          {
+            name: "Reduce Dining Out",
+            target_amount: monthlyExpenses * 0.1,
+            rationale: "Save 10% on monthly expenses by cooking more at home",
+            priority: "medium" as const
+          }
+        ]
+      };
+    }
+  }
+
   async generateBudgetRecommendations(spendingHistory: Transaction[]): Promise<string> {
     const monthlySpending = this.getTopSpendingCategories(spendingHistory);
     
@@ -275,6 +353,96 @@ Provide the score and brief analysis of strengths/weaknesses. Format as: "Score:
     }
   }
 
+  // Enhanced categorization with confidence and fallback
+  async categorizeTransactionsWithConfidence(transactionArray: Transaction[]): Promise<{
+    transactions: Transaction[];
+    results: CategorizationResult[];
+    summary: {
+      totalProcessed: number;
+      aiCategorized: number;
+      fallbackCategorized: number;
+      averageConfidence: number;
+    };
+  }> {
+    const uncategorized = transactionArray.filter(t => !t.category);
+    if (uncategorized.length === 0) {
+      return {
+        transactions: transactionArray,
+        results: [],
+        summary: { totalProcessed: 0, aiCategorized: 0, fallbackCategorized: 0, averageConfidence: 0 }
+      };
+    }
+
+    const results: CategorizationResult[] = [];
+    let aiCategorized = 0;
+    let fallbackCategorized = 0;
+
+    // Try AI categorization first
+    try {
+      const transactionDescriptions = uncategorized.map(t => ({
+        description: t.description,
+        amount: t.amount,
+        merchant: t.merchant || '',
+        is_income: t.is_income
+      }));
+
+      const messages: ClaudeMessage[] = [
+        {
+          role: 'user',
+          content: `Categorize these transactions and provide confidence scores. Return a JSON array with objects containing "category", "confidence" (0-1), and "rationale" fields:
+
+${JSON.stringify(transactionDescriptions)}
+
+Categories: Housing, Transportation, Food & Dining, Shopping, Entertainment, Healthcare, Utilities, Personal Care, Other Income, Salary, Investment Income, Other`
+        }
+      ];
+
+      const response = await this.makeClaudeRequest(messages, 'claude-3-haiku-20240307', 0.1, 2000);
+      const aiResults = JSON.parse(response);
+      
+      for (let i = 0; i < uncategorized.length; i++) {
+        if (aiResults[i]) {
+          results.push(aiResults[i]);
+          aiCategorized++;
+        } else {
+          const fallback = this.fallbackCategorization(uncategorized[i]);
+          results.push(fallback);
+          fallbackCategorized++;
+        }
+      }
+    } catch (error) {
+      console.error('AI categorization failed, using fallback for all transactions:', error);
+      // Use fallback for all transactions
+      for (const transaction of uncategorized) {
+        const result = this.fallbackCategorization(transaction);
+        results.push(result);
+        fallbackCategorized++;
+      }
+    }
+
+    // Apply categories to transactions
+    const categorizedTransactions = transactionArray.map((t, index) => {
+      const uncategorizedIndex = uncategorized.findIndex(u => u.description === t.description);
+      if (uncategorizedIndex !== -1) {
+        return { ...t, category: results[uncategorizedIndex]?.category || 'Other' };
+      }
+      return t;
+    });
+
+    const averageConfidence = results.reduce((sum, r) => sum + r.confidence, 0) / results.length;
+
+    return {
+      transactions: categorizedTransactions,
+      results,
+      summary: {
+        totalProcessed: uncategorized.length,
+        aiCategorized,
+        fallbackCategorized,
+        averageConfidence: Math.round(averageConfidence * 100) / 100
+      }
+    };
+  }
+
   // CSV Processing Functions
   async categorizeTransactions(transactionArray: Transaction[]): Promise<Transaction[]> {
     const uncategorized = transactionArray.filter(t => !t.category);
@@ -290,7 +458,8 @@ Provide the score and brief analysis of strengths/weaknesses. Format as: "Score:
     const messages: ClaudeMessage[] = [
       {
         role: 'user',
-        content: `Categorize these transactions into standard categories (Housing, Transportation, Food & Dining, Shopping, Entertainment, Healthcare, Utilities, Personal Care, Other Income, Salary, Investment Income, Other):
+        content: `Categorize these transactions into standard categories (Housing, Transportation, Food & Dining, Shopping, 
+Entertainment, Healthcare, Utilities, Personal Care, Other Income, Salary, Investment Income, Other):
 
 ${JSON.stringify(transactionDescriptions)}
 
@@ -390,4 +559,4 @@ Return ONLY a JSON object mapping original names to cleaned names. Remove transa
 }
 
 export { ClaudeAIService };
-export type { Transaction, FinancialData };
+export type { Transaction, FinancialData, CategorizationResult };
