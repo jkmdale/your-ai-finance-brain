@@ -1,4 +1,3 @@
-
 import { BankFormat, detectBankFormat } from './bankFormats';
 
 export interface Transaction {
@@ -533,12 +532,12 @@ export class CSVProcessor {
             continue;
           }
 
-          // Parse date with warnings
+          // Parse date with warnings - using unique variable name
           const parsedDateResult = this.parseDate(rawDate, bankFormat, rowNumber);
           const date = parsedDateResult.date;
           rowWarnings.push(...parsedDateResult.warnings);
 
-          // Parse amount with warnings
+          // Parse amount with warnings - using unique variable name
           const parsedAmountResult = this.parseAmount(rawAmount, rowNumber);
           const amount = parsedAmountResult.amount;
           rowWarnings.push(...parsedAmountResult.warnings);
