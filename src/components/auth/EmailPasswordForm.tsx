@@ -25,20 +25,12 @@ const pageVariants = {
   exit: { opacity: 0, x: -50 }
 };
 
-const countries = [
-  'United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Sweden',
-  'Norway', 'Denmark', 'Finland', 'Switzerland', 'Austria', 'Belgium', 'Ireland', 'Portugal', 'Greece', 'Poland',
-  'Czech Republic', 'Hungary', 'Romania', 'Bulgaria', 'Croatia', 'Slovenia', 'Slovakia', 'Estonia', 'Latvia', 'Lithuania',
-  'Luxembourg', 'Malta', 'Cyprus', 'Japan', 'South Korea', 'Singapore', 'Hong Kong', 'Taiwan', 'New Zealand', 'Israel',
-  'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Jordan', 'Lebanon', 'Turkey', 'Egypt',
-  'South Africa', 'Nigeria', 'Kenya', 'Ghana', 'Morocco', 'Tunisia', 'Algeria', 'Brazil', 'Argentina', 'Chile',
-  'Colombia', 'Peru', 'Uruguay', 'Paraguay', 'Ecuador', 'Bolivia', 'Venezuela', 'Mexico', 'Costa Rica', 'Panama',
-  'Guatemala', 'Honduras', 'El Salvador', 'Nicaragua', 'Dominican Republic', 'Jamaica', 'Trinidad and Tobago', 'Barbados',
-  'India', 'China', 'Thailand', 'Malaysia', 'Indonesia', 'Philippines', 'Vietnam', 'Cambodia', 'Laos', 'Myanmar',
-  'Bangladesh', 'Sri Lanka', 'Nepal', 'Bhutan', 'Maldives', 'Pakistan', 'Afghanistan', 'Iran', 'Iraq', 'Syria',
-  'Russia', 'Ukraine', 'Belarus', 'Moldova', 'Georgia', 'Armenia', 'Azerbaijan', 'Kazakhstan', 'Uzbekistan', 'Kyrgyzstan',
-  'Tajikistan', 'Turkmenistan', 'Mongolia', 'North Korea', 'Brunei', 'East Timor', 'Fiji', 'Papua New Guinea',
-  'Solomon Islands', 'Vanuatu', 'Samoa', 'Tonga', 'Kiribati', 'Tuvalu', 'Nauru', 'Palau', 'Marshall Islands', 'Micronesia'
+const supportedCountries = [
+  'New Zealand',
+  'Australia', 
+  'United Kingdom',
+  'United States',
+  'Canada'
 ];
 
 export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
@@ -126,8 +118,8 @@ export const EmailPasswordForm: React.FC<EmailPasswordFormProps> = ({
                 <SelectTrigger className="bg-white/10 border-white/20 text-white placeholder-white/50 rounded-xl h-12">
                   <SelectValue placeholder="Select your country" className="text-white/50" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700 text-white max-h-60">
-                  {countries.map((countryName) => (
+                <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                  {supportedCountries.map((countryName) => (
                     <SelectItem 
                       key={countryName} 
                       value={countryName}
