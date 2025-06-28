@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Eye, TrendingUp, AlertTriangle, Info, Target, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFilePicker } from '@/hooks/useFilePicker';
@@ -18,6 +19,8 @@ interface UploadResult {
   duplicates?: DuplicateMatch[];
   errors?: string[];
   warnings?: string[];
+  budgetCreated?: boolean;
+  goalsRecommended?: any[];
 }
 
 export const CSVUpload = () => {
@@ -30,6 +33,8 @@ export const CSVUpload = () => {
   const [showTransactions, setShowTransactions] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [creatingBudget, setCreatingBudget] = useState(false);
+  const [recommendingGoals, setRecommendingGoals] = useState(false);
   const { user } = useAuth();
 
   const csvProcessor = new CSVProcessor();
@@ -48,18 +53,111 @@ export const CSVUpload = () => {
     try {
       const { data, error } = await supabase.functions.invoke('ai-coach', {
         body: { 
-          message: `Analyze these newly uploaded transactions and provide insights on spending patterns, budget impact, and recommendations: ${JSON.stringify(transactions.slice(0, 20))}`,
+          message: `Analyze these newly uploaded transactions and provide insights on spending patterns, budget impact, and specific recommendations: ${JSON.stringify(transactions.slice(0, 30))}`,
           type: 'analysis'
         }
       });
 
       if (error) throw error;
 
-      setUploadResults(prev => prev ? { ...prev, analysis: data.response } : null);
+      return data.response;
     } catch (error: any) {
       console.error('Analysis error:', error);
+      return null;
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const createSmartBudget = async (transactions: any[]) => {
+    if (!transactions.length || !user) return null;
+
+    setCreatingBudget(true);
+    try {
+      console.log('Creating smart budget from transactions...');
+      
+      const budgetResult = await budgetCreator.createBudgetFromTransactions(
+        user.id,
+        transactions,
+        `Smart Budget - ${new Date().toLocaleDateString()}`
+      );
+      
+      console.log('Budget created successfully:', budgetResult);
+      return budgetResult;
+    } catch (error: any) {
+      console.error('Budget creation error:', error);
+      return null;
+    } finally {
+      setCreatingBudget(false);
+    }
+  };
+
+  const recommendSmartGoals = async (transactions: any[], budgetResult: any) => {
+    if (!transactions.length || !user) return [];
+
+    setRecommendingGoals(true);
+    try {
+      // Analyze spending patterns for goal recommendations
+      const totalIncome = transactions.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0);
+      const totalExpenses = transactions.filter(t => !t.is_income).reduce((sum, t) => sum + t.amount, 0);
+      const monthlyNet = totalIncome - totalExpenses;
+
+      // Get AI recommendations for SMART goals
+      const { data, error } = await supabase.functions.invoke('ai-coach', {
+        body: { 
+          message: `Based on monthly income of $${totalIncome}, expenses of $${totalExpenses}, and net savings of $${monthlyNet}, recommend 3-5 SMART financial goals. Consider emergency fund, debt reduction, savings targets, and investment goals. Make them specific, measurable, achievable, relevant, and time-bound.`,
+          type: 'goals'
+        }
+      });
+
+      if (error) throw error;
+
+      // Create suggested goals in database
+      const suggestedGoals = [
+        {
+          name: 'Emergency Fund',
+          goal_type: 'savings',
+          target_amount: Math.round(totalExpenses * 3), // 3 months expenses
+          current_amount: 0,
+          target_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          priority: 1,
+          description: 'Build emergency fund covering 3 months of expenses'
+        },
+        {
+          name: 'Monthly Savings Target',
+          goal_type: 'savings', 
+          target_amount: Math.max(monthlyNet * 0.8, 500), // 80% of net income or $500 minimum
+          current_amount: 0,
+          target_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          priority: 2,
+          description: 'Monthly savings goal based on your cash flow'
+        }
+      ];
+
+      // Insert goals into database
+      const { data: createdGoals, error: goalError } = await supabase
+        .from('financial_goals')
+        .insert(suggestedGoals.map(goal => ({
+          ...goal,
+          user_id: user.id,
+          is_active: true
+        })))
+        .select();
+
+      if (goalError) {
+        console.error('Error creating goals:', goalError);
+        return [];
+      }
+
+      return {
+        aiRecommendations: data.response,
+        createdGoals: createdGoals || []
+      };
+    } catch (error: any) {
+      console.error('Goal recommendation error:', error);
+      return [];
+    } finally {
+      setRecommendingGoals(false);
     }
   };
 
@@ -72,12 +170,14 @@ export const CSVUpload = () => {
       return;
     }
 
+    // Validate file types
     const nonCsvFiles = Array.from(files).filter(
-      file => file.type !== 'text/csv' && file.type !== 'application/vnd.ms-excel' && !file.name.endsWith('.csv')
+      file => !file.type.includes('csv') && !file.name.toLowerCase().endsWith('.csv')
     );
+    
     if (nonCsvFiles.length > 0) {
       setUploadStatus('error');
-      setUploadMessage(`Please upload only CSV files. Found non-CSV files: ${nonCsvFiles.map(f => f.name).join(', ')}`);
+      setUploadMessage(`Please upload only CSV files. Found: ${nonCsvFiles.map(f => f.name).join(', ')}`);
       return;
     }
 
@@ -86,6 +186,7 @@ export const CSVUpload = () => {
     setUploadStatus('processing');
     setUploadResults(null);
     setProcessedCSV(null);
+    setUploadMessage('Processing CSV files with AI...');
 
     try {
       let totalProcessed = 0;
@@ -95,136 +196,90 @@ export const CSVUpload = () => {
       const allDuplicates: DuplicateMatch[] = [];
 
       // Get existing transactions for duplicate detection
-      console.log('🔍 Fetching existing transactions for duplicate detection...');
-      const { data: existingTransactions, error: fetchError } = await supabase
+      console.log('🔍 Fetching existing transactions...');
+      const { data: existingTransactions } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
         .limit(1000);
 
-      if (fetchError) {
-        console.error('❌ Error fetching existing transactions:', fetchError);
-        allWarnings.push(`Warning: Could not check for duplicates - ${fetchError.message}`);
-      }
-
       const duplicateDetector = new DuplicateDetector(existingTransactions || []);
 
+      // Process each file
       for (const file of Array.from(files)) {
-        console.log(`📄 Processing file: ${file.name} (${file.size} bytes)`);
+        console.log(`📄 Processing: ${file.name}`);
         
         try {
           const text = await file.text();
-          console.log(`📝 File content length: ${text.length} characters`);
-
+          
           if (!text.trim()) {
             allErrors.push(`File ${file.name} is empty`);
             continue;
           }
 
-          setUploadMessage(`Processing ${file.name}...`);
+          setUploadMessage(`Processing ${file.name} with AI categorization...`);
 
-          // Process CSV with enhanced processor
-          console.log('🔄 Processing CSV with enhanced processor...');
+          // Enhanced CSV processing
           const processed = await csvProcessor.processCSV(text);
-          console.log('✅ CSV processing result:', {
-            transactions: processed.transactions.length,
-            errors: processed.errors.length,
-            warnings: processed.warnings.length,
-            bankFormat: processed.bankFormat?.name
-          });
+          console.log('✅ CSV processed:', processed.transactions.length, 'transactions');
           
           if (processed.errors.length > 0) {
-            console.error('❌ Processing errors:', processed.errors);
             allErrors.push(...processed.errors);
           }
           
           if (processed.warnings.length > 0) {
-            console.warn('⚠️ Processing warnings:', processed.warnings);
             allWarnings.push(...processed.warnings);
           }
 
           if (processed.transactions.length > 0) {
-            // Detect duplicates
-            console.log('🔍 Checking for duplicates...');
+            // Check for duplicates
             const duplicates = duplicateDetector.findDuplicates(processed.transactions);
             allDuplicates.push(...duplicates);
-            console.log(`🔍 Found ${duplicates.length} potential duplicates`);
-
-            // Store processed data for preview
+            
             setProcessedCSV(processed);
             
-            // Send to backend for actual storage
-            console.log('💾 Sending to backend for storage...');
+            // Send to backend for storage
+            setUploadMessage('Storing transactions and creating budget...');
             const { data, error } = await supabase.functions.invoke('process-csv', {
               body: { 
-                csvData: text, 
+                csvData: text,
                 fileName: file.name,
                 userId: user.id
               }
             });
 
             if (error) {
-              console.error('❌ Backend processing error:', error);
-              allErrors.push(`Error processing ${file.name}: ${error.message}`);
+              console.error('❌ Backend error:', error);
+              allErrors.push(`Error storing ${file.name}: ${error.message}`);
             } else {
-              console.log('✅ Backend processing successful:', data);
               totalProcessed += data.processed || 0;
               allTransactions.push(...(data.transactions || []));
             }
-          } else {
-            allWarnings.push(`No valid transactions found in ${file.name}`);
           }
         } catch (fileError: any) {
-          console.error(`❌ Error processing file ${file.name}:`, fileError);
-          allErrors.push(`Error reading ${file.name}: ${fileError.message}`);
+          console.error(`❌ File error:`, fileError);
+          allErrors.push(`Error processing ${file.name}: ${fileError.message}`);
         }
       }
 
-      console.log(`📊 Final results: ${totalProcessed} transactions processed, ${allErrors.length} errors, ${allWarnings.length} warnings`);
-
       if (totalProcessed > 0) {
         setUploadStatus('success');
-        setUploadMessage(`Successfully processed ${totalProcessed} transactions with enhanced bank format detection`);
+        setUploadMessage(`Successfully processed ${totalProcessed} transactions`);
         
-        // Auto-create budget from transactions
-        try {
-          console.log('💰 Creating/updating budget from transactions...');
-          const budgetResult = await budgetCreator.createBudgetFromTransactions(
-            user.id,
-            allTransactions,
-            `Budget from ${new Date().toLocaleDateString()}`
-          );
-          
-          console.log('✅ Budget creation result:', budgetResult);
-          
-          // Update success message to include budget creation
-          setUploadMessage(
-            `Successfully processed ${totalProcessed} transactions and updated budget with ${budgetResult.categoriesCreated} categories`
-          );
-
-          // Notify other components that data was uploaded and budget updated
-          localStorage.setItem('csv-upload-complete', Date.now().toString());
-          
-          // Dispatch events for other components
-          window.dispatchEvent(new StorageEvent('storage', {
-            key: 'csv-upload-complete',
-            newValue: Date.now().toString()
-          }));
-
-          window.dispatchEvent(new CustomEvent('csv-upload-complete', {
-            detail: { 
-              processed: totalProcessed, 
-              transactions: allTransactions,
-              budgetUpdated: true,
-              budgetResult
-            }
-          }));
-          
-        } catch (budgetError) {
-          console.error('❌ Error creating/updating budget:', budgetError);
-          allWarnings.push('Transactions processed but budget update failed');
-        }
+        // Run AI analysis, budget creation, and goal recommendations in parallel
+        setUploadMessage('Running AI analysis and creating smart budget...');
         
+        const [analysisResult, budgetResult, goalResult] = await Promise.all([
+          analyzeTransactions(allTransactions),
+          createSmartBudget(allTransactions),
+          recommendSmartGoals(allTransactions, null).then(result => 
+            createSmartBudget(allTransactions).then(budget => 
+              recommendSmartGoals(allTransactions, budget)
+            )
+          )
+        ]);
+
+        // Update final results
         setUploadResults({
           success: true,
           processed: totalProcessed,
@@ -233,25 +288,44 @@ export const CSVUpload = () => {
           bankFormat: processedCSV?.bankFormat,
           duplicates: allDuplicates,
           errors: allErrors,
-          warnings: allWarnings
+          warnings: allWarnings,
+          analysis: analysisResult,
+          budgetCreated: !!budgetResult,
+          goalsRecommended: goalResult
         });
+
+        // Update success message
+        const features = [];
+        if (analysisResult) features.push('AI insights');
+        if (budgetResult) features.push('smart budget');
+        if (goalResult && goalResult.createdGoals?.length > 0) features.push(`${goalResult.createdGoals.length} SMART goals`);
         
-        // Auto-analyze the transactions
-        if (allTransactions.length > 0) {
-          analyzeTransactions(allTransactions);
-        }
+        setUploadMessage(
+          `✅ Successfully processed ${totalProcessed} transactions and created ${features.join(', ')}`
+        );
+
+        // Notify other components
+        window.dispatchEvent(new CustomEvent('csv-upload-complete', {
+          detail: { 
+            processed: totalProcessed, 
+            transactions: allTransactions,
+            budgetCreated: !!budgetResult,
+            goalsCreated: goalResult?.createdGoals?.length || 0
+          }
+        }));
+        
       } else {
         setUploadStatus('error');
-        const errorMessage = allErrors.length > 0 
-          ? `Processing failed. Errors: ${allErrors.join('; ')}`
-          : `No transactions could be processed. ${allWarnings.join('; ')}`;
-        setUploadMessage(errorMessage);
-        console.error('❌ Final error state:', errorMessage);
+        setUploadMessage(
+          allErrors.length > 0 
+            ? `Processing failed: ${allErrors.join('; ')}`
+            : `No transactions found. ${allWarnings.join('; ')}`
+        );
       }
     } catch (error: any) {
       console.error('❌ Upload error:', error);
       setUploadStatus('error');
-      setUploadMessage(`Upload failed: ${error.message || 'Unknown error occurred'}`);
+      setUploadMessage(`Upload failed: ${error.message}`);
     } finally {
       setUploading(false);
       setProcessing(false);
@@ -278,7 +352,7 @@ export const CSVUpload = () => {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Smart CSV Import</h3>
-          <p className="text-white/60 text-sm">Advanced bank format detection with 50+ supported formats</p>
+          <p className="text-white/60 text-sm">AI-powered categorization, budget creation & SMART goals</p>
         </div>
       </div>
 
@@ -311,7 +385,7 @@ export const CSVUpload = () => {
                  !user ? 'Please log in to upload' : 'Click to upload CSV files'}
               </p>
               <p className="text-white/50 text-sm mt-1">
-                {!user ? 'Authentication required' : 'Auto-detects bank formats from 50+ supported banks'}
+                {!user ? 'Authentication required' : 'Auto-categorization + Budget + SMART Goals'}
               </p>
             </div>
           </button>
@@ -339,25 +413,34 @@ export const CSVUpload = () => {
               }`}>
                 {uploadMessage}
               </span>
-              {uploadStatus === 'error' && uploadResults?.errors && uploadResults.errors.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-red-400 text-xs font-medium mb-1">Detailed Errors:</p>
-                  <ul className="text-red-300 text-xs space-y-1">
-                    {uploadResults.errors.map((error, index) => (
-                      <li key={index} className="flex items-start space-x-1">
-                        <span className="text-red-400 mt-0.5">•</span>
-                        <span>{error}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {/* Show processing status */}
+              {(analyzing || creatingBudget || recommendingGoals) && (
+                <div className="mt-2 space-y-1">
+                  {analyzing && (
+                    <div className="flex items-center space-x-2 text-xs text-blue-300">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Analyzing spending patterns...</span>
+                    </div>
+                  )}
+                  {creatingBudget && (
+                    <div className="flex items-center space-x-2 text-xs text-purple-300">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Creating smart budget...</span>
+                    </div>
+                  )}
+                  {recommendingGoals && (
+                    <div className="flex items-center space-x-2 text-xs text-green-300">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Generating SMART goals...</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        
-        {/* Bank Format Detection Results */}
+        {/* Bank Format Detection */}
         {processedCSV?.bankFormat && (
           <div className="bg-white/10 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-3">
@@ -370,28 +453,20 @@ export const CSVUpload = () => {
                 <p className="text-white font-medium">{processedCSV.bankFormat.name}</p>
               </div>
               <div>
-                <span className="text-white/70">Country:</span>
-                <p className="text-white font-medium">{processedCSV.bankFormat.country}</p>
-              </div>
-              <div>
                 <span className="text-white/70">Confidence:</span>
                 <p className={`font-medium ${getConfidenceColor(processedCSV.bankFormat.confidence)}`}>
                   {Math.round(processedCSV.bankFormat.confidence * 100)}%
                 </p>
               </div>
-              <div>
-                <span className="text-white/70">Date Format:</span>
-                <p className="text-white font-medium">{processedCSV.bankFormat.dateFormats[0]}</p>
-              </div>
             </div>
           </div>
         )}
 
-        {/* Enhanced Upload Summary */}
+        {/* Enhanced Results Summary */}
         {uploadResults && (
           <div className="bg-white/10 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-white font-medium">Enhanced Processing Results</h4>
+              <h4 className="text-white font-medium">Smart Processing Results</h4>
               <div className="flex space-x-2">
                 <button
                   onClick={() => setShowTransactions(!showTransactions)}
@@ -400,73 +475,85 @@ export const CSVUpload = () => {
                   <Eye className="w-4 h-4" />
                   <span className="text-sm">{showTransactions ? 'Hide' : 'View'} Transactions</span>
                 </button>
-                {uploadResults.duplicates && uploadResults.duplicates.length > 0 && (
-                  <button
-                    onClick={() => setShowDuplicates(!showDuplicates)}
-                    className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 transition-colors"
-                  >
-                    <AlertTriangle className="w-4 h-4" />
-                    <span className="text-sm">{showDuplicates ? 'Hide' : 'View'} Duplicates ({uploadResults.duplicates.length})</span>
-                  </button>
-                )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-white/70">Transactions Processed:</span>
-                <p className="text-white font-medium">{uploadResults.processed}</p>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="text-center">
+                <div className="text-xl font-bold text-white mb-1">{uploadResults.processed}</div>
+                <div className="text-white/60 text-xs">Transactions</div>
               </div>
-              <div>
-                <span className="text-white/70">Duplicates Found:</span>
-                <p className="text-yellow-400 font-medium">{uploadResults.duplicates?.length || 0}</p>
-              </div>
-              {uploadResults.warnings && uploadResults.warnings.length > 0 && (
-                <div className="col-span-2">
-                  <span className="text-white/70">Warnings:</span>
-                  <ul className="text-yellow-300 text-xs mt-1">
-                    {uploadResults.warnings.map((warning, index) => (
-                      <li key={index}>• {warning}</li>
-                    ))}
-                  </ul>
+              <div className="text-center">
+                <div className="text-xl font-bold text-green-400 mb-1">
+                  {uploadResults.budgetCreated ? '✓' : '✗'}
                 </div>
-              )}
+                <div className="text-white/60 text-xs">Smart Budget</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-blue-400 mb-1">
+                  {uploadResults.goalsRecommended?.createdGoals?.length || 0}
+                </div>
+                <div className="text-white/60 text-xs">SMART Goals</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-yellow-400 mb-1">
+                  {uploadResults.duplicates?.length || 0}
+                </div>
+                <div className="text-white/60 text-xs">Duplicates</div>
+              </div>
             </div>
           </div>
         )}
 
-        
-
-        {/* Enhanced AI Analysis */}
-        {analyzing && (
-          <div className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-4">
-            <div className="flex items-center space-x-2">
-              <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-              <span className="text-purple-300 text-sm">Analyzing transactions with AI...</span>
-            </div>
-          </div>
-        )}
-
+        {/* AI Analysis Results */}
         {uploadResults?.analysis && (
           <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-3">
               <TrendingUp className="w-5 h-5 text-purple-400" />
-              <h4 className="text-white font-medium">AI Analysis</h4>
+              <h4 className="text-white font-medium">AI Financial Analysis</h4>
             </div>
             <p className="text-white/80 text-sm leading-relaxed">{uploadResults.analysis}</p>
           </div>
         )}
 
-        {/* Enhanced Transactions Table */}
+        {/* SMART Goals Recommendations */}
+        {uploadResults?.goalsRecommended?.aiRecommendations && (
+          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <Target className="w-5 h-5 text-green-400" />
+              <h4 className="text-white font-medium">SMART Goals Recommendations</h4>
+            </div>
+            <p className="text-white/80 text-sm leading-relaxed mb-3">
+              {uploadResults.goalsRecommended.aiRecommendations}
+            </p>
+            {uploadResults.goalsRecommended.createdGoals?.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/20">
+                <p className="text-green-300 text-xs font-medium mb-2">
+                  ✓ Created {uploadResults.goalsRecommended.createdGoals.length} goals automatically
+                </p>
+                <div className="space-y-2">
+                  {uploadResults.goalsRecommended.createdGoals.map((goal: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between text-xs">
+                      <span className="text-white/70">{goal.name}</span>
+                      <span className="text-green-300">${goal.target_amount?.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Transaction Table */}
         {showTransactions && processedCSV?.transactions && processedCSV.transactions.length > 0 && (
           <div className="bg-white/10 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-3">Processed Transactions with AI Categorization</h4>
+            <h4 className="text-white font-medium mb-3">AI Categorized Transactions</h4>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="border-white/20">
                     <TableHead className="text-white/70">Date</TableHead>
                     <TableHead className="text-white/70">Description</TableHead>
-                    <TableHead className="text-white/70">Merchant</TableHead>
                     <TableHead className="text-white/70">Amount</TableHead>
                     <TableHead className="text-white/70">Category</TableHead>
                     <TableHead className="text-white/70">Confidence</TableHead>
@@ -479,7 +566,6 @@ export const CSVUpload = () => {
                         {new Date(transaction.date).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-white/80 text-sm">{transaction.description}</TableCell>
-                      <TableCell className="text-white/60 text-sm">{transaction.merchant || '-'}</TableCell>
                       <TableCell className={`text-sm font-medium ${transaction.isIncome ? 'text-green-400' : 'text-white'}`}>
                         {transaction.isIncome ? '+' : '-'}${transaction.amount.toFixed(2)}
                       </TableCell>
@@ -499,64 +585,20 @@ export const CSVUpload = () => {
                   ))}
                 </TableBody>
               </Table>
-              {processedCSV.transactions.length > 10 && (
-                <p className="text-white/60 text-xs mt-2 text-center">
-                  Showing 10 of {processedCSV.transactions.length} transactions
-                </p>
-              )}
             </div>
           </div>
         )}
 
-        {/* Duplicate Detection Results */}
-        {showDuplicates && uploadResults?.duplicates && uploadResults.duplicates.length > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-            <h4 className="text-yellow-300 font-medium mb-3">Potential Duplicates Found</h4>
-            <div className="space-y-3">
-              {uploadResults.duplicates.slice(0, 5).map((duplicate, index) => (
-                <div key={index} className="bg-white/10 rounded-lg p-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-white font-medium">Match #{index + 1}</span>
-                    <span className={`px-2 py-1 text-xs rounded-full ${getConfidenceBadge(duplicate.confidence)}`}>
-                      {Math.round(duplicate.confidence * 100)}% match
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-white/70">New Transaction:</p>
-                      <p className="text-white">{duplicate.new.description}</p>
-                      <p className="text-white/60">{duplicate.new.date} - ${duplicate.new.amount}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/70">Existing Transaction:</p>
-                      <p className="text-white">{duplicate.existing.description}</p>
-                      <p className="text-white/60">{duplicate.existing.transaction_date || duplicate.existing.date} - ${duplicate.existing.amount}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <p className="text-white/70 text-xs">Reasons:</p>
-                    <ul className="text-yellow-300 text-xs">
-                      {duplicate.reasons.map((reason, i) => (
-                        <li key={i}>• {reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Enhanced Format Requirements */}
+        {/* Enhanced Features List */}
         <div className="bg-white/10 rounded-lg p-4">
-          <h4 className="text-white font-medium mb-2">Enhanced CSV Processing Features:</h4>
+          <h4 className="text-white font-medium mb-2">🚀 Smart Finance Features:</h4>
           <ul className="text-white/70 text-sm space-y-1">
-            <li>• <strong>50+ Bank Formats:</strong> ANZ, ASB, BNZ, Westpac, Chase, HSBC, and more</li>
-            <li>• <strong>Smart Duplicate Detection:</strong> Fuzzy matching with confidence scoring</li>
-            <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization</li>
-            <li>• <strong>Merchant Standardization:</strong> Clean and consistent merchant names</li>
-            <li>• <strong>Multi-Currency Support:</strong> Handles NZD, USD, GBP, AUD, EUR</li>
-            <li>• <strong>Error Recovery:</strong> Detailed error reporting and partial imports</li>
+            <li>• <strong>AI Categorization:</strong> Intelligent transaction categorization with confidence scoring</li>
+            <li>• <strong>Smart Budget Creation:</strong> Automatic budget generation based on spending patterns</li>
+            <li>• <strong>SMART Goals:</strong> Personalized financial goals (Specific, Measurable, Achievable, Relevant, Time-bound)</li>
+            <li>• <strong>Bank Format Detection:</strong> Supports 50+ bank formats with auto-detection</li>
+            <li>• <strong>Duplicate Detection:</strong> Advanced duplicate detection with fuzzy matching</li>
+            <li>• <strong>Financial Analysis:</strong> AI-powered insights and recommendations</li>
           </ul>
         </div>
       </div>

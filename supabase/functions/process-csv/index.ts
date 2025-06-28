@@ -15,117 +15,138 @@ interface Transaction {
 }
 
 const parseDate = (dateString: string): string => {
-  console.log('Parsing date:', dateString);
-  
-  // Handle different date formats
-  if (dateString.includes('/')) {
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      // Check if it's DD/MM/YYYY or MM/DD/YYYY format
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]);
-      const year = parseInt(parts[2]);
-      
-      // If day > 12, it's likely DD/MM/YYYY
-      if (day > 12) {
-        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      } else {
-        // Could be MM/DD/YYYY or DD/MM/YYYY, assume DD/MM/YYYY for now
-        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      }
-    }
-  } else if (dateString.includes('-')) {
-    // Already in YYYY-MM-DD format
-    return dateString;
+  if (!dateString?.trim()) {
+    return new Date().toISOString().split('T')[0];
   }
   
-  // If we can't parse it, return today's date
+  const cleanDate = dateString.trim();
+  
+  // Handle various date formats
+  const patterns = [
+    /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
+    /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/,
+    /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/,
+    /^(\d{2})(\d{2})(\d{4})$/,
+    /^(\d{4})(\d{2})(\d{2})$/
+  ];
+
+  for (const pattern of patterns) {
+    const match = cleanDate.match(pattern);
+    if (match) {
+      try {
+        let day: string, month: string, year: string;
+        
+        if (pattern.source.includes('(\\d{4})') && pattern.source.indexOf('(\\d{4})') === 1) {
+          [, year, month, day] = match;
+        } else {
+          [, day, month, year] = match;
+          if (year.length === 2) {
+            year = parseInt(year) > 50 ? `19${year}` : `20${year}`;
+          }
+        }
+        
+        const dateObj = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+  
+  try {
+    const jsDate = new Date(cleanDate);
+    if (!isNaN(jsDate.getTime()) && jsDate.getFullYear() > 1900) {
+      return jsDate.toISOString().split('T')[0];
+    }
+  } catch (error) {
+    // Fallback to today
+  }
+  
   return new Date().toISOString().split('T')[0];
 };
 
-const isTransfer = (description: string, amount: number): boolean => {
-  const desc = description.toLowerCase();
+const parseAmount = (amountString: string): number => {
+  if (!amountString?.trim()) return 0;
   
-  // Transfer patterns - more comprehensive detection
-  const transferPatterns = [
-    /transfer/i,
-    /trf/i,
-    /xfer/i,
-    /between.*accounts/i,
-    /internal.*transfer/i,
-    /account.*transfer/i,
-    /payment.*to.*account/i,
-    /payment.*from.*account/i,
-    /06-0817/i,           // Account number patterns
-    /9171$/i,             // Credit card ending
-    /88419319/i,          // Loan account
-    /662330/i,            // KiwiSaver account
-    /own.*account/i,
-    /from.*savings/i,
-    /to.*savings/i,
-    /from.*checking/i,
-    /to.*checking/i,
-    /visa.*payment/i,     // Credit card payments
-    /card.*payment/i,
-    /loan.*payment/i      // Loan payments (often transfers)
-  ];
+  let cleaned = amountString.replace(/[£$€¥₹,\s]/g, '').trim();
+  const isNegative = /^\(.*\)$/.test(amountString) || cleaned.startsWith('-');
+  cleaned = cleaned.replace(/[()]/g, '').replace(/^-/, '');
   
-  // Check if description matches transfer patterns
-  const matchesPattern = transferPatterns.some(pattern => pattern.test(desc));
-  
-  // Round amounts are often transfers (especially multiples of 50 or 100)
-  const isRoundAmount = amount > 0 && (amount % 50 === 0 || amount % 100 === 0) && amount >= 100;
-  
-  return matchesPattern || (isRoundAmount && desc.includes('payment'));
+  const numericValue = parseFloat(cleaned);
+  return isNaN(numericValue) ? 0 : (isNegative ? -Math.abs(numericValue) : numericValue);
 };
 
-const categorizeTransaction = (description: string, amount: number): { category: string, isIncome: boolean, isTransfer: boolean } => {
+const parseCSV = (csvData: string): { headers: string[], rows: string[][] } => {
+  const lines = csvData.trim().split('\n').filter(line => line.trim());
+  
+  if (lines.length < 2) {
+    throw new Error('CSV must have header and at least one data row');
+  }
+
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result.map(cell => cell.replace(/^"|"$/g, ''));
+  };
+
+  const headers = parseCSVLine(lines[0]);
+  const rows = lines.slice(1).map(line => parseCSVLine(line)).filter(row => row.some(cell => cell.trim()));
+  
+  return { headers, rows };
+};
+
+const categorizeTransaction = (description: string, amount: number): { category: string, isIncome: boolean } => {
   const desc = description.toLowerCase();
   
-  // First check if it's a transfer
-  if (isTransfer(description, amount)) {
-    return { category: 'Transfer', isIncome: false, isTransfer: true };
-  }
-  
   // Income patterns
-  const incomePatterns = [
-    /salary|wage|payroll|income|pay|deposit/,
-    /refund|reimbursement|cashback/,
-    /dividend|interest|investment/,
-    /freelance|contract|commission/,
-    /ird.*credit/,        // Tax refunds
-    /working.*for.*families/
-  ];
+  if (amount > 0) {
+    if (/salary|wage|payroll|pay|employment/.test(desc)) return { category: 'Salary', isIncome: true };
+    if (/dividend|interest|investment/.test(desc)) return { category: 'Investment Income', isIncome: true };
+    if (/refund|reimbursement|cashback/.test(desc)) return { category: 'Refunds', isIncome: true };
+    return { category: 'Other Income', isIncome: true };
+  }
   
   // Expense categories
-  const categoryPatterns = {
-    'Housing': /rent|mortgage|property|utilities|electricity|gas|water|internet|phone/,
-    'Transportation': /uber|taxi|bus|train|fuel|gas|parking|car|vehicle|transport/,
-    'Food & Dining': /restaurant|cafe|food|grocery|supermarket|dining|takeaway|delivery|countdown|paknsave|new.*world/,
-    'Shopping': /amazon|ebay|store|shop|retail|clothing|electronics|warehouse|kmart/,
-    'Entertainment': /netflix|spotify|movie|cinema|game|entertainment|subscription/,
-    'Healthcare': /doctor|hospital|pharmacy|medical|health|dental/,
-    'Utilities': /electricity|gas|water|internet|phone|utility|power/,
-    'Personal Care': /salon|spa|cosmetics|personal|beauty/
-  };
+  const expenseCategories = [
+    { pattern: /rent|mortgage|property|utilities|electricity|gas|water|internet|phone/, category: 'Housing & Utilities' },
+    { pattern: /countdown|paknsave|newworld|woolworths|coles|grocery|supermarket|food/, category: 'Groceries' },
+    { pattern: /uber|taxi|bus|train|fuel|petrol|parking|transport/, category: 'Transportation' },
+    { pattern: /restaurant|cafe|takeaway|delivery|dining|mcdonald|kfc|starbucks/, category: 'Dining Out' },
+    { pattern: /netflix|spotify|subscription|entertainment|movie|cinema|games/, category: 'Entertainment' },
+    { pattern: /doctor|hospital|pharmacy|medical|health|dental/, category: 'Healthcare' },
+    { pattern: /amazon|shopping|retail|clothing|electronics|warehouse/, category: 'Shopping' },
+    { pattern: /insurance|life|car|health|home/, category: 'Insurance' },
+    { pattern: /transfer|payment|loan|credit|atm|withdrawal/, category: 'Transfers' }
+  ];
   
-  // Check if it's income
-  const isIncome = amount > 0 || incomePatterns.some(pattern => pattern.test(desc));
-  
-  if (isIncome && !isTransfer(description, amount)) {
-    if (/salary|wage|payroll/.test(desc)) return { category: 'Salary', isIncome: true, isTransfer: false };
-    if (/investment|dividend|interest/.test(desc)) return { category: 'Investment Income', isIncome: true, isTransfer: false };
-    return { category: 'Other Income', isIncome: true, isTransfer: false };
-  }
-  
-  // Categorize expenses
-  for (const [category, pattern] of Object.entries(categoryPatterns)) {
+  for (const { pattern, category } of expenseCategories) {
     if (pattern.test(desc)) {
-      return { category, isIncome: false, isTransfer: false };
+      return { category, isIncome: false };
     }
   }
   
-  return { category: 'Other', isIncome: false, isTransfer: false };
+  return { category: 'Other', isIncome: false };
 };
 
 serve(async (req) => {
@@ -148,50 +169,48 @@ serve(async (req) => {
       });
     }
 
-    const { csvData } = await req.json();
-    console.log('Processing CSV data for user:', user.id);
+    const { csvData, fileName } = await req.json();
+    console.log('Processing CSV:', fileName, 'for user:', user.id);
 
-    // Parse CSV data - handle different CSV formats
-    const lines = csvData.trim().split('\n');
-    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/"/g, ''));
-    
-    console.log('CSV Headers:', headers);
-    
-    const transactions: Transaction[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map((v: string) => v.trim().replace(/"/g, ''));
-      
-      // Skip empty lines
-      if (values.length < 3 || values.every(v => !v)) continue;
-      
-      const dateIndex = headers.findIndex(h => h.includes('date')) || 0;
-      const descIndex = headers.findIndex(h => h.includes('description') || h.includes('detail')) || 1;
-      const amountIndex = headers.findIndex(h => h.includes('amount') || h.includes('value')) || 2;
-      const merchantIndex = headers.findIndex(h => h.includes('merchant') || h.includes('payee'));
-      
-      const rawDate = values[dateIndex] || values[0];
-      const description = values[descIndex] || values[1];
-      const rawAmount = values[amountIndex] || values[2];
-      
-      // Skip if essential data is missing
-      if (!rawDate || !description || !rawAmount) continue;
-      
-      const transaction: Transaction = {
-        date: parseDate(rawDate),
-        description: description,
-        amount: parseFloat(rawAmount.replace(/[,$]/g, '')) || 0,
-        merchant: merchantIndex >= 0 ? values[merchantIndex] : ''
-      };
-      
-      if (transaction.description && !isNaN(transaction.amount)) {
-        transactions.push(transaction);
-      }
+    if (!csvData?.trim()) {
+      throw new Error('Empty CSV data provided');
     }
 
-    console.log(`Parsed ${transactions.length} transactions`);
+    // Parse CSV with better error handling
+    const { headers, rows } = parseCSV(csvData);
+    console.log(`Parsed ${headers.length} headers, ${rows.length} rows`);
+    
+    if (rows.length === 0) {
+      throw new Error('No data rows found in CSV');
+    }
 
-    // Get user's bank account (create default if none exists)
+    // Find column indices with flexible matching
+    const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+    
+    const findColumnIndex = (possibleNames: string[]): number => {
+      for (const name of possibleNames) {
+        const index = normalizedHeaders.findIndex(h => 
+          h.includes(name.toLowerCase()) || h === name.toLowerCase()
+        );
+        if (index >= 0) return index;
+      }
+      return -1;
+    };
+
+    const dateIndex = findColumnIndex(['date', 'transaction date', 'posting date', 'value date']);
+    const descIndex = findColumnIndex(['description', 'details', 'particulars', 'memo', 'reference']);
+    const amountIndex = findColumnIndex(['amount', 'value', 'debit', 'credit', 'balance']);
+
+    if (dateIndex === -1 || descIndex === -1 || amountIndex === -1) {
+      const missing = [];
+      if (dateIndex === -1) missing.push('date');
+      if (descIndex === -1) missing.push('description');
+      if (amountIndex === -1) missing.push('amount');
+      
+      throw new Error(`Required columns not found: ${missing.join(', ')}. Available: ${headers.join(', ')}`);
+    }
+
+    // Get or create bank account
     let { data: accounts } = await supabaseClient
       .from('bank_accounts')
       .select('id')
@@ -225,38 +244,66 @@ serve(async (req) => {
 
     const categoryMap = new Map(categories?.map(c => [`${c.name}_${c.is_income}`, c.id]) || []);
 
-    // Process transactions
+    // Process transactions with better error handling
     const processedTransactions = [];
-    let transferCount = 0;
+    let successCount = 0;
+    let errorCount = 0;
     
-    for (const transaction of transactions) {
-      const { category, isIncome, isTransfer } = categorizeTransaction(transaction.description, transaction.amount);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       
-      if (isTransfer) {
-        transferCount++;
-        console.log('Transfer detected:', transaction.description, transaction.amount);
-        // Still store transfers but mark them as such
+      try {
+        if (row.length <= Math.max(dateIndex, descIndex, amountIndex)) {
+          console.warn(`Row ${i + 2}: Insufficient columns`);
+          errorCount++;
+          continue;
+        }
+
+        const rawDate = row[dateIndex]?.trim();
+        const description = row[descIndex]?.trim();
+        const rawAmount = row[amountIndex]?.trim();
+
+        if (!rawDate || !description || !rawAmount) {
+          console.warn(`Row ${i + 2}: Missing required data`);
+          errorCount++;
+          continue;
+        }
+
+        const date = parseDate(rawDate);
+        const amount = parseAmount(rawAmount);
+        
+        if (amount === 0 && rawAmount !== '0' && rawAmount !== '0.00') {
+          console.warn(`Row ${i + 2}: Could not parse amount "${rawAmount}"`);
+        }
+
+        const { category, isIncome } = categorizeTransaction(description, amount);
+        const categoryId = categoryMap.get(`${category}_${isIncome}`);
+        
+        const transactionData = {
+          user_id: user.id,
+          account_id: accountId,
+          category_id: categoryId,
+          amount: Math.abs(amount),
+          description,
+          merchant: description.split(' ')[0] || null,
+          transaction_date: date,
+          is_income: isIncome,
+          imported_from: 'csv'
+        };
+        
+        processedTransactions.push(transactionData);
+        successCount++;
+      } catch (rowError: any) {
+        console.error(`Row ${i + 2} error:`, rowError);
+        errorCount++;
       }
-      
-      const categoryId = categoryMap.get(`${category}_${isIncome}`);
-      
-      const transactionData = {
-        user_id: user.id,
-        account_id: accountId,
-        category_id: categoryId,
-        amount: Math.abs(transaction.amount),
-        description: transaction.description,
-        merchant: transaction.merchant || null,
-        transaction_date: transaction.date,
-        is_income: isIncome && !isTransfer, // Transfers are not counted as income
-        imported_from: 'csv',
-        tags: isTransfer ? ['transfer'] : null // Mark transfers with a tag
-      };
-      
-      processedTransactions.push(transactionData);
     }
 
-    // Insert transactions in batches to avoid timeout
+    if (processedTransactions.length === 0) {
+      throw new Error(`No valid transactions found. ${errorCount} rows had errors.`);
+    }
+
+    // Insert transactions in batches
     const batchSize = 100;
     const insertedTransactions = [];
     
@@ -268,8 +315,8 @@ serve(async (req) => {
         .select();
 
       if (error) {
-        console.error('Error inserting batch:', error);
-        throw error;
+        console.error('Batch insert error:', error);
+        throw new Error(`Failed to insert transactions: ${error.message}`);
       }
       
       if (data) {
@@ -277,13 +324,11 @@ serve(async (req) => {
       }
     }
 
-    // Update account balance - exclude transfers from balance calculation
-    const nonTransferTransactions = processedTransactions.filter(t => !t.tags?.includes('transfer'));
-    const totalAmount = nonTransferTransactions.reduce((sum, t) => 
+    // Update account balance
+    const totalAmount = processedTransactions.reduce((sum, t) => 
       sum + (t.is_income ? t.amount : -t.amount), 0
     );
 
-    // Get current balance
     const { data: currentAccount } = await supabaseClient
       .from('bank_accounts')
       .select('balance')
@@ -300,50 +345,24 @@ serve(async (req) => {
       })
       .eq('id', accountId);
 
-    // Update budget if exists - exclude transfers
-    const { data: activeBudget } = await supabaseClient
-      .from('budgets')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
-
-    if (activeBudget) {
-      // Calculate total expenses and income from new non-transfer transactions
-      const totalExpenses = nonTransferTransactions
-        .filter(t => !t.is_income)
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const totalIncome = nonTransferTransactions
-        .filter(t => t.is_income)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      // Update budget totals
-      await supabaseClient
-        .from('budgets')
-        .update({
-          total_expenses: totalExpenses,
-          total_income: totalIncome,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', activeBudget.id);
-    }
-
-    console.log(`Successfully processed ${processedTransactions.length} transactions (${transferCount} transfers excluded from balance)`);
+    console.log(`Successfully processed ${insertedTransactions.length} transactions, ${errorCount} errors`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      processed: processedTransactions.length,
-      transfers: transferCount,
+      processed: insertedTransactions.length,
+      errors: errorCount,
       transactions: insertedTransactions,
       accountBalance: newBalance
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
-    console.error('Error processing CSV:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: any) {
+    console.error('CSV processing error:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message || 'Failed to process CSV',
+      details: error.stack 
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
