@@ -15,6 +15,18 @@ interface GoalRecommendationResult {
   createdGoals?: any[];
 }
 
+interface DetailedResults {
+  totalParsed: number;
+  totalUploaded: number;
+  batchResults: Array<{ 
+    batchNumber: number; 
+    attempted: number; 
+    succeeded: number; 
+    failed: number; 
+    errors: string[] 
+  }>;
+}
+
 interface UploadResult {
   success: boolean;
   processed: number;
@@ -28,6 +40,12 @@ interface UploadResult {
   warnings?: string[];
   budgetCreated?: boolean;
   goalsRecommended?: GoalRecommendationResult;
+  detailedResults?: DetailedResults;
+  fileValidation?: {
+    isValid: boolean;
+    reason?: string;
+    rowDetails?: Array<{ row: number; reason: string; data?: string[]; suggestion?: string }>;
+  };
 }
 
 interface ValidationResult {
@@ -56,6 +74,7 @@ export const CSVUpload = () => {
   const [showTransactions, setShowTransactions] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showDetailedResults, setShowDetailedResults] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [creatingBudget, setCreatingBudget] = useState(false);
   const [recommendingGoals, setRecommendingGoals] = useState(false);
@@ -237,21 +256,24 @@ export const CSVUpload = () => {
       return;
     }
 
-    setUploadStatus('validating');
-    setUploadMessage(`Analyzing ${files.length} CSV file(s)...`);
+    setUploading(true);
+    setProcessing(true);
+    setUploadStatus('processing');
+    setUploadMessage(`Processing ${files.length} CSV file(s) directly via Supabase...`);
     setProgress(10);
 
-    const processedFiles: ProcessedFile[] = [];
-    let totalTransactions = 0;
+    let totalProcessed = 0;
     let totalSkipped = 0;
     let allErrors: string[] = [];
     let allWarnings: string[] = [];
+    let allTransactions: any[] = [];
+    let detailedResults: DetailedResults | undefined;
 
     try {
-      // Process all files
+      // Process files directly via Supabase edge function
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileProgress = ((i + 1) / files.length) * 60; // Up to 60% for file processing
+        const fileProgress = ((i + 1) / files.length) * 80; // Up to 80% for file processing
         
         setUploadMessage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
         setProgress(fileProgress);
@@ -260,68 +282,121 @@ export const CSVUpload = () => {
           const text = await file.text();
           
           if (!text.trim()) {
-            processedFiles.push({
-              name: file.name,
-              data: csvProcessor.createEmptyResult([`File ${file.name} is empty`], [], []),
-              status: 'error'
-            });
+            allErrors.push(`File ${file.name} is empty`);
             continue;
           }
 
-          // Process CSV with enhanced flexibility
-          const processed = await csvProcessor.processCSV(text);
-          console.log(`✅ File ${file.name} processed:`, processed.transactions.length, 'transactions');
+          console.log(`🚀 Sending ${file.name} to Supabase for processing...`);
 
-          totalTransactions += processed.transactions.length;
-          totalSkipped += processed.skippedRows.length;
-          allErrors.push(...processed.errors.map(e => `${file.name}: ${e}`));
-          allWarnings.push(...processed.warnings.map(w => `${file.name}: ${w}`));
-
-          processedFiles.push({
-            name: file.name,
-            data: processed,
-            status: processed.transactions.length > 0 ? 'success' : 
-                   processed.errors.length > 0 ? 'error' : 'partial'
+          // Send to Supabase edge function for processing
+          const { data, error } = await supabase.functions.invoke('process-csv', {
+            body: {
+              csvData: text,
+              fileName: file.name
+            }
           });
+
+          if (error) {
+            console.error(`❌ Error processing ${file.name}:`, error);
+            allErrors.push(`${file.name}: ${error.message}`);
+            continue;
+          }
+
+          if (data) {
+            console.log(`✅ ${file.name} processed:`, data);
+            
+            totalProcessed += data.processed || 0;
+            totalSkipped += data.skipped || 0;
+            allTransactions.push(...(data.transactions || []));
+            
+            if (data.errors) {
+              allErrors.push(...data.errors.map((e: string) => `${file.name}: ${e}`));
+            }
+            if (data.warnings) {
+              allWarnings.push(...data.warnings.map((w: string) => `${file.name}: ${w}`));
+            }
+            
+            // Capture detailed results from the last file (or combine them)
+            if (data.detailedResults) {
+              detailedResults = data.detailedResults;
+            }
+          }
 
         } catch (fileError: any) {
           console.error(`❌ Error processing ${file.name}:`, fileError);
           allErrors.push(`${file.name}: ${fileError.message}`);
-          processedFiles.push({
-            name: file.name,
-            data: csvProcessor.createEmptyResult([fileError.message], [], []),
-            status: 'error'
-          });
         }
       }
 
-      setProcessedFiles(processedFiles);
-      setProgress(70);
+      setProgress(90);
 
-      if (totalTransactions === 0) {
-        setUploadStatus('error');
-        setUploadMessage(`No valid transactions found in any file. ${totalSkipped} rows were skipped across all files.`);
-        setShowPreview(true);
+      if (totalProcessed > 0) {
+        setUploadStatus('success');
+        setUploadMessage('Running AI analysis and creating smart budget...');
+        
+        // Run AI analysis, budget creation, and goal recommendations
+        const [analysisResult, budgetResult] = await Promise.all([
+          analyzeTransactions(allTransactions),
+          createSmartBudget(allTransactions)
+        ]);
+
+        const goalResult = await recommendSmartGoals(allTransactions, budgetResult);
         setProgress(100);
-        return;
+
+        // Update final results
+        setUploadResults({
+          success: true,
+          processed: totalProcessed,
+          skipped: totalSkipped,
+          transactions: allTransactions,
+          accountBalance: 0, // This will be updated by the edge function
+          errors: allErrors,
+          warnings: allWarnings,
+          analysis: analysisResult,
+          budgetCreated: !!budgetResult,
+          goalsRecommended: goalResult,
+          detailedResults
+        });
+
+        // Update success message
+        const features = [];
+        if (analysisResult) features.push('AI insights');
+        if (budgetResult) features.push('smart budget');
+        if (goalResult?.createdGoals && goalResult.createdGoals.length > 0) {
+          features.push(`${goalResult.createdGoals.length} SMART goals`);
+        }
+        
+        setUploadMessage(
+          `✅ Successfully processed ${totalProcessed} transactions from ${files.length} file(s) and created ${features.join(', ')}`
+        );
+
+        console.log(`🎉 Upload complete: ${totalProcessed} transactions processed from ${files.length} files`);
+
+        // Notify other components
+        window.dispatchEvent(new CustomEvent('csv-upload-complete', {
+          detail: { 
+            processed: totalProcessed,
+            skipped: totalSkipped,
+            transactions: allTransactions,
+            budgetCreated: !!budgetResult,
+            goalsCreated: goalResult?.createdGoals?.length || 0,
+            filesProcessed: files.length
+          }
+        }));
+        
+      } else {
+        setUploadStatus('error');
+        setUploadMessage(`No transactions were uploaded successfully. Total skipped: ${totalSkipped}`);
       }
-
-      // Combine all transactions for preview
-      const allTransactions = processedFiles.flatMap(f => f.data.transactions);
-      
-      // Show consolidated preview
-      setUploadStatus('preview');
-      setUploadMessage(
-        `Ready to process ${totalTransactions} transactions from ${processedFiles.filter(f => f.status === 'success').length}/${files.length} files (${totalSkipped} rows will be skipped)`
-      );
-      setShowPreview(true);
-      setProgress(100);
-
     } catch (error: any) {
-      console.error('❌ Multi-file processing error:', error);
+      console.error('❌ Upload error:', error);
       setUploadStatus('error');
-      setUploadMessage(`Processing failed: ${error.message}`);
+      setUploadMessage(`Upload failed: ${error.message}`);
       setProgress(0);
+    } finally {
+      setUploading(false);
+      setProcessing(false);
+      setTimeout(() => setProgress(0), 2000);
     }
   }
 
@@ -608,8 +683,8 @@ export const CSVUpload = () => {
           <Upload className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-white">Smart CSV Import</h3>
-          <p className="text-white/60 text-sm">Multi-file processing with comprehensive transaction extraction</p>
+          <h3 className="text-lg font-semibold text-white">Enhanced CSV Upload</h3>
+          <p className="text-white/60 text-sm">Comprehensive processing with detailed error handling</p>
         </div>
       </div>
 
@@ -620,102 +695,56 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-4">
-        {/* Show Multi-File Preview */}
-        {showPreview && processedFiles.length > 0 && (
-          <div className="space-y-4">
-            {/* File Summary */}
-            <div className="bg-white/10 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-3">File Processing Summary</h4>
-              <div className="space-y-2">
-                {processedFiles.map((file, index) => (
-                  <div key={index} className={`flex items-center justify-between p-2 rounded ${
-                    file.status === 'success' ? 'bg-green-500/20' :
-                    file.status === 'error' ? 'bg-red-500/20' : 'bg-yellow-500/20'
-                  }`}>
-                    <span className="text-white/80 text-sm">{file.name}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-xs ${
-                        file.status === 'success' ? 'text-green-300' :
-                        file.status === 'error' ? 'text-red-300' : 'text-yellow-300'
-                      }`}>
-                        {file.data.transactions.length} transactions
-                      </span>
-                      {file.status === 'success' ? (
-                        <CheckCircle className="w-4 h-4 text-green-400" />
-                      ) : file.status === 'error' ? (
-                        <X className="w-4 h-4 text-red-400" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* Enhanced Drop Zone */}
+        <div className="relative">
+          <div
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={openFilePicker}
+            className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
+              dragActive
+                ? 'border-blue-400 bg-blue-500/20 scale-105'
+                : uploading || !user || isPickerOpen
+                ? 'border-white/20 bg-white/5 cursor-not-allowed'
+                : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
+            }`}
+          >
+            <div className="text-center">
+              {processing || isPickerOpen ? (
+                <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
+              ) : (
+                <div className="relative">
+                  <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
+                  {dragActive && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
+                  )}
+                </div>
+              )}
+              <p className="text-white/80 font-medium">
+                {processing ? 'Processing files via Supabase...' : 
+                 isPickerOpen ? 'Opening file picker...' :
+                 dragActive ? 'Drop CSV files here!' :
+                 !user ? 'Please log in to upload' : 'Click to upload or drag & drop CSV files'}
+              </p>
+              <p className="text-white/50 text-sm mt-1">
+                {!user ? 'Authentication required' : 'Enhanced processing with detailed error reporting'}
+              </p>
             </div>
-
-            {/* Consolidated Preview */}
-            {getConsolidatedPreview() && (
-              <CSVPreview
-                processedData={getConsolidatedPreview()!}
-                onConfirm={handleConfirmUpload}
-                onCancel={handleCancelPreview}
-              />
-            )}
           </div>
-        )}
 
-        {/* Enhanced Drop Zone - Hide when showing preview */}
-        {!showPreview && (
-          <div className="relative">
-            <div
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onClick={openFilePicker}
-              className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-                dragActive
-                  ? 'border-blue-400 bg-blue-500/20 scale-105'
-                  : uploading || !user || isPickerOpen
-                  ? 'border-white/20 bg-white/5 cursor-not-allowed'
-                  : 'border-white/40 bg-white/10 hover:bg-white/20 hover:border-white/60 cursor-pointer'
-              }`}
-            >
-              <div className="text-center">
-                {processing || isPickerOpen ? (
-                  <Loader2 className="w-8 h-8 text-white/60 mx-auto mb-2 animate-spin" />
-                ) : (
-                  <div className="relative">
-                    <FileText className="w-8 h-8 text-white/60 mx-auto mb-2" />
-                    {dragActive && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
-                    )}
-                  </div>
-                )}
-                <p className="text-white/80 font-medium">
-                  {processing ? 'Processing multiple files...' : 
-                   isPickerOpen ? 'Opening file picker...' :
-                   dragActive ? 'Drop CSV files here!' :
-                   !user ? 'Please log in to upload' : 'Click to upload or drag & drop multiple CSV files'}
-                </p>
-                <p className="text-white/50 text-sm mt-1">
-                  {!user ? 'Authentication required' : 'Multi-file support + Comprehensive transaction extraction'}
-                </p>
-              </div>
+          {/* Progress Bar */}
+          {progress > 0 && (
+            <div className="mt-3">
+              <Progress value={progress} className="h-2" />
+              <p className="text-white/60 text-xs mt-1 text-center">{progress}% complete</p>
             </div>
-
-            {/* Progress Bar */}
-            {progress > 0 && !showPreview && (
-              <div className="mt-3">
-                <Progress value={progress} className="h-2" />
-                <p className="text-white/60 text-xs mt-1 text-center">{progress}% complete</p>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Status Messages */}
-        {uploadStatus !== 'idle' && uploadStatus !== 'preview' && (
+        {uploadStatus !== 'idle' && (
           <div className={`flex items-start space-x-2 p-4 rounded-lg ${
             uploadStatus === 'success' 
               ? 'bg-green-500/20 border border-green-500/30' 
@@ -771,19 +800,75 @@ export const CSVUpload = () => {
           </div>
         )}
 
+        {/* Detailed Results Display */}
+        {uploadResults?.detailedResults && (
+          <div className="bg-white/10 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-white font-medium">Processing Details</h4>
+              <button
+                onClick={() => setShowDetailedResults(!showDetailedResults)}
+                className="text-white/60 hover:text-white/80 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4 mb-3">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-400">{uploadResults.detailedResults.totalParsed}</div>
+                <div className="text-xs text-white/60">Parsed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-400">{uploadResults.detailedResults.totalUploaded}</div>
+                <div className="text-xs text-white/60">Uploaded</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-400">{uploadResults.skipped}</div>
+                <div className="text-xs text-white/60">Skipped</div>
+              </div>
+            </div>
+
+            {showDetailedResults && (
+              <div className="space-y-2">
+                <h5 className="text-white/80 text-sm font-medium">Batch Results:</h5>
+                {uploadResults.detailedResults.batchResults.map((batch, index) => (
+                  <div key={index} className={`p-2 rounded text-xs ${
+                    batch.failed > 0 ? 'bg-red-500/20' : 'bg-green-500/20'
+                  }`}>
+                    <div className="flex justify-between">
+                      <span className="text-white/80">Batch {batch.batchNumber}</span>
+                      <span className={batch.failed > 0 ? 'text-red-300' : 'text-green-300'}>
+                        {batch.succeeded}/{batch.attempted}
+                      </span>
+                    </div>
+                    {batch.errors.length > 0 && (
+                      <div className="mt-1 text-red-300">
+                        {batch.errors.slice(0, 2).map((error, i) => (
+                          <div key={i}>• {error}</div>
+                        ))}
+                        {batch.errors.length > 2 && <div>...and {batch.errors.length - 2} more</div>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Enhanced Features List */}
         {!showPreview && (
           <div className="bg-white/10 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-2">🚀 Multi-File CSV Processing Features:</h4>
+            <h4 className="text-white font-medium mb-2">🚀 Enhanced CSV Processing Features:</h4>
             <ul className="text-white/70 text-sm space-y-1">
-              <li>• <strong>Multi-File Support:</strong> Process multiple CSV files simultaneously</li>
-              <li>• <strong>Comprehensive Extraction:</strong> Extract every valid transaction across all files</li>
+              <li>• <strong>Comprehensive Processing:</strong> Extract every valid transaction from CSV files</li>
+              <li>• <strong>Fault-Tolerant Upload:</strong> Retry failed batches with individual inserts</li>
+              <li>• <strong>Detailed Error Reporting:</strong> Row-by-row error tracking with suggestions</li>
               <li>• <strong>Flexible Field Mapping:</strong> Auto-detect Date, Amount, Description columns</li>
               <li>• <strong>Multiple Date Formats:</strong> DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD support</li>
-              <li>• <strong>Fault Tolerance:</strong> Skip invalid rows but continue processing valid data</li>
-              <li>• <strong>Detailed Reporting:</strong> Per-file and per-row error reporting</li>
+              <li>• <strong>Enhanced Validation:</strong> Skip only truly empty/corrupt rows</li>
+              <li>• <strong>Batch Processing:</strong> Efficient upload with detailed batch results</li>
               <li>• <strong>Smart Categorization:</strong> AI-powered transaction categorization</li>
-              <li>• <strong>Consolidated Preview:</strong> Review all transactions before processing</li>
             </ul>
           </div>
         )}
