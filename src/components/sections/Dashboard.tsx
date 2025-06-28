@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
@@ -60,7 +59,7 @@ export const Dashboard = () => {
     try {
       console.log('Fetching dashboard data for user:', user.id);
 
-      // Fetch recent transactions with categories, excluding transfers using proper array syntax
+      // Fetch recent transactions with categories, excluding transfers using PostgreSQL array operator
       const { data: transactions } = await supabase
         .from('transactions')
         .select(`
@@ -68,7 +67,7 @@ export const Dashboard = () => {
           categories(name, color)
         `)
         .eq('user_id', user.id)
-        .not('tags', 'cs', '{"transfer"}') // Fixed PostgreSQL array syntax
+        .not('tags', 'cs', '{transfer}') // Use proper PostgreSQL array contains operator
         .order('transaction_date', { ascending: false })
         .limit(10);
 
