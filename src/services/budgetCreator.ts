@@ -378,7 +378,7 @@ export class BudgetCreator {
           .eq('category_id', categoryId);
 
         if (error) {
-          console.warn('Error updating budget category:', error.message);
+          console.warn(`Error updating budget category: ${error.message}`);
         }
       }
 
