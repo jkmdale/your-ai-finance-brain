@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, PieChart, Target, Calendar, ArrowUpRight, ArrowDownRight, Upload, Plus, AlertTriangle } from 'lucide-react';
 import { CSVUpload } from './CSVUpload';
@@ -67,7 +68,7 @@ export const Dashboard = () => {
           categories(name, color)
         `)
         .eq('user_id', user.id)
-        .not('tags', 'cs', '{transfer}') // Use proper PostgreSQL array syntax
+        .not('tags', 'cs', '{"transfer"}') // Use proper PostgreSQL array syntax with double quotes
         .order('transaction_date', { ascending: false })
         .limit(10);
 
