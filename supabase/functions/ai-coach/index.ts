@@ -22,110 +22,121 @@ serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
+    // Try to get user, but don't require authentication
     const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
+    
+    const { message, type = 'advice', prompt } = await req.json();
+    
+    // Handle both 'message' and 'prompt' for backward compatibility
+    const userInput = message || prompt;
+    
+    if (!userInput) {
+      return new Response(JSON.stringify({ error: 'Message or prompt is required' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const { message, type = 'advice' } = await req.json();
+    let financialContext = '';
+    let systemPrompt = '';
+    let maxTokens = 600;
+    let temperature = 0.7;
 
-    // Get comprehensive user's financial data
-    const { data: transactions } = await supabaseClient
-      .from('transactions')
-      .select(`
-        amount,
-        description,
-        transaction_date,
-        is_income,
-        merchant,
-        categories(name, is_income)
-      `)
-      .eq('user_id', user.id)
-      .order('transaction_date', { ascending: false })
-      .limit(100);
+    // If user is authenticated, get their financial data for personalized advice
+    if (user) {
+      // Fetch comprehensive user's financial data
+      const { data: transactions } = await supabaseClient
+        .from('transactions')
+        .select(`
+          amount,
+          description,
+          transaction_date,
+          is_income,
+          merchant,
+          categories(name, is_income)
+        `)
+        .eq('user_id', user.id)
+        .order('transaction_date', { ascending: false })
+        .limit(100);
 
-    const { data: goals } = await supabaseClient
-      .from('financial_goals')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_active', true);
+      const { data: goals } = await supabaseClient
+        .from('financial_goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
 
-    const { data: accounts } = await supabaseClient
-      .from('bank_accounts')
-      .select('balance, account_name, bank_name')
-      .eq('user_id', user.id);
+      const { data: accounts } = await supabaseClient
+        .from('bank_accounts')
+        .select('balance, account_name, bank_name')
+        .eq('user_id', user.id);
 
-    const { data: budgets } = await supabaseClient
-      .from('budgets')
-      .select(`
-        *,
-        budget_categories(
-          allocated_amount,
-          spent_amount,
-          categories(name)
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('is_active', true);
+      const { data: budgets } = await supabaseClient
+        .from('budgets')
+        .select(`
+          *,
+          budget_categories(
+            allocated_amount,
+            spent_amount,
+            categories(name)
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_active', true);
 
-    // Calculate detailed financial summary
-    const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
-    
-    // Calculate monthly income and expenses from recent transactions (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const recentTransactions = transactions?.filter(t => 
-      new Date(t.transaction_date) >= thirtyDaysAgo
-    ) || [];
+      // Calculate detailed financial summary
+      const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+      
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentTransactions = transactions?.filter(t => 
+        new Date(t.transaction_date) >= thirtyDaysAgo
+      ) || [];
 
-    const monthlyIncome = recentTransactions
-      .filter(t => t.is_income)
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const monthlyExpenses = recentTransactions
-      .filter(t => !t.is_income)
-      .reduce((sum, t) => sum + t.amount, 0);
+      const monthlyIncome = recentTransactions
+        .filter(t => t.is_income)
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const monthlyExpenses = recentTransactions
+        .filter(t => !t.is_income)
+        .reduce((sum, t) => sum + t.amount, 0);
 
-    // Categorize expenses with detailed breakdown
-    const expensesByCategory: Record<string, { total: number; transactions: number }> = {};
-    recentTransactions?.filter(t => !t.is_income).forEach(t => {
-      const category = t.categories?.name || 'Other';
-      if (!expensesByCategory[category]) {
-        expensesByCategory[category] = { total: 0, transactions: 0 };
-      }
-      expensesByCategory[category].total += t.amount;
-      expensesByCategory[category].transactions += 1;
-    });
+      // Categorize expenses with detailed breakdown
+      const expensesByCategory: Record<string, { total: number; transactions: number }> = {};
+      recentTransactions?.filter(t => !t.is_income).forEach(t => {
+        const category = t.categories?.name || 'Other';
+        if (!expensesByCategory[category]) {
+          expensesByCategory[category] = { total: 0, transactions: 0 };
+        }
+        expensesByCategory[category].total += t.amount;
+        expensesByCategory[category].transactions += 1;
+      });
 
-    // Top merchants analysis
-    const merchantSpending: Record<string, number> = {};
-    recentTransactions?.filter(t => !t.is_income && t.merchant).forEach(t => {
-      const merchant = t.merchant!;
-      merchantSpending[merchant] = (merchantSpending[merchant] || 0) + t.amount;
-    });
+      // Top merchants analysis
+      const merchantSpending: Record<string, number> = {};
+      recentTransactions?.filter(t => !t.is_income && t.merchant).forEach(t => {
+        const merchant = t.merchant!;
+        merchantSpending[merchant] = (merchantSpending[merchant] || 0) + t.amount;
+      });
 
-    const topMerchants = Object.entries(merchantSpending)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5)
-      .map(([merchant, amount]) => ({ merchant, amount }));
+      const topMerchants = Object.entries(merchantSpending)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([merchant, amount]) => ({ merchant, amount }));
 
-    // Budget analysis
-    const budgetAnalysis = budgets?.[0] ? {
-      totalAllocated: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.allocated_amount || 0), 0) || 0,
-      totalSpent: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.spent_amount || 0), 0) || 0,
-      categories: budgets[0].budget_categories?.map((bc: any) => ({
-        name: bc.categories?.name || 'Unknown',
-        allocated: bc.allocated_amount || 0,
-        spent: bc.spent_amount || 0,
-        remaining: (bc.allocated_amount || 0) - (bc.spent_amount || 0)
-      })) || []
-    } : null;
+      // Budget analysis
+      const budgetAnalysis = budgets?.[0] ? {
+        totalAllocated: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.allocated_amount || 0), 0) || 0,
+        totalSpent: budgets[0].budget_categories?.reduce((sum: number, bc: any) => sum + (bc.spent_amount || 0), 0) || 0,
+        categories: budgets[0].budget_categories?.map((bc: any) => ({
+          name: bc.categories?.name || 'Unknown',
+          allocated: bc.allocated_amount || 0,
+          spent: bc.spent_amount || 0,
+          remaining: (bc.allocated_amount || 0) - (bc.spent_amount || 0)
+        })) || []
+      } : null;
 
-    const financialContext = `
+      financialContext = `
 COMPREHENSIVE FINANCIAL PROFILE:
 
 ACCOUNT OVERVIEW:
@@ -173,28 +184,33 @@ ${transactions?.slice(0, 20).map(t =>
   `${t.transaction_date}: ${t.description}${t.merchant ? ` (${t.merchant})` : ''} - ${t.is_income ? '+' : '-'}$${t.amount.toLocaleString()} [${t.categories?.name || 'Uncategorized'}]`
 ).join('\n') || 'No recent transactions'}
 `;
+    }
 
-    let systemPrompt = '';
-    let maxTokens = 600;
-    let temperature = 0.7;
-
-    switch (type) {
-      case 'advice':
-        systemPrompt = `You are SmartFinanceAI, a professional financial advisor and coach. Provide personalized, actionable advice based on the user's comprehensive financial data. Be encouraging but realistic. Focus on practical steps they can take immediately. Reference specific numbers from their data to make advice concrete and actionable.`;
-        break;
-      case 'analysis':
-        systemPrompt = `You are a financial analyst specializing in transaction analysis. Analyze the user's spending patterns and identify trends, potential savings opportunities, unusual transactions, and provide 3-5 specific actionable recommendations. Use their actual data to provide concrete insights.`;
-        maxTokens = 500;
-        temperature = 0.3;
-        break;
-      case 'budget':
-        systemPrompt = `You are a budget optimization expert. Create specific budget recommendations based on their actual spending patterns. Suggest realistic percentage allocations, identify overspending areas, and provide actionable steps to optimize their budget using their real financial data.`;
-        break;
-      case 'goals':
-        systemPrompt = `You are a goal optimization specialist. Help prioritize and accelerate their specific financial goal achievement. Provide concrete allocation recommendations based on their current cash flow and suggest timeline adjustments using their actual financial data.`;
-        break;
-      default:
-        systemPrompt = `You are a helpful financial assistant with access to comprehensive financial data. Provide clear, actionable financial guidance based on their actual financial situation.`;
+    // Configure AI response based on type and authentication status
+    if (user && financialContext) {
+      // Personalized advice for authenticated users
+      switch (type) {
+        case 'advice':
+          systemPrompt = `You are SmartFinanceAI, a professional financial advisor and coach. Provide personalized, actionable advice based on the user's comprehensive financial data. Be encouraging but realistic. Focus on practical steps they can take immediately. Reference specific numbers from their data to make advice concrete and actionable.`;
+          break;
+        case 'analysis':
+          systemPrompt = `You are a financial analyst specializing in transaction analysis. Analyze the user's spending patterns and identify trends, potential savings opportunities, unusual transactions, and provide 3-5 specific actionable recommendations. Use their actual data to provide concrete insights.`;
+          maxTokens = 500;
+          temperature = 0.3;
+          break;
+        case 'budget':
+          systemPrompt = `You are a budget optimization expert. Create specific budget recommendations based on their actual spending patterns. Suggest realistic percentage allocations, identify overspending areas, and provide actionable steps to optimize their budget using their real financial data.`;
+          break;
+        case 'goals':
+          systemPrompt = `You are a goal optimization specialist. Help prioritize and accelerate their specific financial goal achievement. Provide concrete allocation recommendations based on their current cash flow and suggest timeline adjustments using their actual financial data.`;
+          break;
+        default:
+          systemPrompt = `You are a helpful financial assistant with access to comprehensive financial data. Provide clear, actionable financial guidance based on their actual financial situation.`;
+      }
+    } else {
+      // General financial advice for unauthenticated users
+      systemPrompt = `You are SmartFinanceAI, a helpful financial advisor. Provide general financial advice, tips, and guidance. For specific transaction categorization requests, categorize into common personal finance categories like groceries, dining, rent, transport, shopping, utilities, salary, or other. Keep advice practical and actionable.`;
+      maxTokens = 400;
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -212,7 +228,9 @@ ${transactions?.slice(0, 20).map(t =>
           },
           {
             role: 'user',
-            content: `Here's my comprehensive financial situation:\n\n${financialContext}\n\nMy question/request: ${message}`
+            content: user && financialContext 
+              ? `Here's my comprehensive financial situation:\n\n${financialContext}\n\nMy question/request: ${userInput}`
+              : userInput
           }
         ],
         max_tokens: maxTokens,
@@ -226,6 +244,16 @@ ${transactions?.slice(0, 20).map(t =>
 
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content || 'Unable to generate response';
+
+    // For transaction categorization, also return just the category for backward compatibility
+    if (userInput.toLowerCase().includes('categorize') && !user) {
+      return new Response(JSON.stringify({ 
+        response: aiResponse,
+        completion: aiResponse // For backward compatibility with claudeApi
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(JSON.stringify({ response: aiResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
