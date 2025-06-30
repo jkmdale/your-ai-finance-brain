@@ -1,6 +1,5 @@
-
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '../integrations/supabase/types';
+import { Database } from '../types/supabase';
 
 const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -13,7 +12,6 @@ export type ClaudeMessage = {
 };
 
 export type Transaction = {
-  id?: string;
   description: string;
   amount: number;
   merchant?: string;
@@ -36,7 +34,7 @@ export type CategorizationResult = {
   rationale: string;
 };
 
-export class ClaudeAIService {
+class ClaudeAIService {
   private async callClaude(messages: ClaudeMessage[], systemPrompt?: string, model = 'claude-3-haiku-20240307'): Promise<string> {
     const session = (await supabase.auth.getSession()).data.session;
     if (!session) throw new Error('User is not logged in');
@@ -140,3 +138,4 @@ Provide the score and a brief analysis. Format: "Score: XX - Analysis..."`;
 }
 
 export const claudeAIService = new ClaudeAIService();
+export type { Transaction, FinancialData, CategorizationResult };

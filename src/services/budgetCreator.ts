@@ -35,10 +35,12 @@ interface BudgetCreationResult {
 }
 
 export class BudgetCreator {
-  private claudeService: ClaudeAIService;
+  private claudeService?: ClaudeAIService;
 
-  constructor() {
-    this.claudeService = new ClaudeAIService();
+  constructor(claudeApiKey?: string) {
+    if (claudeApiKey) {
+      this.claudeService = new ClaudeAIService(claudeApiKey);
+    }
   }
 
   async createBudgetFromTransactions(

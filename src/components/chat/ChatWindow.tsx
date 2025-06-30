@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Loader2, Brain } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,7 +31,8 @@ export const ChatWindow = () => {
 
   // Initialize Claude service
   useEffect(() => {
-    setClaudeService(new ClaudeAIService());
+    const apiKey = process.env.CLAUDE_API_KEY || 'your-claude-api-key-here';
+    setClaudeService(new ClaudeAIService(apiKey));
   }, []);
 
   // Fetch user's financial data for context
