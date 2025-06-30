@@ -9,6 +9,18 @@ export const AppSidebarFooter = () => {
 
   if (!user) return null;
 
+  // Extract display name - prioritize user metadata, fallback to email username
+  const getDisplayName = () => {
+    if (user.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    if (user.user_metadata?.first_name || user.user_metadata?.last_name) {
+      return `${user.user_metadata.first_name || ''} ${user.user_metadata.last_name || ''}`.trim();
+    }
+    // Fallback to email username
+    return user.email?.split('@')[0] || 'User';
+  };
+
   return (
     <SidebarFooter className="border-t border-purple-700/50 p-4 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 sticky bottom-0 z-10">
       <div className="flex items-center space-x-3">
@@ -17,7 +29,7 @@ export const AppSidebarFooter = () => {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-purple-200 text-sm font-medium truncate">
-            {user.email?.split('@')[0]}
+            {getDisplayName()}
           </p>
           <p className="text-purple-300 text-xs">Premium User</p>
         </div>
