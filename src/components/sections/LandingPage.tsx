@@ -28,11 +28,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
     }
   };
 
+  // Debug function to log what's happening
+  const handleLogoLoad = (location: string) => {
+    console.log(`Logo loaded successfully at ${location}`);
+  };
+
+  const handleLogoError = (location: string, e: any) => {
+    console.error(`Logo failed to load at ${location}:`, e);
+    console.log('Available images in public folder should include: logo.png, logo.jpg, cleaned_logo.png');
+    console.log('Current base URL:', window.location.origin);
+  };
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       {/* Navigation Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-slate-900 via-purple-900/90 to-slate-900 border-b border-purple-700/30"
+        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 border-b border-purple-700/30"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
@@ -48,11 +59,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                     alt="SmartFinanceAI" 
                     className="h-10 w-10 object-contain"
                     onError={(e) => {
-                      console.log('Logo failed to load from /logo.png');
-                      // Try fallback
-                      e.currentTarget.src = '/logo.jpg';
+                      handleLogoError('header', e);
+                      e.currentTarget.src = '/cleaned_logo.png';
                     }}
-                    onLoad={() => console.log('Logo loaded successfully')}
+                    onLoad={() => handleLogoLoad('header')}
                   />
                 </div>
               </div>
@@ -77,6 +87,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           </div>
         </div>
       </motion.header>
+
+      {/* Debug Info - This will show temporarily to help diagnose */}
+      <div className="fixed top-20 left-4 z-50 bg-black/80 text-white p-4 rounded text-xs">
+        <div>Debug Info:</div>
+        <div>Base URL: {window.location.origin}</div>
+        <div>Logo path: {window.location.origin}/logo.png</div>
+        <div>Check console for logo loading messages</div>
+      </div>
 
       {/* Hero Section */}
       <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
@@ -545,10 +563,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 alt="SmartFinanceAI" 
                 className="w-12 h-12"
                 onError={(e) => {
-                  console.log('Footer logo failed to load from /logo.png');
-                  e.currentTarget.src = '/logo.jpg';
+                  handleLogoError('footer', e);
+                  e.currentTarget.src = '/cleaned_logo.png';
                 }}
-                onLoad={() => console.log('Footer logo loaded successfully')}
+                onLoad={() => handleLogoLoad('footer')}
               />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
@@ -563,10 +581,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 alt="SmartFinanceAI Large Icon" 
                 className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
                 onError={(e) => {
-                  console.log('Large footer logo failed to load from /logo.png');
-                  e.currentTarget.src = '/logo.jpg';
+                  handleLogoError('large footer', e);
+                  e.currentTarget.src = '/cleaned_logo.png';
                 }}
-                onLoad={() => console.log('Large footer logo loaded successfully')}
+                onLoad={() => handleLogoLoad('large footer')}
               />
             </div>
           </div>
