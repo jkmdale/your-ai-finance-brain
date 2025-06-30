@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -33,7 +32,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
     <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       {/* Navigation Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 border-b border-purple-700/30"
+        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-slate-900 via-purple-900/90 to-slate-900 border-b border-purple-700/30"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
@@ -41,18 +40,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="relative h-10 w-10 group cursor-pointer">
+              <div className="relative h-12 w-12 group cursor-pointer">
                 <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
-                <div className="relative h-10 w-10 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+                <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
                   <img 
-                    src="/cleaned_logo.png" 
+                    src="/logo.png" 
                     alt="SmartFinanceAI" 
-                    className="h-8 w-8 object-contain"
+                    className="h-10 w-10 object-contain"
                     onError={(e) => {
-                      console.log('Logo failed to load from /cleaned_logo.png');
-                      e.currentTarget.style.display = 'none';
+                      console.log('Logo failed to load from /logo.png');
+                      // Try fallback
+                      e.currentTarget.src = '/logo.jpg';
                     }}
-                    onLoad={() => console.log('Logo loaded successfully from /cleaned_logo.png')}
+                    onLoad={() => console.log('Logo loaded successfully')}
                   />
                 </div>
               </div>
@@ -541,14 +541,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
               <img 
-                src="/cleaned_logo.png" 
+                src="/logo.png" 
                 alt="SmartFinanceAI" 
-                className="w-10 h-10"
+                className="w-12 h-12"
                 onError={(e) => {
-                  console.log('Footer logo failed to load from /cleaned_logo.png');
-                  e.currentTarget.style.display = 'none';
+                  console.log('Footer logo failed to load from /logo.png');
+                  e.currentTarget.src = '/logo.jpg';
                 }}
-                onLoad={() => console.log('Footer logo loaded successfully from /cleaned_logo.png')}
+                onLoad={() => console.log('Footer logo loaded successfully')}
               />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
@@ -559,14 +559,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             {/* Large icon at the very bottom */}
             <div className="flex justify-center">
               <img 
-                src="/cleaned_logo.png" 
+                src="/logo.png" 
                 alt="SmartFinanceAI Large Icon" 
                 className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
                 onError={(e) => {
-                  console.log('Large footer logo failed to load from /cleaned_logo.png');
-                  e.currentTarget.style.display = 'none';
+                  console.log('Large footer logo failed to load from /logo.png');
+                  e.currentTarget.src = '/logo.jpg';
                 }}
-                onLoad={() => console.log('Large footer logo loaded successfully from /cleaned_logo.png')}
+                onLoad={() => console.log('Large footer logo loaded successfully')}
               />
             </div>
           </div>
