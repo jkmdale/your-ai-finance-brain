@@ -64,7 +64,7 @@ export const Navbar = () => {
                     className="hover:bg-white/10 cursor-pointer"
                     onClick={() => scrollToSection('insights')}
                   >
-                    <SmartFinanceIcon size={16} className="mr-3" />
+                    <SmartFinanceIcon className="mr-3" />
                     AI Insights
                   </DropdownMenuItem>
                   <DropdownMenuItem 
@@ -228,7 +228,7 @@ export const Navbar = () => {
               onClick={() => scrollToSection('insights')}
               className="text-white flex items-center px-3 py-2 text-base font-medium hover:bg-white/10 rounded-lg transition-colors duration-200 w-full text-left"
             >
-              <SmartFinanceIcon size={20} className="mr-3" />
+              <SmartFinanceIcon className="mr-3" />
               AI Insights
             </button>
             <button
