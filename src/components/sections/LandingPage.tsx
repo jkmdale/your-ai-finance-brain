@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -43,7 +44,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
               <div className="relative h-10 w-10 group cursor-pointer">
                 <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
                 <div className="relative h-10 w-10 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-                  <img src="/cleaned_logo.png" alt="SmartFinanceAI" className="h-8 w-8 object-contain" />
+                  <img 
+                    src="/cleaned_logo.png" 
+                    alt="SmartFinanceAI" 
+                    className="h-8 w-8 object-contain"
+                    onError={(e) => {
+                      console.log('Logo failed to load from /cleaned_logo.png');
+                      e.currentTarget.style.display = 'none';
+                    }}
+                    onLoad={() => console.log('Logo loaded successfully from /cleaned_logo.png')}
+                  />
                 </div>
               </div>
               <span className="text-white font-bold text-xl">SmartFinanceAI</span>
@@ -530,7 +540,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
-              <img src="/cleaned_logo.png" alt="SmartFinanceAI" className="w-10 h-10" />
+              <img 
+                src="/cleaned_logo.png" 
+                alt="SmartFinanceAI" 
+                className="w-10 h-10"
+                onError={(e) => {
+                  console.log('Footer logo failed to load from /cleaned_logo.png');
+                  e.currentTarget.style.display = 'none';
+                }}
+                onLoad={() => console.log('Footer logo loaded successfully from /cleaned_logo.png')}
+              />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
             <p className="text-white/60 text-sm mb-8">
@@ -543,6 +562,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 src="/cleaned_logo.png" 
                 alt="SmartFinanceAI Large Icon" 
                 className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
+                onError={(e) => {
+                  console.log('Large footer logo failed to load from /cleaned_logo.png');
+                  e.currentTarget.style.display = 'none';
+                }}
+                onLoad={() => console.log('Large footer logo loaded successfully from /cleaned_logo.png')}
               />
             </div>
           </div>
