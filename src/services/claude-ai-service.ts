@@ -13,6 +13,7 @@ export type ClaudeMessage = {
 };
 
 export type Transaction = {
+  id?: string;
   description: string;
   amount: number;
   merchant?: string;
