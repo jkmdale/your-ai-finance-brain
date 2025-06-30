@@ -127,22 +127,22 @@ export const Navbar = () => {
 
           {/* Center - Logo */}
           <Link to="/" className="flex items-center space-x-3">
-            <div className="relative h-16 w-16 group cursor-pointer">
+            <div className="relative h-[1024px] w-[1024px] group cursor-pointer">
               {/* Outer glow ring */}
               <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500"></div>
               
               {/* Main logo container */}
-              <div className="relative h-16 w-16 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-2xl group-hover:shadow-purple-500/25 transition-all duration-500 group-hover:scale-105">
+              <div className="relative h-[1024px] w-[1024px] bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-2xl group-hover:shadow-purple-500/25 transition-all duration-500 group-hover:scale-105">
                 
                 {/* Inner gradient overlay */}
                 <div className="absolute inset-1 bg-gradient-to-br from-violet-600/20 via-purple-600/20 to-blue-600/20 rounded-xl"></div>
                 
                 {/* Logo image */}
-                <div className="relative z-10 h-14 w-14 flex items-center justify-center">
+                <div className="relative z-10 h-[1000px] w-[1000px] flex items-center justify-center">
                   <img 
                     src="/cleaned_logo.png" 
                     alt="SmartFinance AI Logo" 
-                    className="h-14 w-14 object-contain drop-shadow-lg group-hover:drop-shadow-2xl transition-all duration-300" 
+                    className="h-[1000px] w-[1000px] object-contain drop-shadow-lg group-hover:drop-shadow-2xl transition-all duration-300" 
                   />
                   
                   {/* Subtle sparkle effect */}
