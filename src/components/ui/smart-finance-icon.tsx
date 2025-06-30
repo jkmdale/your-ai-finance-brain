@@ -6,7 +6,7 @@ interface SmartFinanceIconProps {
   size?: number;
 }
 
-export const SmartFinanceIcon = ({ className = "", size = 32 }: SmartFinanceIconProps) => {
+export const SmartFinanceIcon = ({ className = "", size = 20 }: SmartFinanceIconProps) => {
   return (
     <div className={`flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
       <svg
