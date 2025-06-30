@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -42,7 +41,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-5 h-5" />
+              <img src="/cleaned_logo.png" alt="SmartFinanceAI" className="w-8 h-8" />
               <span className="text-white font-bold text-xl">SmartFinanceAI</span>
             </div>
             
@@ -527,7 +526,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
-              <img src="/icon_48x48.png" alt="SmartFinanceAI" className="w-8 h-8" />
+              <img src="/cleaned_logo.png" alt="SmartFinanceAI" className="w-8 h-8" />
               <span className="text-white font-bold">SmartFinanceAI</span>
             </div>
             <p className="text-white/60 text-sm mb-8">
@@ -537,7 +536,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             {/* Large icon at the very bottom */}
             <div className="flex justify-center">
               <img 
-                src="/icon_1024x1024.png" 
+                src="/cleaned_logo.png" 
                 alt="SmartFinanceAI Large Icon" 
                 className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
               />
@@ -551,4 +550,3 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
     </div>
   );
 };
-
