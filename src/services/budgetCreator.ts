@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { keyManagerService } from './keyManagerService';
 import { ClaudeAIService, type CategorizationResult } from './claude-ai-service';
@@ -37,10 +36,8 @@ interface BudgetCreationResult {
 export class BudgetCreator {
   private claudeService?: ClaudeAIService;
 
-  constructor(claudeApiKey?: string) {
-    if (claudeApiKey) {
-      this.claudeService = new ClaudeAIService(claudeApiKey);
-    }
+  constructor() {
+    this.claudeService = new ClaudeAIService();
   }
 
   async createBudgetFromTransactions(
