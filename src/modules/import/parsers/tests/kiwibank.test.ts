@@ -3,26 +3,22 @@ import { parseKiwibank } from '@parsers/kiwibank'
 
 describe('parseKiwibank', () => {
   it('parses Kiwibank CSV rows correctly', () => {
-    const input = [
-      ['Date', 'Amount', 'Description'],
-      ['2023-07-01', '-50.00', 'Petrol Station'],
-      ['2023-07-02', '1000.00', 'Invoice Payment']
-    ]
+    const csv = `"Date","Amount","Description"
+"2024-01-07","-20.00","Coffee"
+"2024-01-08","300.00","Bonus"`
 
-    const result = parseKiwibank(input)
+    const result = parseKiwibank(csv)
 
     expect(result).toEqual([
       {
-        date: '2023-07-01',
-        amount: -50.0,
-        description: 'Petrol Station',
-        source: 'Kiwibank'
+        date: '2024-01-07',
+        amount: -20.0,
+        description: 'Coffee'
       },
       {
-        date: '2023-07-02',
-        amount: 1000.0,
-        description: 'Invoice Payment',
-        source: 'Kiwibank'
+        date: '2024-01-08',
+        amount: 300.0,
+        description: 'Bonus'
       }
     ])
   })
