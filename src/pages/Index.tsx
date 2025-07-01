@@ -1,3 +1,4 @@
+// src/pages/Index.tsx
 
 import { LandingPage } from "@/components/sections/LandingPage";
 import { Dashboard } from "@/components/sections/Dashboard";
@@ -13,6 +14,7 @@ import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSecurity } from "@/hooks/useAppSecurity";
 import { useState } from "react";
+import SmartGoalsCard from "@/components/goals/SmartGoalsCard";
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -20,7 +22,6 @@ const Index = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
 
-  // Show loading spinner while checking authentication
   if (loading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -43,12 +44,10 @@ const Index = () => {
     setShowAuth(false);
   };
 
-  // Show auth screen if requested
   if (showAuth && !user) {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
-  // If user is not authenticated, always show the landing page first
   if (!user) {
     return (
       <LandingPage 
@@ -58,29 +57,25 @@ const Index = () => {
     );
   }
 
-  // If user is authenticated but PIN isn't set up yet, show PIN setup screen
   if (user && !isPinSetup) {
     return <PinSetupScreen />;
   }
 
-  // If user has PIN set up but hasn't completed full security setup, 
-  // show security method setup for preference selection
   if (user && isPinSetup && !setupComplete) {
     return <SecurityMethodSetup />;
   }
 
-  // If user is authenticated and app is locked, show unlock screen
   if (user && setupComplete && isAppLocked) {
     return <UnlockScreen />;
   }
 
-  // If user is authenticated, security is set up, and app is unlocked, show the main dashboard
   return (
     <SidebarLayout>
-      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-4 p-4">
         <Dashboard />
         <BudgetOverview />
         <GoalTracking />
+        <SmartGoalsCard />
         <AIInsights />
         <TransactionHistory />
       </div>
