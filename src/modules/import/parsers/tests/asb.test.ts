@@ -1,30 +1,29 @@
-/* File: __tests__/parsers/asb.test.ts */
-import { parseASB } from '../../../src/modules/import/parsers/asb';
+// src/modules/import/parsers/tests/asb.test.ts
+import { parseASB } from '@parsers/asb'
 
 describe('parseASB', () => {
   it('parses ASB transactions correctly', () => {
-    const mockData = [
-      { Date: '15/05/2024', Particulars: 'Uber Eats', Amount: '-22.40' },
-      { Date: '16/05/2024', Particulars: 'Refund', Amount: '10.00' }
-    ];
+    const input = [
+      ['Date', 'Amount', 'Description'],
+      ['2023-07-01', '-10.00', 'Grocery Store'],
+      ['2023-07-02', '200.00', 'Salary']
+    ]
 
-    const result = parseASB(mockData);
+    const result = parseASB(input)
 
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({
-      date: '2024-05-15',
-      description: 'Uber Eats',
-      amount: -22.4,
-      type: 'debit',
-      account: 'ASB'
-    });
-
-    expect(result[1]).toMatchObject({
-      date: '2024-05-16',
-      description: 'Refund',
-      amount: 10.0,
-      type: 'credit',
-      account: 'ASB'
-    });
-  });
-});
+    expect(result).toEqual([
+      {
+        date: '2023-07-01',
+        amount: -10.0,
+        description: 'Grocery Store',
+        source: 'ASB'
+      },
+      {
+        date: '2023-07-02',
+        amount: 200.0,
+        description: 'Salary',
+        source: 'ASB'
+      }
+    ])
+  })
+})
