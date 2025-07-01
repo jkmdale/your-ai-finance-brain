@@ -4,6 +4,7 @@
 
 **URL**: https://lovable.dev/projects/a29b8699-11a7-4b06-985f-e3c27ee69b05
 
+![Jest Tests](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/actions/workflows/test.yml/badge.svg)
 ## How can I edit this code?
 
 There are several ways of editing your application.
