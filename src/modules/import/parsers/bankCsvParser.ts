@@ -1,6 +1,6 @@
 /* File: src/modules/import/parsers/bankCsvParser.ts Description: Normalizes bank-specific CSV formats (ANZ, ASB, Westpac, Kiwibank, BNZ) into a unified transaction schema. */
 
-import { parseANZ } from './anz'; import { parseASB } from './asb'; import { parseWestpac } from './westpac'; import { parseKiwibank } from './kiwibank'; import { parseBNZ } from './bnz'; import { parseFloatSafe, normalizeDate } from '../../utils/format'; import { recommendSmartGoals } from '../../goals/recommendGoals';
+import { parseANZ } from './anz'; import { parseASB } from './asb'; import { parseWestpac } from './westpac'; import { parseKiwibank } from './kiwibank'; import { parseBNZ } from './bnz'; import { parseFloatSafe, normalizeDate } from '../../utils/format'; import { recommendSmartGoals } from '../../goals/recommendGoals'; import { saveSmartGoals } from '../../goals/saveSmartGoals';
 
 export interface Transaction { date: string; description: string; amount: number; type: 'debit' | 'credit'; account: string; category?: string; }
 
@@ -8,7 +8,7 @@ export function parseBankCSV(filename: string, data: any[]): Transaction[] { con
 
 if (lower.includes('anz')) transactions = parseANZ(data); else if (lower.includes('asb')) transactions = parseASB(data); else if (lower.includes('westpac')) transactions = parseWestpac(data); else if (lower.includes('kiwibank')) transactions = parseKiwibank(data); else if (lower.includes('bnz')) transactions = parseBNZ(data); else throw new Error(Unknown bank CSV format: ${filename});
 
-// 🔁 Trigger goal recommendation here const smartGoals = recommendSmartGoals(transactions); console.log('Recommended SMART Goals:', smartGoals);
+// 🔁 Recommend and persist SMART goals const smartGoals = recommendSmartGoals(transactions); saveSmartGoals(smartGoals).catch(console.error);
 
 return transactions; }
 
