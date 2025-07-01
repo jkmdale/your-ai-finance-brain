@@ -1,28 +1,24 @@
-// src/modules/import/parsers/tests/anz.test.ts
-import { parseANZ } from '@parsers/anz'
+// src/modules/import/parsers/tests/bnz.test.ts
+import { parseBNZ } from '@parsers/bnz'
 
-describe('parseANZ', () => {
-  it('parses ANZ CSV rows correctly', () => {
-    const input = [
-      ['Date', 'Amount', 'Description'],
-      ['2023-07-01', '-75.00', 'Online Shopping'],
-      ['2023-07-02', '300.00', 'Project Payment']
-    ]
+describe('parseBNZ', () => {
+  it('parses BNZ transactions correctly', () => {
+    const csv = `"Date","Amount","Description"
+"2024-01-05","-75.00","Restaurant"
+"2024-01-06","150.00","Refund"`
 
-    const result = parseANZ(input)
+    const result = parseBNZ(csv)
 
     expect(result).toEqual([
       {
-        date: '2023-07-01',
+        date: '2024-01-05',
         amount: -75.0,
-        description: 'Online Shopping',
-        source: 'ANZ'
+        description: 'Restaurant'
       },
       {
-        date: '2023-07-02',
-        amount: 300.0,
-        description: 'Project Payment',
-        source: 'ANZ'
+        date: '2024-01-06',
+        amount: 150.0,
+        description: 'Refund'
       }
     ])
   })
