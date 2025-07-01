@@ -11,11 +11,11 @@ if (!rootElement) {
 
 createRoot(rootElement).render(<App />);
 
-// ✅ Register the service worker after app load
+// ✅ Register the correct service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/service-worker.js')
+      .register('/sw.js') // <-- 🔁 updated from '/service-worker.js'
       .then((registration) => {
         console.log('SW registered: ', registration);
       })
