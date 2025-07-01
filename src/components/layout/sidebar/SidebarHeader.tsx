@@ -9,7 +9,7 @@ export const AppSidebarHeader = () => {
         <div className="relative h-12 w-12 group cursor-pointer">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
           <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-            <img src="/cleaned_logo.png" alt="Smart Finance AI" className="h-20 w-20 object-contain" />
+            <img src="/cleaned_logo.png" alt="Smart Finance AI" className="h-40 w-40 object-contain" />
           </div>
         </div>
         <div>
