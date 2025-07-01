@@ -1,23 +1,27 @@
-File: .github/workflows/test.yml
-
+# File: .github/workflows/test.yml
 name: Run Jest Tests
 
-on: push: branches: [ main ] pull_request: branches: [ main ]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
-jobs: test: runs-on: ubuntu-latest
+jobs:
+  test:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: 📥 Checkout repository
-    uses: actions/checkout@v3
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
 
-  - name: 🟢 Setup Node.js
-    uses: actions/setup-node@v3
-    with:
-      node-version: '20'
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-  - name: 📦 Install dependencies
-    run: npm install
+      - name: 📦 Install dependencies
+        run: npm install
 
-  - name: 🧪 Run Jest tests
-    run: npm test
-
+      - name: 🧪 Run Jest tests
+        run: npm test
