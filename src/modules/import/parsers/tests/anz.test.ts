@@ -1,28 +1,28 @@
-// src/modules/import/parsers/tests/asb.test.ts
-import { parseASB } from '@parsers/asb'
+// src/modules/import/parsers/tests/anz.test.ts
+import { parseANZ } from '@parsers/anz'
 
-describe('parseASB', () => {
-  it('parses ASB transactions correctly', () => {
+describe('parseANZ', () => {
+  it('parses ANZ CSV rows correctly', () => {
     const input = [
       ['Date', 'Amount', 'Description'],
-      ['2023-07-01', '-10.00', 'Grocery Store'],
-      ['2023-07-02', '200.00', 'Salary']
+      ['2023-07-01', '-75.00', 'Online Shopping'],
+      ['2023-07-02', '300.00', 'Project Payment']
     ]
 
-    const result = parseASB(input)
+    const result = parseANZ(input)
 
     expect(result).toEqual([
       {
         date: '2023-07-01',
-        amount: -10.0,
-        description: 'Grocery Store',
-        source: 'ASB'
+        amount: -75.0,
+        description: 'Online Shopping',
+        source: 'ANZ'
       },
       {
         date: '2023-07-02',
-        amount: 200.0,
-        description: 'Salary',
-        source: 'ASB'
+        amount: 300.0,
+        description: 'Project Payment',
+        source: 'ANZ'
       }
     ])
   })
