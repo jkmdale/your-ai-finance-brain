@@ -1,7 +1,11 @@
+// public/sw.js
 
-const CACHE_NAME = 'smartfinanceai-v1';
+const CACHE_NAME = 'smartfinanceai-v2';
+
 const urlsToCache = [
   '/',
+  '/index.html',
+  '/offline.html',
   '/static/js/bundle.js',
   '/static/css/main.css',
   '/manifest.json',
@@ -12,22 +16,20 @@ const urlsToCache = [
 // Install event
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
-// Fetch event
+// Fetch event with offline fallback
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
+    fetch(event.request).catch(() => {
+      return caches.match(event.request).then((response) => {
+        return response || caches.match('/offline.html');
+      });
+    })
   );
 });
 
@@ -38,7 +40,6 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
