@@ -1,30 +1,29 @@
-/* File: __tests__/parsers/anz.test.ts */
-import { parseANZ } from '../../../src/modules/import/parsers/anz';
+// src/modules/import/parsers/tests/asb.test.ts
+import { parseASB } from '@parsers/asb'
 
-describe('parseANZ', () => {
-  it('parses valid debit and credit transactions', () => {
-    const mockData = [
-      { Date: '01/06/2024', Details: 'Coffee Shop', Amount: '-5.00' },
-      { Date: '02/06/2024', Details: 'Salary Payment', Amount: '2500.00' }
-    ];
+describe('parseASB', () => {
+  it('parses ASB transactions correctly', () => {
+    const input = [
+      ['Date', 'Amount', 'Description'],
+      ['2023-07-01', '-10.00', 'Grocery Store'],
+      ['2023-07-02', '200.00', 'Salary']
+    ]
 
-    const result = parseANZ(mockData);
+    const result = parseASB(input)
 
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({
-      date: '2024-06-01',
-      description: 'Coffee Shop',
-      amount: -5.0,
-      type: 'debit',
-      account: 'ANZ'
-    });
-
-    expect(result[1]).toMatchObject({
-      date: '2024-06-02',
-      description: 'Salary Payment',
-      amount: 2500.0,
-      type: 'credit',
-      account: 'ANZ'
-    });
-  });
-});
+    expect(result).toEqual([
+      {
+        date: '2023-07-01',
+        amount: -10.0,
+        description: 'Grocery Store',
+        source: 'ASB'
+      },
+      {
+        date: '2023-07-02',
+        amount: 200.0,
+        description: 'Salary',
+        source: 'ASB'
+      }
+    ])
+  })
+})
