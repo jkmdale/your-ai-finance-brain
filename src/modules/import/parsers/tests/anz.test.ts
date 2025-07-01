@@ -1,58 +1,49 @@
-// src/modules/import/parsers/tests/asb.test.ts
-import { parseASB } from '@parsers/asb'
+// src/modules/import/parsers/tests/anz.test.ts
+import { parseANZ } from '@parsers/anz'
 
-describe('parseASB', () => {
-  it('parses debit and credit transactions correctly', () => {
-    const mock = [
-      ['Date', 'Amount', 'Particulars', 'Code', 'Reference'],
-      ['2024-01-01', '-100.00', 'Countdown', '', 'REF123'],
-      ['2024-01-02', '250.00', 'Salary', '', 'EMP456']
+describe('parseANZ', () => {
+  it('parses ANZ data correctly', () => {
+    const rows = [
+      ['Date', 'Amount', 'Details', 'Particulars', 'Reference'],
+      ['2024-01-01', '-55.00', 'Store', 'Groceries', '1234'],
+      ['2024-01-02', '600.00', 'Company', 'Salary', '']
     ]
 
-    const result = parseASB(mock)
+    const result = parseANZ(rows)
 
     expect(result).toEqual([
       {
         date: '2024-01-01',
-        amount: -100,
-        description: 'Countdown - REF123',
-        source: 'ASB'
+        amount: -55,
+        description: 'Store - Groceries - 1234',
+        source: 'ANZ'
       },
       {
         date: '2024-01-02',
-        amount: 250,
-        description: 'Salary - EMP456',
-        source: 'ASB'
+        amount: 600,
+        description: 'Company - Salary',
+        source: 'ANZ'
       }
     ])
   })
 
-  it('handles missing optional fields gracefully', () => {
-    const input = [
-      ['Date', 'Amount', 'Particulars', 'Code', 'Reference'],
-      ['2024-01-03', '-20.00', '', '', '']
+  it('parses invalid amounts to NaN', () => {
+    const rows = [
+      ['Date', 'Amount', 'Details', 'Particulars', 'Reference'],
+      ['2024-01-03', 'invalid', 'Foo', '', '']
     ]
 
-    const result = parseASB(input)
-
-    expect(result).toEqual([
-      {
-        date: '2024-01-03',
-        amount: -20,
-        description: '',
-        source: 'ASB'
-      }
-    ])
-  })
-
-  it('throws error on invalid rows (non-numeric amount)', () => {
-    const invalid = [
-      ['Date', 'Amount', 'Particulars', 'Code', 'Reference'],
-      ['2024-01-04', 'invalid', 'Desc', '', '']
-    ]
-
-    const result = parseASB(invalid)
-
+    const result = parseANZ(rows)
     expect(result[0].amount).toBeNaN()
+  })
+
+  it('handles missing fields safely', () => {
+    const rows = [
+      ['Date', 'Amount', 'Details', 'Particulars', 'Reference'],
+      ['2024-01-04', '50.00', '', '', '']
+    ]
+
+    const result = parseANZ(rows)
+    expect(result[0].description).toBe('')
   })
 })
