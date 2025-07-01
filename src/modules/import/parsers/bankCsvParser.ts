@@ -1,75 +1,26 @@
 /*
   File: src/modules/import/parsers/bankCsvParser.ts
-  Description: Normalizes bank-specific CSV formats (ANZ, ASB, Westpac, Kiwibank, BNZ) into a unified transaction schema.
+  Description: Delegates parsing of bank-specific CSV formats to dedicated per-bank modules. Fallback includes column inspection. Transaction type is imported from shared types.
 */
 
 import { parseFloatSafe, normalizeDate } from '../../utils/format';
-
-export interface Transaction {
-  date: string;
-  description: string;
-  amount: number;
-  type: 'debit' | 'credit';
-  account: string;
-}
+import { parseANZ } from './anz';
+import { parseASB } from './asb';
+import { parseWestpac } from './westpac';
+import { parseKiwibank } from './kiwibank';
+import { parseBNZ } from './bnz';
+import { getField, sanitizeString } from '../utils/parseHelpers';
+import { Transaction } from '../../../types/Transaction';
 
 export function parseBankCSV(filename: string, data: any[]): Transaction[] {
   const lower = filename.toLowerCase();
-  if (lower.includes('anz')) return parseBankCSV_ANZ(data);
-  if (lower.includes('asb')) return parseBankCSV_ASB(data);
-  if (lower.includes('westpac')) return parseBankCSV_WESTPAC(data);
-  if (lower.includes('kiwibank')) return parseBankCSV_KIWIBANK(data);
-  if (lower.includes('bnz')) return parseBankCSV_BNZ(data);
 
-  throw new Error(`Unknown bank CSV format: ${filename}`);
-}
+  if (lower.includes('anz')) return parseANZ(data);
+  if (lower.includes('asb')) return parseASB(data);
+  if (lower.includes('westpac')) return parseWestpac(data);
+  if (lower.includes('kiwibank')) return parseKiwibank(data);
+  if (lower.includes('bnz')) return parseBNZ(data);
 
-function parseBankCSV_ANZ(data: any[]): Transaction[] {
-  return data.map(row => ({
-    date: normalizeDate(row['Date']),
-    description: row['Details'] || '',
-    amount: parseFloatSafe(row['Amount']),
-    type: parseFloatSafe(row['Amount']) < 0 ? 'debit' : 'credit',
-    account: 'ANZ',
-  }));
-}
-
-function parseBankCSV_ASB(data: any[]): Transaction[] {
-  return data.map(row => ({
-    date: normalizeDate(row['Date']),
-    description: row['Particulars'] || '',
-    amount: parseFloatSafe(row['Amount']),
-    type: parseFloatSafe(row['Amount']) < 0 ? 'debit' : 'credit',
-    account: 'ASB',
-  }));
-}
-
-function parseBankCSV_WESTPAC(data: any[]): Transaction[] {
-  return data.map(row => ({
-    date: normalizeDate(row['Date']),
-    description: row['Transaction Details'] || '',
-    amount: parseFloatSafe(row['Amount']),
-    type: parseFloatSafe(row['Amount']) < 0 ? 'debit' : 'credit',
-    account: 'Westpac',
-  }));
-}
-
-function parseBankCSV_KIWIBANK(data: any[]): Transaction[] {
-  return data.map(row => ({
-    date: normalizeDate(row['Date']),
-    description: row['Payee'] || '',
-    amount: parseFloatSafe(row['Amount']),
-    type: parseFloatSafe(row['Amount']) < 0 ? 'debit' : 'credit',
-    account: 'Kiwibank',
-  }));
-}
-
-function parseBankCSV_BNZ(data: any[]): Transaction[] {
-  return data.map(row => ({
-    date: normalizeDate(row['Date']),
-    description: row['Description'] || '',
-    amount: parseFloatSafe(row['Amount']),
-    type: parseFloatSafe(row['Amount']) < 0 ? 'debit' : 'credit',
-    account: 'BNZ',
-  }));
+  const headerSample = Object.keys(data?.[0] || {}).map(sanitizeString).join(', ');
+  throw new Error(`Unknown bank CSV format for file "${filename}". Headers found: [${headerSample}]`);
 }
