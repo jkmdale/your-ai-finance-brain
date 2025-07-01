@@ -1,9 +1,4 @@
-/*
-  File: src/modules/import/parsers/bankCsvParser.ts
-  Description: Delegates parsing of bank-specific CSV formats to dedicated per-bank modules. Fallback includes column inspection. Transaction type is imported from shared types.
-*/
-
-import { parseFloatSafe, normalizeDate } from '../../utils/format';
+/* File: src/modules/import/parsers/bankCsvParser.ts */
 import { parseANZ } from './anz';
 import { parseASB } from './asb';
 import { parseWestpac } from './westpac';
