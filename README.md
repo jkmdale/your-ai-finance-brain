@@ -1,10 +1,11 @@
+![Jest Tests](https://github.com/jkmdale/your-ai-finance-brain/actions/workflows/test.yml/badge.svg)
+
 # Welcome to your Lovable project
 
 ## Project info
 
 **URL**: https://lovable.dev/projects/a29b8699-11a7-4b06-985f-e3c27ee69b05
 
-![Jest Tests](https://github.com/jkmdale/your-ai-finance-brain/actions/workflows/test.yml/badge.svg)
 
 ## How can I edit this code?
 
