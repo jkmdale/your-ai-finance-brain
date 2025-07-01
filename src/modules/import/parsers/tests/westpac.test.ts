@@ -2,24 +2,48 @@
 import { parseWestpac } from '@parsers/westpac'
 
 describe('parseWestpac', () => {
-  it('parses Westpac CSV data correctly', () => {
-    const csv = `"Date","Amount","Description"
-"2024-01-09","-45.00","Taxi"
-"2024-01-10","500.00","Freelance"`
+  it('parses valid Westpac transactions', () => {
+    const rows = [
+      ['Date', 'Amount', 'Transaction Details'],
+      ['2024-01-01', '-60.00', 'Transport'],
+      ['2024-01-02', '700.00', 'Payroll']
+    ]
 
-    const result = parseWestpac(csv)
+    const result = parseWestpac(rows)
 
     expect(result).toEqual([
       {
-        date: '2024-01-09',
-        amount: -45.0,
-        description: 'Taxi'
+        date: '2024-01-01',
+        amount: -60,
+        description: 'Transport',
+        source: 'Westpac'
       },
       {
-        date: '2024-01-10',
-        amount: 500.0,
-        description: 'Freelance'
+        date: '2024-01-02',
+        amount: 700,
+        description: 'Payroll',
+        source: 'Westpac'
       }
     ])
+  })
+
+  it('handles missing description field gracefully', () => {
+    const input = [
+      ['Date', 'Amount', 'Transaction Details'],
+      ['2024-01-03', '500.00', '']
+    ]
+
+    const result = parseWestpac(input)
+    expect(result[0].description).toBe('')
+  })
+
+  it('returns NaN for invalid amount', () => {
+    const input = [
+      ['Date', 'Amount', 'Transaction Details'],
+      ['2024-01-04', 'oops', 'Error']
+    ]
+
+    const result = parseWestpac(input)
+    expect(result[0].amount).toBeNaN()
   })
 })
