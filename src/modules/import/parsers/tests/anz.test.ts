@@ -2,27 +2,23 @@
 import { parseANZ } from '@parsers/anz'
 
 describe('parseANZ', () => {
-  it('parses ANZ CSV rows correctly', () => {
-    const input = [
-      ['Date', 'Amount', 'Description'],
-      ['2023-07-01', '-75.00', 'Online Shopping'],
-      ['2023-07-02', '300.00', 'Project Payment']
-    ]
+  it('parses ANZ transactions correctly', () => {
+    const csv = `"Date","Amount","Description"
+"2024-01-03","-50.00","Groceries"
+"2024-01-04","100.00","Salary"`
 
-    const result = parseANZ(input)
+    const result = parseANZ(csv)
 
     expect(result).toEqual([
       {
-        date: '2023-07-01',
-        amount: -75.0,
-        description: 'Online Shopping',
-        source: 'ANZ'
+        date: '2024-01-03',
+        amount: -50.0,
+        description: 'Groceries'
       },
       {
-        date: '2023-07-02',
-        amount: 300.0,
-        description: 'Project Payment',
-        source: 'ANZ'
+        date: '2024-01-04',
+        amount: 100.0,
+        description: 'Salary'
       }
     ])
   })
