@@ -1,30 +1,29 @@
-/* File: __tests__/parsers/bnz.test.ts */
-import { parseBNZ } from '../../../src/modules/import/parsers/bnz';
+// src/modules/import/parsers/tests/anz.test.ts
+import { parseANZ } from '@parsers/anz'
 
-describe('parseBNZ', () => {
-  it('parses BNZ CSV rows correctly', () => {
-    const mockData = [
-      { Date: '20/02/2024', Description: 'ATM Withdrawal', Amount: '-200.00' },
-      { Date: '21/02/2024', Description: 'Deposit', Amount: '500.00' }
-    ];
+describe('parseANZ', () => {
+  it('parses ANZ CSV rows correctly', () => {
+    const input = [
+      ['Date', 'Amount', 'Description'],
+      ['2023-07-01', '-75.00', 'Online Shopping'],
+      ['2023-07-02', '300.00', 'Project Payment']
+    ]
 
-    const result = parseBNZ(mockData);
+    const result = parseANZ(input)
 
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({
-      date: '2024-02-20',
-      description: 'ATM Withdrawal',
-      amount: -200.0,
-      type: 'debit',
-      account: 'BNZ'
-    });
-
-    expect(result[1]).toMatchObject({
-      date: '2024-02-21',
-      description: 'Deposit',
-      amount: 500.0,
-      type: 'credit',
-      account: 'BNZ'
-    });
-  });
-});
+    expect(result).toEqual([
+      {
+        date: '2023-07-01',
+        amount: -75.0,
+        description: 'Online Shopping',
+        source: 'ANZ'
+      },
+      {
+        date: '2023-07-02',
+        amount: 300.0,
+        description: 'Project Payment',
+        source: 'ANZ'
+      }
+    ])
+  })
+})
