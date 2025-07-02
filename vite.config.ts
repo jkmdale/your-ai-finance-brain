@@ -18,5 +18,11 @@ export default defineConfig({
   },
   build: {
     target: 'es2020'
+  },
+  define: {
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom']
   }
 })
