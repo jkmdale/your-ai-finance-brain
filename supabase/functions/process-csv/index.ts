@@ -35,16 +35,53 @@ serve(async (req) => {
   const headers = lines[0].split(',');
   const transactions = [];
 
+  // First ensure user has a default bank account
+  const { data: existingAccount } = await supabaseClient
+    .from('bank_accounts')
+    .select('id')
+    .eq('user_id', user.data.user.id)
+    .limit(1)
+    .single();
+
+  let accountId = existingAccount?.id;
+  
+  if (!accountId) {
+    // Create a default account for this user
+    const { data: newAccount, error: accountError } = await supabaseClient
+      .from('bank_accounts')
+      .insert({
+        user_id: user.data.user.id,
+        account_name: 'Default Account',
+        account_type: 'checking',
+        bank_name: 'Imported',
+        currency: 'NZD',
+        balance: 0
+      })
+      .select('id')
+      .single();
+    
+    if (accountError) {
+      return new Response(
+        JSON.stringify({ error: `Failed to create account: ${accountError.message}` }),
+        { status: 500 }
+      );
+    }
+    
+    accountId = newAccount.id;
+  }
+
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split(',');
     if (values.length >= 3) {
+      const amount = parseFloat(values[2]) || 0;
       transactions.push({
         id: `txn_${Date.now()}_${i}`,
         user_id: user.data.user.id,
-        date: values[0] || new Date().toISOString().split('T')[0],
+        account_id: accountId,
+        transaction_date: values[0] || new Date().toISOString().split('T')[0],
         description: values[1] || 'Unknown transaction',
-        amount: parseFloat(values[2]) || 0,
-        is_income: parseFloat(values[2]) > 0,
+        amount: Math.abs(amount),
+        is_income: amount > 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
