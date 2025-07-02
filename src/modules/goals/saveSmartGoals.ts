@@ -1,7 +1,7 @@
 /* File: src/modules/goals/saveSmartGoals.ts Description: Saves SMART goals securely to encrypted IndexedDB. */
 
 import { SmartGoal } from './recommendations';
-import { encryptAndStore } from '../storage/secureStore';
+import { encryptAndStore, decryptAndLoad } from '../storage/secureStore';
 
 const GOALS_KEY = 'smart-goals-v1';
 
@@ -10,7 +10,7 @@ export async function saveSmartGoals(goals: SmartGoal[]) {
 }
 
 export async function loadSmartGoals(): Promise<SmartGoal[]> {
-  const data = await encryptAndStore(GOALS_KEY);
+  const data = await decryptAndLoad(GOALS_KEY);
   return Array.isArray(data) ? data : [];
 }
 

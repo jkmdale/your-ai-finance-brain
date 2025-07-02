@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/kiwibank.test.ts
-import { parseKiwibank } from '@parsers/kiwibank'
+import { parseKiwibank } from '../kiwibank'
 
 describe('parseKiwibank', () => {
   it('parses valid Kiwibank rows correctly', () => {

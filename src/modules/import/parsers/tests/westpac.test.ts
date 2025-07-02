@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/westpac.test.ts
-import { parseWestpac } from '@parsers/westpac'
+import { parseWestpac } from '../westpac'
 
 describe('parseWestpac', () => {
   it('parses valid Westpac transactions', () => {

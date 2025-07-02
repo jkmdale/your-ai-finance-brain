@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/parseBankCSV.test.ts
-import { parseBankCSV } from '@parsers/bankCsvParser'
+import { parseBankCSV } from '../bankCsvParser'
 
 const mockData = [
   ['Date', 'Amount', 'Description'],

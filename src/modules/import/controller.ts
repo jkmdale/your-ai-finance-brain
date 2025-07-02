@@ -13,8 +13,8 @@ export async function handleBulkImport(filename: string, rawData: any[][]): Prom
     // 1. Parse
     const transactions: Transaction[] = parseBankCSV(filename, rawData);
 
-    // 2. Categorize
-    const categorized = categorizeTransactions(transactions);
+    // 2. Categorize (await the Promise)
+    const categorized = await categorizeTransactions(transactions);
 
     // 3. Budget update
     updateBudgetFromTransactions(categorized);

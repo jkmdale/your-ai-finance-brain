@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/anz.test.ts
-import { parseANZ } from '@parsers/anz'
+import { parseANZ } from '../anz'
 
 describe('parseANZ', () => {
   it('parses ANZ data correctly', () => {

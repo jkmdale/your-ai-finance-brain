@@ -4,3 +4,7 @@ export function updateBudgets(transactions: any[]): void {
   console.log(`Budget updated with ${transactions.length} transactions`);
   window.dispatchEvent(new CustomEvent('budget-update', { detail: { transactions } }));
 }
+
+export function updateBudgetFromTransactions(transactions: any[]): void {
+  updateBudgets(transactions);
+}

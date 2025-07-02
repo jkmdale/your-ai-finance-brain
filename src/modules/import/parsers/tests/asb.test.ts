@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/asb.test.ts
-import { parseASB } from '@parsers/asb'
+import { parseASB } from '../asb'
 
 describe('parseASB', () => {
   it('parses debit and credit transactions correctly', () => {

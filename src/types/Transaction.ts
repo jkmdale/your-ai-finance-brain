@@ -9,4 +9,5 @@ export interface Transaction {
   amount: number;
   type: 'debit' | 'credit';
   account: string;
+  category?: string;
 }

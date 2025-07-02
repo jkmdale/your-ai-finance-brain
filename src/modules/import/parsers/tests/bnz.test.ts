@@ -1,5 +1,5 @@
 // src/modules/import/parsers/tests/bnz.test.ts
-import { parseBNZ } from '@parsers/bnz'
+import { parseBNZ } from '../bnz'
 
 describe('parseBNZ', () => {
   it('parses BNZ transactions correctly', () => {

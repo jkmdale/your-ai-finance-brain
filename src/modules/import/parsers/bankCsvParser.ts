@@ -1,10 +1,10 @@
 /* File: src/modules/import/parsers/bankCsvParser.ts Description: Normalizes bank-specific CSV formats (ANZ, ASB, Westpac, Kiwibank, BNZ) into a unified transaction schema. */
 
-import { parseANZ } from './anz';
-import { parseASB } from './asb';
-import { parseWestpac } from './westpac';
-import { parseKiwibank } from './kiwibank';
-import { parseBNZ } from './bnz';
+import { parseANZ as parseANZFile } from './anz';
+import { parseASB as parseASBFile } from './asb';
+import { parseWestpac as parseWestpacFile } from './westpac';
+import { parseKiwibank as parseKiwibankFile } from './kiwibank';
+import { parseBNZ as parseBNZFile } from './bnz';
 import { parseFloatSafe, normalizeDate } from '../../utils/format';
 // Goals integration removed from parser - handled in the upload flow
 
@@ -37,19 +37,19 @@ export function parseBankCSV(filename: string, data: any[], headers?: string[]):
   
   switch (bankType) {
     case 'anz':
-      transactions = parseANZ(data);
+      transactions = parseANZFile(data);
       break;
     case 'asb':
-      transactions = parseASB(data);
+      transactions = parseASBFile(data);
       break;
     case 'westpac':
-      transactions = parseWestpac(data);
+      transactions = parseWestpacFile(data);
       break;
     case 'kiwibank':
-      transactions = parseKiwibank(data);
+      transactions = parseKiwibankFile(data);
       break;
     case 'bnz':
-      transactions = parseBNZ(data);
+      transactions = parseBNZFile(data);
       break;
     default:
       // Try generic parsing as fallback
