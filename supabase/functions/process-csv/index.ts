@@ -30,10 +30,21 @@ serve(async (req) => {
     );
   }
 
-  // Simple CSV processing - this will be enhanced
+  // Enhanced CSV processing with better parsing
   const lines = csvData.trim().split('\n');
-  const headers = lines[0].split(',');
+  if (lines.length < 2) {
+    return new Response(
+      JSON.stringify({ error: 'CSV must have at least header and one data row' }),
+      { status: 400 }
+    );
+  }
+  
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
   const transactions = [];
+  const errors = [];
+  
+  console.log('CSV Headers:', headers);
+  console.log('Total data rows:', lines.length - 1);
 
   // First ensure user has a default bank account
   const { data: existingAccount } = await supabaseClient
@@ -71,27 +82,71 @@ serve(async (req) => {
   }
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',');
+    const line = lines[i].trim();
+    if (!line) continue; // Skip empty lines
+    
+    const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+    
     if (values.length >= 3) {
-      const amount = parseFloat(values[2]) || 0;
-      transactions.push({
-        id: `txn_${Date.now()}_${i}`,
-        user_id: user.data.user.id,
-        account_id: accountId,
-        transaction_date: values[0] || new Date().toISOString().split('T')[0],
-        description: values[1] || 'Unknown transaction',
-        amount: Math.abs(amount),
-        is_income: amount > 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      try {
+        // Parse date - try common formats
+        let transactionDate;
+        const dateStr = values[0];
+        if (dateStr) {
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            transactionDate = date.toISOString().split('T')[0];
+          } else {
+            // Try DD/MM/YYYY format
+            const parts = dateStr.split(/[-\/]/);
+            if (parts.length === 3) {
+              const [day, month, year] = parts;
+              const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+              if (!isNaN(parsedDate.getTime())) {
+                transactionDate = parsedDate.toISOString().split('T')[0];
+              }
+            }
+          }
+        }
+        transactionDate = transactionDate || new Date().toISOString().split('T')[0];
+
+        // Parse amount
+        const amountStr = values[2].replace(/[$,]/g, '');
+        const amount = parseFloat(amountStr) || 0;
+        
+        if (amount === 0) {
+          console.log(`Row ${i}: Amount is 0 or invalid: "${values[2]}"`);
+        }
+
+        const transaction = {
+          id: `txn_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`,
+          user_id: user.data.user.id,
+          account_id: accountId,
+          transaction_date: transactionDate,
+          description: (values[1] || `Transaction ${i}`).substring(0, 200),
+          amount: Math.abs(amount),
+          is_income: amount > 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        transactions.push(transaction);
+        console.log(`Row ${i}: Created transaction - ${transaction.description} - $${transaction.amount}`);
+        
+      } catch (rowError) {
+        console.error(`Error parsing row ${i}:`, rowError, 'Row data:', values);
+        errors.push(`Row ${i}: ${rowError.message}`);
+      }
+    } else {
+      console.log(`Row ${i}: Insufficient columns (${values.length}), skipping`);
     }
   }
+
+  console.log(`Parsed ${transactions.length} transactions from ${lines.length - 1} data rows`);
 
   let processedCount = 0;
   let failedCount = 0;
   const insertedTransactions = [];
-  const errors = [];
 
   for (const txn of transactions) {
     const { error } = await supabaseClient.from('transactions').insert(txn);
