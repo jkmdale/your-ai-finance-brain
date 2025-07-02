@@ -1,17 +1,11 @@
-import { defineConfig } from 'vite'
-import path from 'path'
-
-export default defineConfig({
+export default {
   resolve: {
     alias: {
-      "@": path.resolve(process.cwd(), "./src")
-    },
-  },
-  define: {
-    global: 'globalThis',
+      "@": "/dev-server/src"
+    }
   },
   server: {
     host: "::",
     port: 8080
   }
-})
+}
