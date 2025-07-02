@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "Node",
     "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": "./src",
     "paths": {
