@@ -10,4 +10,5 @@ export interface Transaction {
   type: 'debit' | 'credit';
   account: string;
   category?: string;
+  source?: string;
 }

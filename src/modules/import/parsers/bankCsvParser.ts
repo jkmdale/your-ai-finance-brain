@@ -15,6 +15,7 @@ export interface Transaction {
   type: 'debit' | 'credit';
   account: string;
   category?: string;
+  source?: string;
 }
 
 export function parseBankCSV(filename: string, data: any[], headers?: string[]): Transaction[] {
@@ -119,6 +120,7 @@ export function parseANZ(data: any[]): Transaction[] {
     amount: parseFloatSafe(row['Amount']),
     type: parseFloat(row['Amount']) < 0 ? 'debit' : 'credit',
     account: 'ANZ',
+    source: 'ANZ',
   }));
 }
 
@@ -129,6 +131,7 @@ export function parseASB(data: any[]): Transaction[] {
     amount: parseFloatSafe(row['Amount']),
     type: parseFloat(row['Amount']) < 0 ? 'debit' : 'credit',
     account: 'ASB',
+    source: 'ASB',
   }));
 }
 
@@ -139,6 +142,7 @@ export function parseWestpac(data: any[]): Transaction[] {
     amount: parseFloatSafe(row['Amount']),
     type: parseFloat(row['Amount']) < 0 ? 'debit' : 'credit',
     account: 'Westpac',
+    source: 'Westpac',
   }));
 }
 
@@ -149,6 +153,7 @@ export function parseKiwibank(data: any[]): Transaction[] {
     amount: parseFloatSafe(row['Amount']),
     type: parseFloat(row['Amount']) < 0 ? 'debit' : 'credit',
     account: 'Kiwibank',
+    source: 'Kiwibank',
   }));
 }
 
@@ -159,5 +164,6 @@ export function parseBNZ(data: any[]): Transaction[] {
     amount: parseFloatSafe(row['Amount']),
     type: parseFloat(row['Amount']) < 0 ? 'debit' : 'credit',
     account: 'BNZ',
+    source: 'BNZ',
   }));
 }
