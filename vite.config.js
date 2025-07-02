@@ -18,13 +18,20 @@ export default defineConfig({
     global: 'globalThis',
   },
   optimizeDeps: {
-    exclude: ['@solana/wallet-standard-features']
+    exclude: ['@solana/wallet-standard-features'],
+    esbuildOptions: {
+      target: 'esnext'
+    }
   },
   build: {
     target: 'esnext',
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      external: [],
+      onwarn: () => {}
+    }
   },
   server: {
     host: "::",
@@ -32,5 +39,6 @@ export default defineConfig({
     fs: {
       strict: false
     }
-  }
+  },
+  esbuild: false
 })
