@@ -47,7 +47,8 @@ export const MultiFileUpload = () => {
         throw new Error('File size must be less than 5MB');
       }
 
-      console.log(`Processing CSV file: ${file.name} (${file.size} bytes)`);
+      console.log(`🚀 Processing CSV file: ${file.name} (${file.size} bytes)`);
+      console.log('📊 CSV content preview:', csvContent.substring(0, 200));
 
       // Call the edge function to process CSV
       const { data, error } = await supabase.functions.invoke('process-csv', {
@@ -66,7 +67,13 @@ export const MultiFileUpload = () => {
         throw new Error('No response from processing service');
       }
 
-      console.log('Processing response:', data);
+      console.log('📈 Processing response:', data);
+      console.log('📈 Response details:', { 
+        success: data?.success, 
+        processed: data?.processed, 
+        errors: data?.errors,
+        warnings: data?.warnings 
+      });
 
       // Handle the response
       if (data.success) {
@@ -127,6 +134,7 @@ export const MultiFileUpload = () => {
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔍 File select triggered, user:', user);
     const files = event.target.files;
     if (!files || files.length === 0) return;
 

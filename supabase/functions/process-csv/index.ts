@@ -39,13 +39,19 @@ serve(async (req) => {
     const { csvData, fileName } = requestBody;
 
     if (!csvData || typeof csvData !== 'string') {
+      console.error('❌ Invalid CSV data:', { 
+        hasCsvData: !!csvData, 
+        type: typeof csvData, 
+        length: csvData?.length 
+      });
       return new Response(
         JSON.stringify({ error: 'No CSV data provided or invalid format' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Processing CSV for user ${user.id}: ${fileName} (${csvData.length} chars)`);
+    console.log(`🚀 Processing CSV for user ${user.id}: ${fileName} (${csvData.length} chars)`);
+    console.log('📊 CSV preview:', csvData.substring(0, 200));
 
     // Enhanced CSV processing
     const lines = csvData.trim().split('\n').filter(line => line.trim());
