@@ -1,35 +1,55 @@
 
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-  },
-  // Set base path for GitHub Pages deployment
-  base: mode === 'production' ? '/' : '/',
+export default defineConfig({
   plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
+    react({
+      jsxImportSource: 'react'
+    })
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@parsers": path.resolve(__dirname, "./src/modules/import/parsers")
     },
   },
+  esbuild: {
+    target: 'es2022',
+    keepNames: true,
+    jsx: 'automatic',
+    include: /\.(tsx?|jsx?)$/,
+    exclude: /node_modules/
+  },
+  define: {
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    exclude: ['@solana/wallet-standard-features'],
+    esbuildOptions: {
+      target: 'es2022'
+    }
+  },
   build: {
+    target: 'es2022',
     outDir: 'dist',
     assetsDir: 'assets',
-    // Ensure proper file naming for GitHub Pages
+    sourcemap: false,
+    commonjsOptions: {
+      transformMixedEsModules: true
+    },
     rollupOptions: {
       output: {
         manualChunks: undefined,
-      },
-    },
+      }
+    }
   },
-}));
+  server: {
+    host: "::",
+    port: 8080,
+    fs: {
+      strict: false
+    }
+  }
+})

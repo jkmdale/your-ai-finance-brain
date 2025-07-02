@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      jsxImportSource: 'react'
+    })
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -12,10 +16,29 @@ export default defineConfig({
     },
   },
   esbuild: {
-    target: 'es2020',
+    target: 'es2022',
     keepNames: true,
+    tsconfig: false, // Bypass corrupted tsconfig.json
+    jsx: 'automatic'
   },
   define: {
     global: 'globalThis',
   },
+  optimizeDeps: {
+    exclude: ['@solana/wallet-standard-features'],
+    esbuildOptions: {
+      target: 'es2022'
+    }
+  },
+  build: {
+    target: 'es2022',
+    commonjsOptions: {
+      transformMixedEsModules: true
+    }
+  },
+  server: {
+    fs: {
+      strict: false
+    }
+  }
 })
