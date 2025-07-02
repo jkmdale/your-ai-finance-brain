@@ -50,12 +50,22 @@ export const MultiFileUpload = () => {
       console.log(`🚀 Processing CSV file: ${file.name} (${file.size} bytes)`);
       console.log('📊 CSV content preview:', csvContent.substring(0, 200));
 
+      // Get the session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session found');
+      }
+      console.log('🔑 Session token available:', !!session.access_token);
+
       // Call the edge function to process CSV
       const { data, error } = await supabase.functions.invoke('process-csv', {
         body: {
           csvData: csvContent,
           fileName: file.name
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       if (error) {
@@ -139,9 +149,12 @@ export const MultiFileUpload = () => {
     if (!files || files.length === 0) return;
 
     if (!user) {
+      console.error('❌ No user found - authentication required');
       toast.error('Please sign in to upload CSV files');
       return;
     }
+
+    console.log('✅ User authenticated:', user.id);
 
     setUploading(true);
     setResults([]);
