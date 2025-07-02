@@ -16,12 +16,11 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@parsers/*": ["./src/modules/import/parsers/*"]
+      "@/*": ["./src/*"]
     },
     "noImplicitAny": false,
     "allowJs": true
   },
-  "include": ["src", "**/*.ts", "**/*.tsx"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "vite.config.ts", "vite.config.js"]
 }
