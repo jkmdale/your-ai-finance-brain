@@ -6,6 +6,7 @@ import { BudgetOverview } from "@/components/sections/BudgetOverview";
 import { GoalTracking } from "@/components/sections/GoalTracking";
 import { AIInsights } from "@/components/sections/AIInsights";
 import { TransactionHistory } from "@/components/sections/TransactionHistory";
+import { MultiFileUpload } from "@/components/csv/MultiFileUpload";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { SecurityMethodSetup } from "@/components/security/SecurityMethodSetup";
 import { PinSetupScreen } from "@/components/security/PinSetupScreen";
@@ -80,6 +81,7 @@ const Index = () => {
         <BudgetOverview />
         <GoalTracking />
         <SmartGoalsCard />
+        <MultiFileUpload />
         <AIInsights />
         <TransactionHistory />
       </div>

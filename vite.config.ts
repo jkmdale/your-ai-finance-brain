@@ -20,7 +20,8 @@ export default defineConfig({
     keepNames: true,
     jsx: 'automatic',
     include: /\.(tsx?|jsx?)$/,
-    exclude: /node_modules/
+    exclude: /node_modules/,
+    tsconfig: false // Bypass corrupted tsconfig.json
   },
   define: {
     global: 'globalThis',
