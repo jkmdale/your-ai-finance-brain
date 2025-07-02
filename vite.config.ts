@@ -16,12 +16,28 @@ export default defineConfig({
     },
   },
   esbuild: {
-    target: 'es2022',
+    target: 'esnext',
     keepNames: true,
     jsx: 'automatic',
     include: /\.(tsx?|jsx?)$/,
     exclude: /node_modules/,
-    tsconfig: false // Bypass corrupted tsconfig.json
+    tsconfig: false, // Completely bypass tsconfig
+    tsconfigRaw: {
+      compilerOptions: {
+        target: 'esnext',
+        lib: ['esnext', 'dom'],
+        allowJs: true,
+        skipLibCheck: true,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        strict: false, // Disable strict mode
+        jsx: 'react-jsx',
+        moduleResolution: 'node',
+        resolveJsonModule: true,
+        isolatedModules: true,
+        noEmit: true
+      }
+    }
   },
   define: {
     global: 'globalThis',
@@ -29,11 +45,11 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@solana/wallet-standard-features'],
     esbuildOptions: {
-      target: 'es2022'
+      target: 'esnext'
     }
   },
   build: {
-    target: 'es2022',
+    target: 'esnext',
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
