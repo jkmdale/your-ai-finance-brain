@@ -81,6 +81,9 @@ export const MultiFileUpload = () => {
             <p className="text-white/50 text-sm mt-1">
               Supports ANZ, ASB, Westpac, Kiwibank, BNZ formats
             </p>
+            <p className="text-white/40 text-xs mt-1">
+              CSV should have Date, Description, Amount columns
+            </p>
           </div>
         </label>
       </div>

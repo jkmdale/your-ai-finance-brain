@@ -1,15 +1,10 @@
 /*
   File: src/modules/import/handleCsvUpload.ts
-  Description: Handles CSV upload from UI, processes parsing, triggers categorization, storage, and all downstream dashboard effects.
+  Description: Handles CSV upload from UI using Supabase edge function for processing
 */
 
-import Papa from 'papaparse';
-import { parseBankCSV } from './parsers/bankCsvParser';
-import { categorizeTransactions } from '../ai/categorizer';
-import { updateDashboard } from '../dashboard/update';
-import { updateBudgets } from '../budget/update';
-import { recommendGoals } from '../goals/recommender';
-import { encryptAndStoreTransactions } from '../storage/encryptedStorage';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 /**
  * Upload + process single CSV file end-to-end
@@ -54,51 +49,87 @@ export async function handleCsvUpload(file: File): Promise<UploadResult> {
   };
 
   try {
-    const raw = await file.text();
+    // Check if user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Please sign in to upload CSV files');
+    }
+
+    // Read file content
+    const csvContent = await file.text();
     
     // Validate CSV content
-    if (!raw.trim()) {
+    if (!csvContent.trim()) {
       throw new Error('File is empty');
     }
 
-    const parsed = Papa.parse(raw, { header: true, skipEmptyLines: true });
-
-    if (parsed.errors.length > 0) {
-      result.warnings.push(...parsed.errors.map(e => e.message));
+    // Check file size (limit to 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('File size must be less than 5MB');
     }
 
-    if (!parsed.data || parsed.data.length === 0) {
-      throw new Error('No data found in CSV');
+    // Get the session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session found');
     }
 
-    // Validate headers
-    const headers = parsed.meta.fields || [];
-    if (headers.length < 2) {
-      throw new Error('CSV must have at least 2 columns');
+    console.log(`Processing CSV file: ${file.name} (${file.size} bytes)`);
+
+    // Call the edge function to process CSV
+    const { data, error } = await supabase.functions.invoke('process-csv', {
+      body: {
+        csvData: csvContent,
+        fileName: file.name
+      },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (error) {
+      console.error('Edge function error:', error);
+      throw new Error(`Processing failed: ${error.message}`);
     }
 
-    const transactions = parseBankCSV(file.name, parsed.data, headers);
-    
-    if (transactions.length === 0) {
-      throw new Error('No valid transactions found');
+    if (!data) {
+      throw new Error('No response from processing service');
     }
 
-    // Await categorization properly
-    const categorized = await categorizeTransactions(transactions);
+    console.log('Processing response:', data);
 
-    await encryptAndStoreTransactions(categorized);
-    updateDashboard();
-    updateBudgets(categorized);
-    recommendGoals(categorized);
+    // Handle the response
+    if (data.success) {
+      result.success = true;
+      result.processed = data.processed || 0;
+      result.warnings = data.warnings || [];
+      
+      if (data.errors && data.errors.length > 0) {
+        result.warnings.push(...data.errors);
+      }
 
-    result.success = true;
-    result.processed = categorized.length;
-    
-    console.log(`✅ Successfully processed ${categorized.length} transactions from ${file.name}`);
+      // Trigger dashboard refresh
+      window.dispatchEvent(new CustomEvent('csv-upload-success', { 
+        detail: { 
+          fileName: file.name, 
+          transactions: data.transactions || [],
+          processed: data.processed 
+        } 
+      }));
+      
+      console.log(`✅ Successfully processed ${result.processed} transactions from ${file.name}`);
+    } else {
+      result.errors = data.errors || ['Unknown processing error'];
+      if (data.processed > 0) {
+        result.processed = data.processed;
+        result.warnings.push(`Partially processed: ${data.processed} transactions`);
+      }
+    }
+
     return result;
   } catch (err: any) {
-    result.errors.push(err.message);
     console.error(`❌ CSV Upload Error for ${file.name}:`, err);
+    result.errors.push(err.message || 'Unknown error occurred');
     return result;
   }
 }

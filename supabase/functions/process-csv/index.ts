@@ -2,173 +2,300 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 serve(async (req) => {
-  const supabaseClient = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    {
-      global: {
-        headers: { Authorization: req.headers.get('Authorization')! }
-      },
-    }
-  );
-
-  const { csvData, fileName } = await req.json();
-  const user = await supabaseClient.auth.getUser();
-
-  if (!user || !user.data?.user?.id) {
-    return new Response(
-      JSON.stringify({ error: 'User not authenticated.' }),
-      { status: 401 }
-    );
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  if (!csvData || typeof csvData !== 'string') {
-    return new Response(
-      JSON.stringify({ error: 'No CSV data provided' }),
-      { status: 400 }
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! }
+        },
+      }
     );
-  }
 
-  // Enhanced CSV processing with better parsing
-  const lines = csvData.trim().split('\n');
-  if (lines.length < 2) {
-    return new Response(
-      JSON.stringify({ error: 'CSV must have at least header and one data row' }),
-      { status: 400 }
-    );
-  }
-  
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-  const transactions = [];
-  const errors = [];
-  
-  console.log('CSV Headers:', headers);
-  console.log('Total data rows:', lines.length - 1);
-
-  // First ensure user has a default bank account
-  const { data: existingAccount } = await supabaseClient
-    .from('bank_accounts')
-    .select('id')
-    .eq('user_id', user.data.user.id)
-    .limit(1)
-    .single();
-
-  let accountId = existingAccount?.id;
-  
-  if (!accountId) {
-    // Create a default account for this user
-    const { data: newAccount, error: accountError } = await supabaseClient
-      .from('bank_accounts')
-      .insert({
-        user_id: user.data.user.id,
-        account_name: 'Default Account',
-        account_type: 'checking',
-        bank_name: 'Imported',
-        currency: 'NZD',
-        balance: 0
-      })
-      .select('id')
-      .single();
+    // Get user from session
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     
-    if (accountError) {
+    if (userError || !user?.id) {
+      console.error('Authentication error:', userError);
       return new Response(
-        JSON.stringify({ error: `Failed to create account: ${accountError.message}` }),
-        { status: 500 }
+        JSON.stringify({ error: 'User not authenticated', details: userError?.message }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const requestBody = await req.json();
+    const { csvData, fileName } = requestBody;
+
+    if (!csvData || typeof csvData !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'No CSV data provided or invalid format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Processing CSV for user ${user.id}: ${fileName} (${csvData.length} chars)`);
+
+    // Enhanced CSV processing
+    const lines = csvData.trim().split('\n').filter(line => line.trim());
+    if (lines.length < 2) {
+      return new Response(
+        JSON.stringify({ error: 'CSV must have at least header and one data row' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    accountId = newAccount.id;
-  }
+    // Parse headers with better CSV handling
+    const headers = parseCSVLine(lines[0]);
+    const transactions = [];
+    const errors = [];
+    const warnings = [];
+    
+    console.log('CSV Headers:', headers);
+    console.log('Total data rows:', lines.length - 1);
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue; // Skip empty lines
+    // Ensure user has a default bank account
+    let { data: existingAccount, error: accountError } = await supabaseClient
+      .from('bank_accounts')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    let accountId = existingAccount?.id;
     
-    const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-    
-    if (values.length >= 3) {
+    if (!accountId) {
+      // Create a default account for this user
+      const { data: newAccount, error: createAccountError } = await supabaseClient
+        .from('bank_accounts')
+        .insert({
+          user_id: user.id,
+          account_name: 'Imported Account',
+          account_type: 'checking',
+          bank_name: detectBankFromFileName(fileName),
+          currency: 'NZD',
+          balance: 0
+        })
+        .select('id')
+        .single();
+      
+      if (createAccountError) {
+        console.error('Failed to create account:', createAccountError);
+        return new Response(
+          JSON.stringify({ error: `Failed to create account: ${createAccountError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      accountId = newAccount.id;
+      console.log('Created new account:', accountId);
+    }
+
+    // Process each data row
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
       try {
-        // Parse date - try common formats
-        let transactionDate;
-        const dateStr = values[0];
-        if (dateStr) {
-          const date = new Date(dateStr);
-          if (!isNaN(date.getTime())) {
-            transactionDate = date.toISOString().split('T')[0];
-          } else {
-            // Try DD/MM/YYYY format
-            const parts = dateStr.split(/[-\/]/);
-            if (parts.length === 3) {
-              const [day, month, year] = parts;
-              const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-              if (!isNaN(parsedDate.getTime())) {
-                transactionDate = parsedDate.toISOString().split('T')[0];
-              }
-            }
+        const values = parseCSVLine(line);
+        
+        if (values.length >= 3) {
+          // Enhanced date parsing
+          const transactionDate = parseDate(values[0]) || new Date().toISOString().split('T')[0];
+          
+          // Enhanced amount parsing
+          const amountStr = values[2].replace(/[$,\s]/g, '');
+          const amount = parseFloat(amountStr) || 0;
+          
+          if (amount === 0) {
+            warnings.push(`Row ${i}: Amount is 0 or invalid: "${values[2]}"`);
           }
-        }
-        transactionDate = transactionDate || new Date().toISOString().split('T')[0];
 
-        // Parse amount
-        const amountStr = values[2].replace(/[$,]/g, '');
-        const amount = parseFloat(amountStr) || 0;
-        
-        if (amount === 0) {
-          console.log(`Row ${i}: Amount is 0 or invalid: "${values[2]}"`);
+          // Create transaction with enhanced data
+          const transaction = {
+            user_id: user.id,
+            account_id: accountId,
+            transaction_date: transactionDate,
+            description: (values[1] || `Transaction ${i}`).substring(0, 255),
+            amount: Math.abs(amount),
+            is_income: amount > 0,
+            category_id: null, // Will be set by categorization
+            merchant: extractMerchant(values[1] || ''),
+            imported_from: fileName,
+            external_id: `${fileName}_${i}_${Date.now()}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          transactions.push(transaction);
+          console.log(`Row ${i}: Parsed transaction - ${transaction.description} - $${transaction.amount}`);
+          
+        } else {
+          warnings.push(`Row ${i}: Insufficient columns (${values.length}), requires at least 3`);
         }
-
-        const transaction = {
-          id: `txn_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`,
-          user_id: user.data.user.id,
-          account_id: accountId,
-          transaction_date: transactionDate,
-          description: (values[1] || `Transaction ${i}`).substring(0, 200),
-          amount: Math.abs(amount),
-          is_income: amount > 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        transactions.push(transaction);
-        console.log(`Row ${i}: Created transaction - ${transaction.description} - $${transaction.amount}`);
-        
       } catch (rowError) {
-        console.error(`Error parsing row ${i}:`, rowError, 'Row data:', values);
+        console.error(`Error parsing row ${i}:`, rowError);
         errors.push(`Row ${i}: ${rowError.message}`);
       }
-    } else {
-      console.log(`Row ${i}: Insufficient columns (${values.length}), skipping`);
     }
-  }
 
-  console.log(`Parsed ${transactions.length} transactions from ${lines.length - 1} data rows`);
+    console.log(`Parsed ${transactions.length} transactions from ${lines.length - 1} data rows`);
 
-  let processedCount = 0;
-  let failedCount = 0;
-  const insertedTransactions = [];
+    // Batch insert transactions
+    let processedCount = 0;
+    let failedCount = 0;
+    const insertedTransactions = [];
 
-  for (const txn of transactions) {
-    const { error } = await supabaseClient.from('transactions').insert(txn);
-    if (error) {
-      failedCount++;
-      errors.push(`Insert failed for ${txn.id}: ${error.message}`);
-    } else {
-      insertedTransactions.push(txn);
-      processedCount++;
+    if (transactions.length > 0) {
+      // Insert in batches of 100
+      const batchSize = 100;
+      for (let i = 0; i < transactions.length; i += batchSize) {
+        const batch = transactions.slice(i, i + batchSize);
+        
+        const { data: insertedBatch, error: insertError } = await supabaseClient
+          .from('transactions')
+          .insert(batch)
+          .select();
+
+        if (insertError) {
+          console.error('Batch insert error:', insertError);
+          failedCount += batch.length;
+          errors.push(`Batch insert failed: ${insertError.message}`);
+        } else {
+          processedCount += insertedBatch?.length || 0;
+          if (insertedBatch) {
+            insertedTransactions.push(...insertedBatch);
+          }
+        }
+      }
     }
-  }
 
-  return new Response(
-    JSON.stringify({
+    const response = {
       success: processedCount > 0,
       processed: processedCount,
       failed: failedCount,
       skipped: 0,
-      warnings: [],
+      warnings,
       errors,
-      transactions: insertedTransactions
-    }),
-    { status: 200 }
-  );
+      transactions: insertedTransactions.slice(0, 10), // Return first 10 for preview
+      totalRows: lines.length - 1,
+      fileName
+    };
+
+    console.log('Processing complete:', response);
+
+    return new Response(
+      JSON.stringify(response),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.message,
+        success: false 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 });
+
+// Helper functions
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(val => val.replace(/^"|"$/g, ''));
+}
+
+function parseDate(dateStr: string): string | null {
+  if (!dateStr) return null;
+  
+  // Try various date formats
+  const formats = [
+    // ISO format
+    /^\d{4}-\d{2}-\d{2}$/,
+    // DD/MM/YYYY or DD-MM-YYYY
+    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/,
+    // MM/DD/YYYY or MM-DD-YYYY  
+    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/,
+  ];
+  
+  // Try direct parsing first
+  const directDate = new Date(dateStr);
+  if (!isNaN(directDate.getTime())) {
+    return directDate.toISOString().split('T')[0];
+  }
+  
+  // Try DD/MM/YYYY format (common in NZ banks)
+  const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  return null;
+}
+
+function extractMerchant(description: string): string | null {
+  if (!description) return null;
+  
+  // Extract merchant from common patterns
+  const cleaned = description.trim();
+  
+  // Remove common prefixes
+  const patterns = [
+    /^(EFTPOS|VISA|MASTERCARD|PURCHASE)\s+/i,
+    /^(INTERNET BANKING|ONLINE)\s+/i,
+  ];
+  
+  let merchant = cleaned;
+  for (const pattern of patterns) {
+    merchant = merchant.replace(pattern, '');
+  }
+  
+  return merchant.substring(0, 100) || null;
+}
+
+function detectBankFromFileName(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  
+  if (lower.includes('anz')) return 'ANZ';
+  if (lower.includes('asb')) return 'ASB';
+  if (lower.includes('westpac')) return 'Westpac';
+  if (lower.includes('kiwibank')) return 'Kiwibank';
+  if (lower.includes('bnz')) return 'BNZ';
+  
+  return 'Unknown';
+}
