@@ -11,6 +11,8 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +23,34 @@ const queryClient = new QueryClient({
   },
 });
 
+function useNetworkToasts() {
+  const [online, setOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+      toast.success('Back online ✅');
+    };
+    const handleOffline = () => {
+      setOnline(false);
+      toast.warning('You are offline ⚠️');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return online;
+}
+
 const App = () => {
+  useNetworkToasts();
+
   return (
     <>
       <QueryClientProvider client={queryClient}>
@@ -48,40 +77,3 @@ const App = () => {
 };
 
 export default App;
-import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-
-function useNetworkToasts() {
-  const [online, setOnline] = useState(navigator.onLine)
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setOnline(true)
-      toast.success('Back online ✅')
-    }
-    const handleOffline = () => {
-      setOnline(false)
-      toast.warning('You are offline ⚠️')
-    }
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  return online
-}
-
-export default function App() {
-  useNetworkToasts()
-
-  return (
-    <>
-      {/* your app layout here */}
-    </>
-  )
-}
