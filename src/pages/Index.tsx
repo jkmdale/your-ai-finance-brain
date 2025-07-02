@@ -13,6 +13,7 @@ import { UnlockScreen } from "@/components/security/UnlockScreen";
 import { SidebarLayout } from "@/components/layout/SidebarNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSecurity } from "@/hooks/useAppSecurity";
+import { useSimpleInactivityTimer } from "@/hooks/useSimpleInactivityTimer";
 import { useState } from "react";
 import SmartGoalsCard from "@/components/goals/SmartGoalsCard";
 
@@ -21,6 +22,9 @@ const Index = () => {
   const { isAppLocked, setupComplete, preferredUnlockMethod, isPinSetup } = useAppSecurity();
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
+  
+  // Add inactivity timer
+  useSimpleInactivityTimer();
 
   if (loading) {
     return (
