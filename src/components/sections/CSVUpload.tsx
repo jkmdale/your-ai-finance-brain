@@ -190,6 +190,10 @@ export const CSVUpload = () => {
         }
       );
 
+      // Save categorized transactions to localStorage for dashboard and debug access
+      localStorage.setItem('transactions', JSON.stringify(categorizedTransactions));
+      console.log(`💾 Saved ${categorizedTransactions.length} categorized transactions to localStorage`);
+
       // Final success message
       const finalProgress = categorizationProgress || { total: transactions.length, completed: 0, failed: 0 };
       const successCount = finalProgress.total - finalProgress.failed;
