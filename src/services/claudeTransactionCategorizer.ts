@@ -10,6 +10,8 @@ export interface CategorizedTransaction extends Transaction {
   category: string;
   budgetGroup: 'Needs' | 'Wants' | 'Savings';
   smartGoal: string;
+  isIncome: boolean;
+  incomeType: string | null;
 }
 
 export interface CategorizationProgress {
@@ -51,9 +53,77 @@ export class ClaudeTransactionCategorizer {
       throw new Error('Claude API key not configured');
     }
 
-    const prompt = `Transaction: '${transaction.description}' for $${Math.abs(transaction.amount)} on ${transaction.date}.
+    // Enhanced income classification for positive amounts
+    if (transaction.amount > 0) {
+      const prompt = `You are a financial assistant classifying bank transactions.
 
-What category is this? (e.g. groceries, rent, entertainment, transport, dining, utilities, salary, shopping, healthcare)
+This transaction is a positive credit. Please identify:
+- Is it true income (or a transfer/refund)?
+- What type of income is it?
+- What category and budget group?
+
+Respond with:
+{
+  "isIncome": true | false,
+  "incomeType": "Salary" | "Interest" | "Refund" | "Gift" | "Business Revenue" | "Transfer" | "Other",
+  "category": "category_name",
+  "budgetGroup": "Needs" | "Wants" | "Savings",
+  "smartGoal": "specific goal suggestion",
+  "reason": "Short explanation why"
+}
+
+Transaction: "${transaction.description}" - $${Math.abs(transaction.amount)} on ${transaction.date}`;
+
+      try {
+        const { data: responseData, error } = await supabase.functions.invoke('claude-api-proxy', {
+          body: {
+            prompt: prompt,
+            model: this.MODEL,
+            max_tokens: this.MAX_TOKENS
+          }
+        });
+
+        if (error) throw new Error(`Supabase function error: ${error.message}`);
+
+        const content = responseData?.content?.[0]?.text;
+        if (!content) throw new Error('No content in Claude response');
+
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON found in Claude response');
+
+        const result = JSON.parse(jsonMatch[0]);
+        
+        return {
+          ...transaction,
+          isIncome: result.isIncome || false,
+          incomeType: result.incomeType || 'Other',
+          category: result.category || 'Other Income',
+          budgetGroup: ['Needs', 'Wants', 'Savings'].includes(result.budgetGroup) ? result.budgetGroup : 'Savings',
+          smartGoal: result.smartGoal || 'Track income source'
+        };
+
+      } catch (error) {
+        console.error(`Error categorizing income transaction: ${transaction.description}`, error);
+        
+        if (retryCount === 0) {
+          await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+          return this.categorizeTransaction(transaction, 1);
+        }
+        
+        return {
+          ...transaction,
+          isIncome: true,
+          incomeType: 'Other',
+          category: 'Other Income',
+          budgetGroup: 'Savings',
+          smartGoal: 'Review and categorize manually'
+        };
+      }
+    } else {
+      // Regular expense categorization for negative amounts
+      const prompt = `Transaction: '${transaction.description}' for $${Math.abs(transaction.amount)} on ${transaction.date}.
+
+What category is this? (e.g. groceries, rent, entertainment, transport, dining, utilities, shopping, healthcare)
 What budget group? (Needs, Wants, or Savings)
 Any SMART financial goal suggestion?
 
@@ -64,58 +134,51 @@ Please respond in this exact JSON format:
   "smartGoal": "specific goal suggestion"
 }`;
 
-    try {
-      const { data: responseData, error } = await supabase.functions.invoke('claude-api-proxy', {
-        body: {
-          prompt: prompt,
-          model: this.MODEL,
-          max_tokens: this.MAX_TOKENS
+      try {
+        const { data: responseData, error } = await supabase.functions.invoke('claude-api-proxy', {
+          body: {
+            prompt: prompt,
+            model: this.MODEL,
+            max_tokens: this.MAX_TOKENS
+          }
+        });
+
+        if (error) throw new Error(`Supabase function error: ${error.message}`);
+
+        const content = responseData?.content?.[0]?.text;
+        if (!content) throw new Error('No content in Claude response');
+
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON found in Claude response');
+
+        const result = JSON.parse(jsonMatch[0]);
+        
+        return {
+          ...transaction,
+          isIncome: false,
+          incomeType: null,
+          category: result.category || 'Uncategorised',
+          budgetGroup: ['Needs', 'Wants', 'Savings'].includes(result.budgetGroup) ? result.budgetGroup : 'Needs',
+          smartGoal: result.smartGoal || 'Track spending in this category'
+        };
+
+      } catch (error) {
+        console.error(`Error categorizing expense transaction: ${transaction.description}`, error);
+        
+        if (retryCount === 0) {
+          await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+          return this.categorizeTransaction(transaction, 1);
         }
-      });
-
-      if (error) {
-        throw new Error(`Supabase function error: ${error.message}`);
+        
+        return {
+          ...transaction,
+          isIncome: false,
+          incomeType: null,
+          category: 'Uncategorised',
+          budgetGroup: 'Needs',
+          smartGoal: 'Review and categorize manually'
+        };
       }
-
-      const content = responseData?.content?.[0]?.text;
-      
-      if (!content) {
-        throw new Error('No content in Claude response');
-      }
-
-      // Parse JSON response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in Claude response');
-      }
-
-      const result = JSON.parse(jsonMatch[0]);
-      
-      return {
-        ...transaction,
-        category: result.category || 'Uncategorised',
-        budgetGroup: ['Needs', 'Wants', 'Savings'].includes(result.budgetGroup) 
-          ? result.budgetGroup 
-          : 'Needs',
-        smartGoal: result.smartGoal || 'Track spending in this category'
-      };
-
-    } catch (error) {
-      console.error(`Error categorizing transaction: ${transaction.description}`, error);
-      
-      // Retry once on failure
-      if (retryCount === 0) {
-        await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
-        return this.categorizeTransaction(transaction, 1);
-      }
-      
-      // Fallback for failed categorization
-      return {
-        ...transaction,
-        category: 'Uncategorised',
-        budgetGroup: 'Needs',
-        smartGoal: 'Review and categorize manually'
-      };
     }
   }
 
@@ -141,6 +204,8 @@ Please respond in this exact JSON format:
           console.error('Failed to categorize transaction:', transaction.description, error);
           return {
             ...transaction,
+            isIncome: transaction.amount > 0,
+            incomeType: transaction.amount > 0 ? 'Other' : null,
             category: 'Uncategorised',
             budgetGroup: 'Needs' as const,
             smartGoal: 'Failed to categorize'

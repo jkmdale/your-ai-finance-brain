@@ -293,6 +293,7 @@ export type Database = {
           external_id: string | null
           id: string
           imported_from: string | null
+          income_type: string | null
           is_income: boolean | null
           is_recurring: boolean | null
           merchant: string | null
@@ -313,6 +314,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           imported_from?: string | null
+          income_type?: string | null
           is_income?: boolean | null
           is_recurring?: boolean | null
           merchant?: string | null
@@ -333,6 +335,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           imported_from?: string | null
+          income_type?: string | null
           is_income?: boolean | null
           is_recurring?: boolean | null
           merchant?: string | null
