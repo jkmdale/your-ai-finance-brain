@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Brain, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
+import { claudeTransactionCategorizer, type CategorizationProgress } from '@/services/claudeTransactionCategorizer';
 
 interface Transaction {
   date: string;
@@ -30,10 +31,11 @@ interface UploadResult {
 
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'categorizing'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
   const [progress, setProgress] = useState(0);
+  const [categorizationProgress, setCategorizationProgress] = useState<CategorizationProgress | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -169,6 +171,74 @@ export const CSVUpload = () => {
     });
   };
 
+  const startCategorization = async (transactions: Transaction[]) => {
+    setUploadStatus('categorizing');
+    setUploadMessage(`Starting AI categorization with Claude...`);
+    setProgress(0);
+    setCategorizationProgress({ total: transactions.length, completed: 0, failed: 0 });
+
+    try {
+      const categorizedTransactions = await claudeTransactionCategorizer.categorizeTransactions(
+        transactions,
+        (progress: CategorizationProgress) => {
+          setCategorizationProgress(progress);
+          const progressPercent = Math.round((progress.completed / progress.total) * 100);
+          setProgress(progressPercent);
+          setUploadMessage(
+            `Categorizing with Claude AI: ${progress.completed}/${progress.total} transactions (${progress.failed} failed)`
+          );
+        }
+      );
+
+      // Final success message
+      const finalProgress = categorizationProgress || { total: transactions.length, completed: 0, failed: 0 };
+      const successCount = finalProgress.total - finalProgress.failed;
+      
+      setUploadStatus('success');
+      setUploadMessage(`✅ All ${successCount} transactions categorized with Claude AI`);
+      
+      toast({
+        title: "AI Categorization Complete",
+        description: `✅ All ${successCount} transactions categorized with Claude AI${finalProgress.failed > 0 ? ` (${finalProgress.failed} failed)` : ''}`,
+        duration: 5000,
+      });
+
+      if (finalProgress.failed > 0) {
+        toast({
+          title: "Some Categorizations Failed",
+          description: `❌ ${finalProgress.failed} transactions failed to categorize`,
+          variant: "destructive",
+          duration: 3000,
+        });
+      }
+
+      // Dispatch event with categorized transactions
+      window.dispatchEvent(new CustomEvent('transactions-categorized', { 
+        detail: { 
+          transactions: categorizedTransactions,
+          totalCategorized: successCount,
+          totalFailed: finalProgress.failed
+        } 
+      }));
+
+    } catch (error: any) {
+      console.error('Categorization error:', error);
+      setUploadStatus('error');
+      setUploadMessage(`Categorization failed: ${error.message}`);
+      
+      toast({
+        title: "Categorization Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setTimeout(() => {
+        setProgress(0);
+        setCategorizationProgress(null);
+      }, 3000);
+    }
+  };
+
   const handleFileUpload = async (files: FileList) => {
     if (!user) {
       setUploadStatus('error');
@@ -233,6 +303,9 @@ export const CSVUpload = () => {
           description: `✅ Uploaded ${files.length} files with ${allTransactions.length} total transactions`,
           duration: 5000,
         });
+        
+        // Start Claude categorization
+        await startCategorization(allTransactions);
         
         // Dispatch event for other components
         window.dispatchEvent(new CustomEvent('csv-upload-complete', { 
@@ -338,6 +411,7 @@ export const CSVUpload = () => {
             {uploadStatus === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0" />}
             {uploadStatus === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
             {uploadStatus === 'processing' && <Upload className="w-5 h-5 flex-shrink-0 animate-pulse" />}
+            {uploadStatus === 'categorizing' && <Brain className="w-5 h-5 flex-shrink-0 animate-pulse" />}
             <p className="text-sm font-medium">{uploadMessage}</p>
           </div>
         )}
