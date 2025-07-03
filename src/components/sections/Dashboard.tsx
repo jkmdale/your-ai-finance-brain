@@ -53,6 +53,17 @@ export const Dashboard = () => {
     return colorMap[color as keyof typeof colorMap] || 'from-gray-400 to-gray-500';
   };
 
+  const generateBudget = (transactions: any[]) => {
+    const totals = { Needs: 0, Wants: 0, Savings: 0 };
+    transactions.forEach(tx => {
+      const group = tx.budgetGroup;
+      if (totals[group as keyof typeof totals] !== undefined) {
+        totals[group as keyof typeof totals] += Math.abs(tx.amount || 0);
+      }
+    });
+    return totals;
+  };
+
   const fetchDashboardData = async (forceRefresh = false) => {
     if (!user) {
       setLoading(false);
@@ -60,92 +71,75 @@ export const Dashboard = () => {
     }
 
     try {
-      console.log(`🔄 Fetching dashboard data for user: ${user.id} ${forceRefresh ? '(forced refresh)' : ''}`);
+      console.log(`🔄 Loading dashboard data ${forceRefresh ? '(forced refresh)' : ''}`);
 
-      // Add a small delay if this is a forced refresh to ensure DB operations are complete
-      if (forceRefresh) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      // Load transactions from localStorage first
+      const raw = localStorage.getItem("transactions");
+      const localTransactions = raw ? JSON.parse(raw) : [];
+      
+      console.log(`💾 Loaded ${localTransactions.length} transactions from localStorage`);
 
-      // Fetch ALL transactions (not just 10) to get accurate calculations
-      const { data: allTransactions } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          categories(name, color)
-        `)
-        .eq('user_id', user.id)
-        .not('tags', 'cs', '{transfer}')
-        .order('transaction_date', { ascending: false });
+      if (localTransactions && localTransactions.length > 0) {
+        // Sort by date (most recent first)
+        const sortedTransactions = localTransactions.sort((a: any, b: any) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
 
-      console.log(`📊 Fetched ${allTransactions?.length || 0} transactions (excluding transfers)`);
+        // Get recent transactions for display (limit 10)
+        const recentTransactionsData = sortedTransactions.slice(0, 10).map((tx: any) => ({
+          id: tx.id || `${tx.date}-${tx.description}-${tx.amount}`,
+          description: tx.description,
+          amount: tx.amount,
+          transaction_date: tx.date,
+          is_income: tx.amount > 0,
+          merchant: tx.merchant || null,
+          categories: tx.category ? { name: tx.category, color: '#6366f1' } : null
+        }));
 
-      // Fetch recent transactions for display (limit 10)
-      const recentTransactionsData = allTransactions?.slice(0, 10) || [];
-
-      // Fetch current active budgets for more accurate balance calculation
-      const { data: budgets } = await supabase
-        .from('budgets')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      console.log('📋 Active budget found:', budgets?.length > 0);
-
-      // Fetch bank accounts for balance
-      const { data: accounts } = await supabase
-        .from('bank_accounts')
-        .select('balance')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-      console.log('🏦 Bank accounts:', accounts?.length || 0);
-
-      if (allTransactions && allTransactions.length > 0) {
-        // Calculate stats using ALL transactions for accuracy
+        // Calculate stats from localStorage transactions
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         
         // Get current month transactions
-        const currentMonthTransactions = allTransactions.filter(t => {
-          const transactionDate = new Date(t.transaction_date);
+        const currentMonthTransactions = sortedTransactions.filter((t: any) => {
+          const transactionDate = new Date(t.date);
           return transactionDate.getMonth() === currentMonth && 
-                 transactionDate.getFullYear() === currentYear &&
-                 (!t.tags || !t.tags.includes('transfer'));
+                 transactionDate.getFullYear() === currentYear;
         });
 
         // Calculate totals from current month
         const monthlyIncome = currentMonthTransactions
-          .filter(t => t.is_income)
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+          .filter((t: any) => t.amount > 0)
+          .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
 
         const monthlyExpenses = currentMonthTransactions
-          .filter(t => !t.is_income)
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+          .filter((t: any) => t.amount < 0)
+          .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
 
-        // Use budget total balance if available, otherwise use bank accounts
-        const totalBalance = budgets && budgets.length > 0 
-          ? (budgets[0].total_income || 0) - (budgets[0].total_expenses || 0)
-          : accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
+        // Calculate total balance from all transactions
+        const totalBalance = sortedTransactions.reduce((sum: number, t: any) => sum + t.amount, 0);
 
         const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
+
+        // Generate budget summary
+        const budgetSummary = generateBudget(sortedTransactions);
+        console.log('📊 Budget Summary:', budgetSummary);
 
         const dashboardStats: DashboardStats = {
           totalBalance,
           monthlyIncome,
           monthlyExpenses,
           savingsRate,
-          transactionCount: allTransactions.length,
+          transactionCount: sortedTransactions.length,
           isValidated: true,
           warnings: []
         };
 
-        console.log('📈 Calculated dashboard stats:', {
+        console.log('📈 Calculated dashboard stats from localStorage:', {
           ...dashboardStats,
+          budgetSummary,
           currentMonthTransactions: currentMonthTransactions.length,
-          totalTransactions: allTransactions.length
+          totalTransactions: sortedTransactions.length
         });
 
         setStats(dashboardStats);
@@ -153,17 +147,17 @@ export const Dashboard = () => {
         setLastDataRefresh(new Date());
         
         // Generate AI insights for new data or if we don't have insights yet
-        if (forceRefresh || (!aiInsights && allTransactions.length > 5)) {
-          generateAIInsights(allTransactions.slice(0, 20));
+        if (forceRefresh || (!aiInsights && sortedTransactions.length > 5)) {
+          generateAIInsights(sortedTransactions.slice(0, 20));
         }
       } else {
-        console.log('📊 No non-transfer transactions found');
+        console.log('📊 No transactions found in localStorage');
         setStats(null);
         setRecentTransactions([]);
         setLastDataRefresh(new Date());
       }
     } catch (error) {
-      console.error('❌ Error fetching dashboard data:', error);
+      console.error('❌ Error loading dashboard data:', error);
       setStats(null);
       setRecentTransactions([]);
     } finally {
@@ -341,7 +335,7 @@ export const Dashboard = () => {
         </p>
         {lastDataRefresh && (
           <p className="text-white/50 text-sm mt-2">
-            Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed
+            Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed from localStorage
           </p>
         )}
       </div>
