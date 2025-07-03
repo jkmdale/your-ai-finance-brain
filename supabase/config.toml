@@ -70,5 +70,8 @@ verify_jwt = true
 [functions.ai-coach]
 verify_jwt = false
 
+[functions.claude-api-proxy]
+verify_jwt = true
+
 [functions.send-auth-email]
 verify_jwt = false
