@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
 import { claudeTransactionCategorizer, type CategorizationProgress } from '@/services/claudeTransactionCategorizer';
-import { filterUniqueTransactions } from '@/utils/transactionUtils';
+import { transactionClassifier } from '@/utils/transactionClassifier';
 
 interface Transaction {
   date: string;
@@ -179,7 +179,7 @@ export const CSVUpload = () => {
 
     try {
       // Filter out duplicate transactions with enhanced detection
-      const uniqueTransactions = await filterUniqueTransactions(transactions, user!.id);
+      const uniqueTransactions = await transactionClassifier.removeDuplicates(transactions, user!.id);
       
       if (uniqueTransactions.length === 0) {
         setUploadStatus('success');

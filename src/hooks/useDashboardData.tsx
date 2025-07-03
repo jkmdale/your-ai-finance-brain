@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppState } from '@/store/appState';
-import { detectActiveMonth } from '@/utils/transactionUtils';
+import { transactionClassifier } from '@/utils/transactionClassifier';
 import type { DashboardStats, Transaction } from '@/types/dashboard';
 
 export const useDashboardData = () => {
@@ -79,43 +79,24 @@ export const useDashboardData = () => {
       console.log('🏦 Bank accounts:', accounts?.length || 0);
 
       if (allTransactions && allTransactions.length > 0) {
-        // Auto-detect active month from uploaded data
-        const detectedMonth = detectActiveMonth(allTransactions);
-        setActiveMonth(detectedMonth);
+        // Use the new enhanced transaction classifier
+        const classifiedTransactions = transactionClassifier.classifyTransactions(allTransactions);
+        
+        // Calculate monthly summary using the classifier
+        const monthlySummary = transactionClassifier.calculateMonthlySummary(classifiedTransactions);
+        
+        // Set active month based on the classified data
+        setActiveMonth(monthlySummary.month);
         setTotalTransactions(allTransactions.length);
 
         // Get recent transactions for display (limit 10)
         const recentTransactionsData = allTransactions.slice(0, 10);
 
-        // Calculate stats using detected active month instead of current month
-        const [activeYear, activeMonthNum] = detectedMonth.split('-').map(Number);
-        
-        // Get active month transactions
-        const activeMonthTransactions = allTransactions.filter(t => {
-          const transactionDate = new Date(t.transaction_date);
-          return transactionDate.getMonth() === (activeMonthNum - 1) && 
-                 transactionDate.getFullYear() === activeYear &&
-                 (!t.tags || !t.tags.includes('transfer'));
-        });
-
-        // Calculate totals from active month using improved filtering
-        const { isValidIncomeTransaction, isValidExpenseTransaction } = await import('@/utils/transactionUtils');
-        
-        const monthlyIncome = activeMonthTransactions
-          .filter(t => isValidIncomeTransaction(t))
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-        const monthlyExpenses = activeMonthTransactions
-          .filter(t => isValidExpenseTransaction(t))
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-        // Use budget total balance if available, otherwise use bank accounts, or calculate from transactions
+        // Use budget total balance if available, otherwise calculate from transactions
         const totalBalance = budgets && budgets.length > 0 
           ? (budgets[0].total_income || 0) - (budgets[0].total_expenses || 0)
           : accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 
-            allTransactions.reduce((sum, t) => sum + t.amount, 0);
-
-        const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
+            monthlySummary.balance;
 
         // Generate budget summary from tags (budgetGroup)
         const budgetSummary = generateBudget(allTransactions);
@@ -123,19 +104,22 @@ export const useDashboardData = () => {
 
         const dashboardStats: DashboardStats = {
           totalBalance,
-          monthlyIncome,
-          monthlyExpenses,
-          savingsRate,
-          transactionCount: allTransactions.length,
+          monthlyIncome: monthlySummary.income,
+          monthlyExpenses: monthlySummary.expenses,
+          savingsRate: monthlySummary.savingsRate,
+          transactionCount: monthlySummary.transactionCount,
           isValidated: true,
           warnings: []
         };
 
-        console.log('📈 Calculated dashboard stats from Supabase:', {
+        console.log('📈 Enhanced dashboard stats from classifier:', {
           ...dashboardStats,
           budgetSummary,
-          activeMonthTransactions: activeMonthTransactions.length,
-          totalTransactions: allTransactions.length
+          month: monthlySummary.month,
+          incomeTransactions: monthlySummary.incomeTransactions.length,
+          expenseTransactions: monthlySummary.expenseTransactions.length,
+          transfersExcluded: monthlySummary.transferTransactions.length,
+          reversalsExcluded: monthlySummary.reversalTransactions.length
         });
 
         setStats(dashboardStats);
