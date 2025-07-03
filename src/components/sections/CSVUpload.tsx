@@ -190,20 +190,20 @@ export const CSVUpload = () => {
         }
       );
 
-      // Save categorized transactions to localStorage for dashboard and debug access
-      localStorage.setItem('transactions', JSON.stringify(categorizedTransactions));
-      console.log(`💾 Saved ${categorizedTransactions.length} categorized transactions to localStorage`);
+      // Save categorized transactions to Supabase
+      setUploadMessage('Saving transactions to cloud database...');
+      await saveTransactionsToSupabase(categorizedTransactions);
 
       // Final success message
       const finalProgress = categorizationProgress || { total: transactions.length, completed: 0, failed: 0 };
       const successCount = finalProgress.total - finalProgress.failed;
       
       setUploadStatus('success');
-      setUploadMessage(`✅ All ${successCount} transactions categorized with Claude AI`);
+      setUploadMessage(`✅ All ${successCount} transactions saved to cloud database`);
       
       toast({
         title: "AI Categorization Complete",
-        description: `✅ All ${successCount} transactions categorized with Claude AI${finalProgress.failed > 0 ? ` (${finalProgress.failed} failed)` : ''}`,
+        description: `✅ All ${successCount} transactions categorized and saved to cloud`,
         duration: 5000,
       });
 
@@ -240,6 +240,127 @@ export const CSVUpload = () => {
         setProgress(0);
         setCategorizationProgress(null);
       }, 3000);
+    }
+  };
+
+  const saveTransactionsToSupabase = async (categorizedTransactions: any[]) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      console.log(`💾 Saving ${categorizedTransactions.length} transactions to Supabase...`);
+
+      // First, ensure we have a default bank account for this user
+      let { data: accounts, error: accountError } = await supabase
+        .from('bank_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1);
+
+      if (accountError) throw accountError;
+
+      let accountId: string;
+      
+      if (!accounts || accounts.length === 0) {
+        // Create a default account for CSV imports
+        const { data: newAccount, error: createError } = await supabase
+          .from('bank_accounts')
+          .insert({
+            user_id: user.id,
+            account_name: 'CSV Import Account',
+            bank_name: 'Mixed Banks',
+            account_type: 'checking',
+            currency: 'NZD',
+            balance: 0
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        accountId = newAccount.id;
+        console.log('✅ Created default bank account for CSV imports');
+      } else {
+        accountId = accounts[0].id;
+      }
+
+      // Get or create categories
+      const { data: existingCategories, error: categoriesError } = await supabase
+        .from('categories')
+        .select('id, name')
+        .eq('user_id', user.id);
+
+      if (categoriesError) throw categoriesError;
+
+      const categoryMap = new Map();
+      existingCategories?.forEach(cat => categoryMap.set(cat.name, cat.id));
+
+      // Create missing categories
+      const newCategories: string[] = [];
+      categorizedTransactions.forEach(tx => {
+        if (tx.category && !categoryMap.has(tx.category) && !newCategories.includes(tx.category)) {
+          newCategories.push(tx.category);
+        }
+      });
+
+      if (newCategories.length > 0) {
+        const { data: createdCategories, error: createCatError } = await supabase
+          .from('categories')
+          .insert(
+            newCategories.map(catName => ({
+              user_id: user.id,
+              name: catName,
+              color: '#6366f1',
+              icon: '💰',
+              is_income: false
+            }))
+          )
+          .select('id, name');
+
+        if (createCatError) throw createCatError;
+
+        createdCategories?.forEach(cat => categoryMap.set(cat.name, cat.id));
+        console.log(`✅ Created ${newCategories.length} new categories`);
+      }
+
+      // Prepare transaction data for Supabase
+      const transactionsToInsert = categorizedTransactions.map(tx => ({
+        user_id: user.id,
+        account_id: accountId,
+        description: tx.description,
+        amount: tx.amount,
+        transaction_date: tx.date,
+        is_income: tx.amount > 0,
+        category_id: tx.category ? categoryMap.get(tx.category) : null,
+        merchant: tx.merchant || null,
+        imported_from: 'CSV Upload',
+        tags: tx.budgetGroup ? [tx.budgetGroup] : null,
+        notes: tx.smartGoal || null
+      }));
+
+      // Insert transactions in batches to avoid timeout
+      const batchSize = 100;
+      let insertedCount = 0;
+
+      for (let i = 0; i < transactionsToInsert.length; i += batchSize) {
+        const batch = transactionsToInsert.slice(i, i + batchSize);
+        
+        const { error: insertError } = await supabase
+          .from('transactions')
+          .insert(batch);
+
+        if (insertError) throw insertError;
+        
+        insertedCount += batch.length;
+        console.log(`💾 Inserted batch ${Math.ceil((i + 1) / batchSize)} - ${insertedCount}/${transactionsToInsert.length} transactions`);
+      }
+
+      console.log(`✅ Successfully saved ${insertedCount} transactions to Supabase`);
+
+    } catch (error: any) {
+      console.error('❌ Error saving transactions to Supabase:', error);
+      throw new Error(`Failed to save transactions: ${error.message}`);
     }
   };
 

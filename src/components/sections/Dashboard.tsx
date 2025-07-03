@@ -53,17 +53,6 @@ export const Dashboard = () => {
     return colorMap[color as keyof typeof colorMap] || 'from-gray-400 to-gray-500';
   };
 
-  const generateBudget = (transactions: any[]) => {
-    const totals = { Needs: 0, Wants: 0, Savings: 0 };
-    transactions.forEach(tx => {
-      const group = tx.budgetGroup;
-      if (totals[group as keyof typeof totals] !== undefined) {
-        totals[group as keyof typeof totals] += Math.abs(tx.amount || 0);
-      }
-    });
-    return totals;
-  };
-
   const fetchDashboardData = async (forceRefresh = false) => {
     if (!user) {
       setLoading(false);
@@ -71,75 +60,103 @@ export const Dashboard = () => {
     }
 
     try {
-      console.log(`🔄 Loading dashboard data ${forceRefresh ? '(forced refresh)' : ''}`);
+      console.log(`🔄 Loading dashboard data from Supabase ${forceRefresh ? '(forced refresh)' : ''}`);
 
-      // Load transactions from localStorage first
-      const raw = localStorage.getItem("transactions");
-      const localTransactions = raw ? JSON.parse(raw) : [];
-      
-      console.log(`💾 Loaded ${localTransactions.length} transactions from localStorage`);
+      // Add a small delay if this is a forced refresh to ensure DB operations are complete
+      if (forceRefresh) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
 
-      if (localTransactions && localTransactions.length > 0) {
-        // Sort by date (most recent first)
-        const sortedTransactions = localTransactions.sort((a: any, b: any) => 
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+      // Fetch ALL transactions from Supabase
+      const { data: allTransactions, error: transactionsError } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          categories(name, color)
+        `)
+        .eq('user_id', user.id)
+        .not('tags', 'cs', '{transfer}')
+        .order('transaction_date', { ascending: false });
 
+      if (transactionsError) {
+        console.error('❌ Error fetching transactions:', transactionsError);
+        throw transactionsError;
+      }
+
+      console.log(`📊 Fetched ${allTransactions?.length || 0} transactions from Supabase`);
+
+      // Fetch current active budgets for more accurate balance calculation
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      console.log('📋 Active budget found:', budgets?.length > 0);
+
+      // Fetch bank accounts for balance
+      const { data: accounts } = await supabase
+        .from('bank_accounts')
+        .select('balance')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      console.log('🏦 Bank accounts:', accounts?.length || 0);
+
+      if (allTransactions && allTransactions.length > 0) {
         // Get recent transactions for display (limit 10)
-        const recentTransactionsData = sortedTransactions.slice(0, 10).map((tx: any) => ({
-          id: tx.id || `${tx.date}-${tx.description}-${tx.amount}`,
-          description: tx.description,
-          amount: tx.amount,
-          transaction_date: tx.date,
-          is_income: tx.amount > 0,
-          merchant: tx.merchant || null,
-          categories: tx.category ? { name: tx.category, color: '#6366f1' } : null
-        }));
+        const recentTransactionsData = allTransactions.slice(0, 10);
 
-        // Calculate stats from localStorage transactions
+        // Calculate stats using ALL transactions for accuracy
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         
         // Get current month transactions
-        const currentMonthTransactions = sortedTransactions.filter((t: any) => {
-          const transactionDate = new Date(t.date);
+        const currentMonthTransactions = allTransactions.filter(t => {
+          const transactionDate = new Date(t.transaction_date);
           return transactionDate.getMonth() === currentMonth && 
-                 transactionDate.getFullYear() === currentYear;
+                 transactionDate.getFullYear() === currentYear &&
+                 (!t.tags || !t.tags.includes('transfer'));
         });
 
         // Calculate totals from current month
         const monthlyIncome = currentMonthTransactions
-          .filter((t: any) => t.amount > 0)
-          .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
+          .filter(t => t.is_income)
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         const monthlyExpenses = currentMonthTransactions
-          .filter((t: any) => t.amount < 0)
-          .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
+          .filter(t => !t.is_income)
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-        // Calculate total balance from all transactions
-        const totalBalance = sortedTransactions.reduce((sum: number, t: any) => sum + t.amount, 0);
+        // Use budget total balance if available, otherwise use bank accounts, or calculate from transactions
+        const totalBalance = budgets && budgets.length > 0 
+          ? (budgets[0].total_income || 0) - (budgets[0].total_expenses || 0)
+          : accounts?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 
+            allTransactions.reduce((sum, t) => sum + t.amount, 0);
 
         const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
 
-        // Generate budget summary
-        const budgetSummary = generateBudget(sortedTransactions);
-        console.log('📊 Budget Summary:', budgetSummary);
+        // Generate budget summary from tags (budgetGroup)
+        const budgetSummary = generateBudget(allTransactions);
+        console.log('📊 Budget Summary from Supabase:', budgetSummary);
 
         const dashboardStats: DashboardStats = {
           totalBalance,
           monthlyIncome,
           monthlyExpenses,
           savingsRate,
-          transactionCount: sortedTransactions.length,
+          transactionCount: allTransactions.length,
           isValidated: true,
           warnings: []
         };
 
-        console.log('📈 Calculated dashboard stats from localStorage:', {
+        console.log('📈 Calculated dashboard stats from Supabase:', {
           ...dashboardStats,
           budgetSummary,
           currentMonthTransactions: currentMonthTransactions.length,
-          totalTransactions: sortedTransactions.length
+          totalTransactions: allTransactions.length
         });
 
         setStats(dashboardStats);
@@ -147,22 +164,34 @@ export const Dashboard = () => {
         setLastDataRefresh(new Date());
         
         // Generate AI insights for new data or if we don't have insights yet
-        if (forceRefresh || (!aiInsights && sortedTransactions.length > 5)) {
-          generateAIInsights(sortedTransactions.slice(0, 20));
+        if (forceRefresh || (!aiInsights && allTransactions.length > 5)) {
+          generateAIInsights(allTransactions.slice(0, 20));
         }
       } else {
-        console.log('📊 No transactions found in localStorage');
+        console.log('📊 No transactions found in Supabase');
         setStats(null);
         setRecentTransactions([]);
         setLastDataRefresh(new Date());
       }
     } catch (error) {
-      console.error('❌ Error loading dashboard data:', error);
+      console.error('❌ Error loading dashboard data from Supabase:', error);
       setStats(null);
       setRecentTransactions([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateBudget = (transactions: any[]) => {
+    const totals = { Needs: 0, Wants: 0, Savings: 0 };
+    transactions.forEach(tx => {
+      // Extract budget group from tags array or notes field
+      const budgetGroup = tx.tags?.[0] || tx.notes;
+      if (totals[budgetGroup as keyof typeof totals] !== undefined) {
+        totals[budgetGroup as keyof typeof totals] += Math.abs(tx.amount || 0);
+      }
+    });
+    return totals;
   };
 
   const generateAIInsights = async (transactions: any[]) => {
@@ -333,11 +362,11 @@ export const Dashboard = () => {
         <p className="text-lg text-white/70">
           Smart insights powered by advanced AI analysis and bank format detection
         </p>
-        {lastDataRefresh && (
-          <p className="text-white/50 text-sm mt-2">
-            Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed from localStorage
-          </p>
-        )}
+         {lastDataRefresh && (
+           <p className="text-white/50 text-sm mt-2">
+             Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed from Supabase
+           </p>
+         )}
       </div>
 
       {/* AI Insights Card */}
