@@ -54,14 +54,14 @@ export const TransactionHistory = () => {
 
     fetchTransactions();
 
-    // Listen for CSV upload success to refresh transactions
-    const handleCsvUploadSuccess = () => {
-      console.log('CSV upload success detected, refreshing transactions...');
+    // Listen for CSV upload and categorization events
+    const handleTransactionsCategorized = () => {
+      console.log('Transactions categorized, refreshing...');
       fetchTransactions();
     };
 
-    window.addEventListener('csv-upload-success', handleCsvUploadSuccess);
-    return () => window.removeEventListener('csv-upload-success', handleCsvUploadSuccess);
+    window.addEventListener('transactions-categorized', handleTransactionsCategorized);
+    return () => window.removeEventListener('transactions-categorized', handleTransactionsCategorized);
   }, [user]);
 
   const getCategoryColor = (category: string) => {
