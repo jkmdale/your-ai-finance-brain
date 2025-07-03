@@ -268,13 +268,22 @@ export const CSVUpload = () => {
 
           console.log(`🚀 Sending ${file.name} to Supabase for processing...`);
 
+          // Get the session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('No active session found');
+          }
+
           // Send to Supabase edge function for processing
           const { data, error } = await supabase.functions.invoke('process-csv', {
             body: {
               csvData: text,
               fileName: file.name,
               preserveExisting: preserveExisting
-            }
+            },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
           });
 
           if (error) {
