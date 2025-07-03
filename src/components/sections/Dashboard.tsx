@@ -242,12 +242,28 @@ export const Dashboard = () => {
       }, delay);
     };
 
+    const handleTransactionsCategorized = (event: any) => {
+      console.log('🧠 Transactions categorized event detected:', event.detail);
+      const detail = event.detail || {};
+      
+      console.log(`📊 Categorized ${detail.totalCategorized || 0} transactions`);
+      
+      // Immediate refresh since categorization is complete
+      setTimeout(() => {
+        console.log('🔄 Refreshing dashboard after AI categorization...');
+        setRefreshKey(prev => prev + 1);
+        setAiInsights(null); // Reset to regenerate with new data
+      }, 1000);
+    };
+
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('csv-upload-complete', handleCustomEvent);
+    window.addEventListener('transactions-categorized', handleTransactionsCategorized);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('csv-upload-complete', handleCustomEvent);
+      window.removeEventListener('transactions-categorized', handleTransactionsCategorized);
     };
   }, []);
 
