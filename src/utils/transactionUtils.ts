@@ -7,7 +7,26 @@ export interface AppState {
 
 export const createTransactionSignature = (transaction: any): string => {
   const date = typeof transaction.date === 'string' ? transaction.date : transaction.transaction_date;
-  return `${date}-${transaction.amount}-${transaction.description}`.toLowerCase().trim();
+  const description = transaction.description?.substring(0, 100) || ''; // Limit length for consistency
+  return `${date}-${Math.abs(transaction.amount)}-${description}`.toLowerCase().trim();
+};
+
+export const isTransferOrReversal = (transaction: any): boolean => {
+  const description = transaction.description?.toLowerCase() || '';
+  const transferKeywords = ['transfer', 'repayment', 'loan', 'reverse', 'correction', 'top up', 'from savings', 'refund', 'failed'];
+  return transferKeywords.some(keyword => description.includes(keyword));
+};
+
+export const isValidIncomeTransaction = (transaction: any): boolean => {
+  if (transaction.amount <= 0) return false;
+  if (isTransferOrReversal(transaction)) return false;
+  return transaction.is_income === true;
+};
+
+export const isValidExpenseTransaction = (transaction: any): boolean => {
+  if (transaction.amount >= 0) return false;
+  if (isTransferOrReversal(transaction)) return false;
+  return transaction.is_income === false;
 };
 
 export const detectActiveMonth = (transactions: any[]): string => {

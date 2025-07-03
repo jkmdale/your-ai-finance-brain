@@ -178,12 +178,17 @@ export const CSVUpload = () => {
     setProgress(0);
 
     try {
-      // Filter out duplicate transactions
+      // Filter out duplicate transactions with enhanced detection
       const uniqueTransactions = await filterUniqueTransactions(transactions, user!.id);
       
       if (uniqueTransactions.length === 0) {
         setUploadStatus('success');
         setUploadMessage('No new transactions found - all were duplicates');
+        toast({
+          title: "Upload Complete",
+          description: "All transactions were duplicates - no new data added",
+          duration: 3000,
+        });
         return;
       }
 

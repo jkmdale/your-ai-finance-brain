@@ -98,13 +98,15 @@ export const useDashboardData = () => {
                  (!t.tags || !t.tags.includes('transfer'));
         });
 
-        // Calculate totals from active month using is_income field
+        // Calculate totals from active month using improved filtering
+        const { isValidIncomeTransaction, isValidExpenseTransaction } = await import('@/utils/transactionUtils');
+        
         const monthlyIncome = activeMonthTransactions
-          .filter(t => t.is_income === true)
+          .filter(t => isValidIncomeTransaction(t))
           .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         const monthlyExpenses = activeMonthTransactions
-          .filter(t => t.is_income === false)
+          .filter(t => isValidExpenseTransaction(t))
           .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         // Use budget total balance if available, otherwise use bank accounts, or calculate from transactions
