@@ -1,222 +1,176 @@
 import React, { useState, useCallback } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useFilePicker } from '@/hooks/useFilePicker';
-import { budgetCreator } from '@/services/budgetCreator';
-import { incrementalUpdateService } from '@/services/incrementalUpdateService';
-import { FileUploadZone } from '@/components/csv/FileUploadZone';
-import { ProgressTracker } from '@/components/csv/ProgressTracker';
-import { StatusMessage } from '@/components/csv/StatusMessage';
-import { DetailedResults } from '@/components/csv/DetailedResults';
-import { FeaturesList } from '@/components/csv/FeaturesList';
+import { useToast } from '@/hooks/use-toast';
+import Papa from 'papaparse';
 
-interface GoalRecommendationResult {
-  aiRecommendations?: string;
-  createdGoals?: any[];
+interface Transaction {
+  date: string;
+  description: string;
+  amount: number;
 }
 
-interface DetailedResults {
-  totalParsed: number;
-  totalUploaded: number;
-  batchResults: Array<{ 
-    batchNumber: number; 
-    attempted: number; 
-    succeeded: number; 
-    failed: number; 
-    errors: string[] 
-  }>;
+interface BankFormat {
+  name: string;
+  dateColumn: string;
+  descriptionColumn: string;
+  amountColumn: string;
+  creditColumn?: string;
+  debitColumn?: string;
 }
 
 interface UploadResult {
   success: boolean;
-  processed: number;
-  skipped: number;
-  transactions: any[];
-  accountBalance: number;
-  analysis?: string;
-  bankFormat?: any;
-  duplicates?: any[];
-  errors?: string[];
-  warnings?: string[];
-  budgetCreated?: boolean;
-  goalsRecommended?: GoalRecommendationResult;
-  detailedResults?: DetailedResults;
-  fileValidation?: {
-    isValid: boolean;
-    reason?: string;
-    rowDetails?: Array<{ row: number; reason: string; data?: string[]; suggestion?: string }>;
-  };
+  totalTransactions: number;
+  filesProcessed: number;
+  errors: string[];
+  transactions: Transaction[];
 }
 
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing' | 'validating' | 'preview'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [creatingBudget, setCreatingBudget] = useState(false);
-  const [recommendingGoals, setRecommendingGoals] = useState(false);
   const [progress, setProgress] = useState(0);
   const { user } = useAuth();
+  const { toast } = useToast();
 
-  // Use dedicated file picker hook
-  const { openFilePicker, isPickerOpen } = useFilePicker({
-    accept: '.csv,text/csv,application/vnd.ms-excel',
-    multiple: true,
-    onFilesSelected: handleFilesSelected
-  });
-
-  const analyzeTransactions = async (transactions: any[]) => {
-    if (!transactions.length) return;
-
-    setAnalyzing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-coach', {
-        body: { 
-          message: `Analyze these newly uploaded transactions and provide insights on spending patterns, budget impact, and specific recommendations: ${JSON.stringify(transactions.slice(0, 30))}`,
-          type: 'analysis'
-        }
-      });
-
-      if (error) throw error;
-
-      return data.response;
-    } catch (error: any) {
-      console.error('Analysis error:', error);
-      return null;
-    } finally {
-      setAnalyzing(false);
+  // NZ Bank format detection
+  const bankFormats: BankFormat[] = [
+    {
+      name: 'ANZ',
+      dateColumn: 'Date',
+      descriptionColumn: 'Details',
+      amountColumn: 'Amount'
+    },
+    {
+      name: 'ASB',
+      dateColumn: 'Date',
+      descriptionColumn: 'Particulars',
+      amountColumn: 'Amount'
+    },
+    {
+      name: 'Westpac',
+      dateColumn: 'Date',
+      descriptionColumn: 'Transaction Details',
+      amountColumn: 'Amount'
+    },
+    {
+      name: 'Kiwibank',
+      dateColumn: 'Date',
+      descriptionColumn: 'Payee',
+      amountColumn: 'Amount'
     }
-  };
+  ];
 
-  const createSmartBudget = async (transactions: any[], preserveExisting: boolean = true) => {
-    if (!transactions.length || !user) return null;
-
-    setCreatingBudget(true);
-    try {
-      console.log(`💰 Creating smart budget from ${transactions.length} transactions (preserve: ${preserveExisting})`);
-      
-      if (preserveExisting) {
-        // Try incremental update first
-        const incrementalResult = await incrementalUpdateService.updateBudgetsIncrementally({
-          userId: user.id,
-          newTransactions: transactions,
-          preserveExisting: true
-        });
-        
-        if (incrementalResult) {
-          console.log('✅ Budget updated incrementally');
-          return incrementalResult;
-        }
-      }
-      
-      // Create new budget if incremental update not possible
-      const budgetResult = await budgetCreator.createBudgetFromTransactions(
-        user.id,
-        transactions,
-        `Smart Budget - ${new Date().toLocaleDateString()}`
+  const detectBankFormat = (headers: string[]): BankFormat | null => {
+    for (const format of bankFormats) {
+      const hasRequiredColumns = [
+        format.dateColumn,
+        format.descriptionColumn,
+        format.amountColumn
+      ].every(col => 
+        headers.some(h => h.toLowerCase().includes(col.toLowerCase()))
       );
       
-      console.log('💰 Budget created successfully:', budgetResult);
-      return budgetResult;
-    } catch (error: any) {
-      console.error('❌ Budget creation error:', error);
-      return null;
-    } finally {
-      setCreatingBudget(false);
+      if (hasRequiredColumns) {
+        console.log(`🏦 Detected ${format.name} bank format`);
+        return format;
+      }
     }
+    return null;
   };
 
-  const recommendSmartGoals = async (transactions: any[], budgetResult: any, preserveExisting: boolean = true): Promise<GoalRecommendationResult> => {
-    if (!transactions.length || !user) return {};
+  const parseDate = (dateStr: string): string => {
+    if (!dateStr) return new Date().toISOString().split('T')[0];
+    
+    // Try various date formats common in NZ banks
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+    
+    // Try DD/MM/YYYY format
+    const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyy) {
+      const [, day, month, year] = ddmmyyyy;
+      const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return parsedDate.toISOString().split('T')[0];
+    }
+    
+    return new Date().toISOString().split('T')[0];
+  };
 
-    setRecommendingGoals(true);
-    try {
-      if (preserveExisting) {
-        // Try incremental update first
-        const incrementalResult = await incrementalUpdateService.updateGoalsIncrementally({
-          userId: user.id,
-          newTransactions: transactions,
-          preserveExisting: true
-        });
-        
-        if (incrementalResult.createdGoals && incrementalResult.createdGoals.length > 0) {
-          console.log('✅ Goals updated incrementally');
-          return incrementalResult;
-        }
-      }
+  const parseAmount = (amountStr: string): number => {
+    if (!amountStr) return 0;
+    
+    // Remove currency symbols, commas, and spaces
+    const cleaned = amountStr.replace(/[$,\s]/g, '');
+    
+    // Handle negative amounts in parentheses
+    if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+      return -parseFloat(cleaned.slice(1, -1)) || 0;
+    }
+    
+    return parseFloat(cleaned) || 0;
+  };
 
-      const totalIncome = transactions.filter(t => t.is_income).reduce((sum, t) => sum + t.amount, 0);
-      const totalExpenses = transactions.filter(t => !t.is_income).reduce((sum, t) => sum + t.amount, 0);
-      const monthlyNet = totalIncome - totalExpenses;
+  const parseCSVFile = (file: File): Promise<Transaction[]> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          try {
+            const headers = results.meta.fields || [];
+            const bankFormat = detectBankFormat(headers);
+            
+            if (!bankFormat) {
+              reject(new Error(`Unsupported CSV format in ${file.name}. Expected ANZ, ASB, Westpac, or Kiwibank format.`));
+              return;
+            }
 
-      // Get AI recommendations for SMART goals
-      const { data, error } = await supabase.functions.invoke('ai-coach', {
-        body: { 
-          message: `Based on monthly income of $${totalIncome}, expenses of $${totalExpenses}, and net savings of $${monthlyNet}, recommend 3-5 SMART financial goals. Consider emergency fund, debt reduction, savings targets, and investment goals. Make them specific, measurable, achievable, relevant, and time-bound.`,
-          type: 'goals'
+            const transactions: Transaction[] = [];
+            
+            for (const row of results.data as any[]) {
+              // Skip empty rows
+              if (!row || Object.values(row).every(val => !val || val.toString().trim() === '')) {
+                continue;
+              }
+
+              const date = parseDate(row[bankFormat.dateColumn]);
+              const description = (row[bankFormat.descriptionColumn] || '').toString().trim();
+              const amount = parseAmount(row[bankFormat.amountColumn]);
+
+              // Skip if missing critical data
+              if (!description || amount === 0) {
+                continue;
+              }
+
+              transactions.push({
+                date,
+                description,
+                amount
+              });
+            }
+
+            console.log(`✅ Parsed ${transactions.length} transactions from ${file.name}`);
+            resolve(transactions);
+          } catch (error) {
+            reject(new Error(`Error parsing ${file.name}: ${error.message}`));
+          }
+        },
+        error: (error) => {
+          reject(new Error(`CSV parsing error in ${file.name}: ${error.message}`));
         }
       });
-
-      if (error) throw error;
-
-      // Create suggested goals in database
-      const suggestedGoals = [
-        {
-          name: 'Emergency Fund',
-          goal_type: 'savings',
-          target_amount: Math.round(totalExpenses * 3), // 3 months expenses
-          current_amount: 0,
-          target_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          priority: 1,
-          description: 'Build emergency fund covering 3 months of expenses'
-        },
-        {
-          name: 'Monthly Savings Target',
-          goal_type: 'savings', 
-          target_amount: Math.max(monthlyNet * 0.8, 500), // 80% of net income or $500 minimum
-          current_amount: 0,
-          target_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          priority: 2,
-          description: 'Monthly savings goal based on your cash flow'
-        }
-      ];
-
-      // Insert goals into database
-      const { data: createdGoals, error: goalError } = await supabase
-        .from('financial_goals')
-        .insert(suggestedGoals.map(goal => ({
-          ...goal,
-          user_id: user.id,
-          is_active: true
-        })))
-        .select();
-
-      if (goalError) {
-        console.error('Error creating goals:', goalError);
-        return { aiRecommendations: data?.response };
-      }
-
-      return {
-        aiRecommendations: data?.response,
-        createdGoals: createdGoals || []
-      };
-    } catch (error: any) {
-      console.error('Goal recommendation error:', error);
-      return {};
-    } finally {
-      setRecommendingGoals(false);
-    }
+    });
   };
 
-  async function handleFilesSelected(files: FileList) {
-    console.log('📁 Processing selected files:', files.length);
-    console.log('👤 Current user:', user?.id);
-    
+  const handleFileUpload = async (files: FileList) => {
     if (!user) {
-      console.error('❌ No user found - authentication required');
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
       return;
@@ -233,258 +187,201 @@ export const CSVUpload = () => {
       return;
     }
 
-    // Check if we should preserve existing data
-    const preserveExisting = await incrementalUpdateService.shouldPreserveExistingData(user.id);
-    console.log(`📊 Preserve existing data: ${preserveExisting}`);
-
     setUploading(true);
-    setProcessing(true);
     setUploadStatus('processing');
-    setUploadMessage(`Processing ${files.length} CSV file(s) - ${preserveExisting ? 'adding to existing data' : 'creating fresh analysis'}...`);
+    setUploadMessage(`Processing ${files.length} CSV file(s)...`);
     setProgress(10);
 
-    let totalProcessed = 0;
-    let totalSkipped = 0;
-    let allErrors: string[] = [];
-    let allWarnings: string[] = [];
-    let allTransactions: any[] = [];
-    let detailedResults: DetailedResults | undefined;
-    let allBatchResults: any[] = [];
-
+    const allTransactions: Transaction[] = [];
+    const errors: string[] = [];
+    
     try {
-      // Process ALL files sequentially to ensure proper transaction collection
+      // Process each file
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileProgress = 10 + ((i + 1) / files.length) * 70; // Progress from 10% to 80%
+        const fileProgress = 10 + ((i + 1) / files.length) * 80;
         
         setUploadMessage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
         setProgress(fileProgress);
 
         try {
-          const text = await file.text();
-          
-          if (!text.trim()) {
-            allErrors.push(`File ${file.name} is empty`);
-            continue;
-          }
-
-          console.log(`🚀 Sending ${file.name} to Supabase for processing...`);
-
-          // Get the session for authentication
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error('No active session found');
-          }
-          console.log('🔑 Session token available:', !!session.access_token);
-
-          // Send to Supabase edge function for processing
-          console.log('📤 Calling process-csv edge function...');
-          const { data, error } = await supabase.functions.invoke('process-csv', {
-            body: {
-              csvData: text,
-              fileName: file.name,
-              preserveExisting: preserveExisting
-            },
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          });
-
-          console.log('📥 Edge function response:', { data, error });
-
-          if (error) {
-            console.error(`❌ Error processing ${file.name}:`, error);
-            allErrors.push(`${file.name}: ${error.message}`);
-            continue;
-          }
-
-          if (data) {
-            console.log(`✅ ${file.name} processed:`, {
-              processed: data.processed || 0,
-              skipped: data.skipped || 0,
-              transactions: data.transactions?.length || 0
-            });
-            
-            totalProcessed += data.processed || 0;
-            totalSkipped += data.skipped || 0;
-            
-            // Collect ALL transactions from this file
-            if (data.transactions && Array.isArray(data.transactions)) {
-              allTransactions.push(...data.transactions);
-              console.log(`📊 Added ${data.transactions.length} transactions from ${file.name}, total: ${allTransactions.length}`);
-            }
-            
-            if (data.errors) {
-              allErrors.push(...data.errors.map((e: string) => `${file.name}: ${e}`));
-            }
-            if (data.warnings) {
-              allWarnings.push(...data.warnings.map((w: string) => `${file.name}: ${w}`));
-            }
-            
-            // Collect batch results
-            if (data.detailedResults?.batchResults) {
-              allBatchResults.push(...data.detailedResults.batchResults.map((batch: any) => ({
-                ...batch,
-                fileName: file.name
-              })));
-            }
-          }
-
-        } catch (fileError: any) {
-          console.error(`❌ Error processing ${file.name}:`, fileError);
-          allErrors.push(`${file.name}: ${fileError.message}`);
+          const transactions = await parseCSVFile(file);
+          allTransactions.push(...transactions);
+        } catch (error: any) {
+          console.error(`Error processing ${file.name}:`, error);
+          errors.push(error.message);
         }
       }
 
-      // Combine all batch results into detailed results
-      if (allBatchResults.length > 0) {
-        detailedResults = {
-          totalParsed: totalProcessed,
-          totalUploaded: totalProcessed,
-          batchResults: allBatchResults
-        };
-      }
-
-      console.log(`📊 Final results: ${allTransactions.length} total transactions from ${files.length} files`);
-      setProgress(85);
-
-      if (totalProcessed > 0 && allTransactions.length > 0) {
+      // Store parsed data for later use
+      localStorage.setItem('parsedTransactions', JSON.stringify(allTransactions));
+      
+      setProgress(100);
+      
+      if (allTransactions.length > 0) {
         setUploadStatus('success');
-        setUploadMessage(`Running AI analysis and ${preserveExisting ? 'updating' : 'creating'} smart budget...`);
-        
-        // Run AI analysis, budget creation/update, and goal recommendations/updates
-        const [analysisResult, budgetResult] = await Promise.all([
-          analyzeTransactions(allTransactions),
-          createSmartBudget(allTransactions, preserveExisting)
-        ]);
-
-        const goalResult = await recommendSmartGoals(allTransactions, budgetResult, preserveExisting);
-        setProgress(100);
-
-        // Update final results
         setUploadResults({
           success: true,
-          processed: totalProcessed,
-          skipped: totalSkipped,
-          transactions: allTransactions,
-          accountBalance: 0,
-          errors: allErrors,
-          warnings: allWarnings,
-          analysis: analysisResult,
-          budgetCreated: !!budgetResult,
-          goalsRecommended: goalResult,
-          detailedResults
-        });
-
-        // Update success message
-        const features = [];
-        if (analysisResult) features.push('AI insights');
-        if (budgetResult) features.push(preserveExisting ? 'updated budget' : 'smart budget');
-        if (goalResult?.createdGoals && goalResult.createdGoals.length > 0) {
-          features.push(`${goalResult.createdGoals.length} ${preserveExisting ? 'updated' : 'SMART'} goals`);
-        }
-        
-        const actionText = preserveExisting ? 'updated' : 'created';
-        setUploadMessage(
-          `✅ Successfully processed ${totalProcessed} transactions from ${files.length} file(s) and ${actionText} ${features.join(', ')}`
-        );
-
-        console.log(`🎉 Upload complete: ${totalProcessed} transactions processed from ${files.length} files`);
-
-        // Enhanced event dispatch with comprehensive data for dashboard
-        const eventDetail = { 
-          processed: totalProcessed,
-          skipped: totalSkipped,
-          transactions: allTransactions,
-          budgetCreated: !!budgetResult,
-          budgetUpdated: preserveExisting && !!budgetResult,
-          goalsCreated: goalResult?.createdGoals?.length || 0,
-          goalsUpdated: preserveExisting,
-          filesProcessed: files.length,
-          preserveExisting,
           totalTransactions: allTransactions.length,
-          hasAnalysis: !!analysisResult,
-          timestamp: new Date().toISOString(),
-          // Add transaction breakdown for better dashboard calculations
-          incomeTransactions: allTransactions.filter(t => t.is_income).length,
-          expenseTransactions: allTransactions.filter(t => !t.is_income).length,
-          totalIncomeAmount: allTransactions.filter(t => t.is_income).reduce((sum, t) => sum + Math.abs(t.amount), 0),
-          totalExpenseAmount: allTransactions.filter(t => !t.is_income).reduce((sum, t) => sum + Math.abs(t.amount), 0)
-        };
-
-        // Notify other components with comprehensive data
-        window.dispatchEvent(new CustomEvent('csv-upload-complete', { detail: eventDetail }));
+          filesProcessed: files.length,
+          errors,
+          transactions: allTransactions
+        });
         
-        // Also store in localStorage as backup
-        localStorage.setItem('csv-upload-complete', JSON.stringify(eventDetail));
+        toast({
+          title: "CSV Upload Successful",
+          description: `✅ Uploaded ${files.length} files with ${allTransactions.length} total transactions`,
+          duration: 5000,
+        });
+        
+        // Dispatch event for other components
+        window.dispatchEvent(new CustomEvent('csv-upload-complete', { 
+          detail: { 
+            transactions: allTransactions,
+            totalFiles: files.length,
+            totalTransactions: allTransactions.length
+          } 
+        }));
         
       } else {
         setUploadStatus('error');
-        setUploadMessage(`No transactions were uploaded successfully. Total skipped: ${totalSkipped}`);
+        setUploadMessage('No valid transactions found in the uploaded files');
+        
+        toast({
+          title: "Upload Failed",
+          description: "No valid transactions found in the uploaded files",
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
-      console.error('❌ Upload error:', error);
+      console.error('Upload error:', error);
       setUploadStatus('error');
       setUploadMessage(`Upload failed: ${error.message}`);
-      setProgress(0);
+      
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
-      setProcessing(false);
       setTimeout(() => setProgress(0), 2000);
     }
-  }
+  };
 
   return (
     <div id="upload" className="backdrop-blur-xl bg-gradient-to-br from-white/20 to-white/10 border border-white/30 rounded-2xl p-6 shadow-2xl">
-      <div className="flex items-center space-x-3 mb-4">
-        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-          <Upload className="w-5 h-5 text-white" />
+      <div className="flex items-center space-x-3 mb-6">
+        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+          <Upload className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-white">Enhanced CSV Upload</h3>
-          <p className="text-white/60 text-sm">Comprehensive processing with detailed error handling</p>
+          <h3 className="text-xl font-semibold text-white">CSV Upload</h3>
+          <p className="text-white/70 text-sm">Upload multiple CSV files from NZ banks (ANZ, ASB, Westpac, Kiwibank)</p>
         </div>
       </div>
 
       {!user && (
-        <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
-          <p className="text-yellow-300 text-sm">Please log in to upload CSV files</p>
+        <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+          <p className="text-yellow-300 text-sm font-medium">⚠️ Please log in to upload CSV files</p>
         </div>
       )}
 
-      <div className="space-y-4">
-        <FileUploadZone
-          user={user}
-          uploading={uploading}
-          processing={processing}
-          isPickerOpen={isPickerOpen}
-          onFilesSelected={handleFilesSelected}
-          onOpenFilePicker={openFilePicker}
-        />
-
-        <ProgressTracker
-          progress={progress}
-          analyzing={analyzing}
-          creatingBudget={creatingBudget}
-          recommendingGoals={recommendingGoals}
-        />
-
-        <StatusMessage
-          status={uploadStatus}
-          message={uploadMessage}
-          analyzing={analyzing}
-          creatingBudget={creatingBudget}
-          recommendingGoals={recommendingGoals}
-        />
-
-        {uploadResults?.detailedResults && (
-          <DetailedResults
-            detailedResults={uploadResults.detailedResults}
-            skipped={uploadResults.skipped}
+      <div className="space-y-6">
+        {/* File Upload Area */}
+        <div className="border-2 border-dashed border-white/30 rounded-xl p-8 text-center hover:border-white/50 transition-colors">
+          <input
+            type="file"
+            multiple
+            accept=".csv,text/csv"
+            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            disabled={uploading || !user}
+            className="hidden"
+            id="csv-upload"
           />
+          <label htmlFor="csv-upload" className="cursor-pointer">
+            <FileText className="w-12 h-12 text-white/60 mx-auto mb-4" />
+            <p className="text-white font-medium mb-2">
+              {uploading ? 'Processing...' : 'Select CSV Files'}
+            </p>
+            <p className="text-white/60 text-sm">
+              Choose multiple CSV files from your bank (ANZ, ASB, Westpac, Kiwibank)
+            </p>
+          </label>
+        </div>
+
+        {/* Progress Bar */}
+        {progress > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-white/70">
+              <span>Processing...</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <div className="w-full bg-white/20 rounded-full h-2">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
         )}
 
-        <FeaturesList />
+        {/* Status Message */}
+        {uploadMessage && (
+          <div className={`p-4 rounded-lg border flex items-center space-x-3 ${
+            uploadStatus === 'success' 
+              ? 'bg-green-500/20 border-green-500/30 text-green-300'
+              : uploadStatus === 'error'
+              ? 'bg-red-500/20 border-red-500/30 text-red-300'
+              : 'bg-blue-500/20 border-blue-500/30 text-blue-300'
+          }`}>
+            {uploadStatus === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0" />}
+            {uploadStatus === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+            {uploadStatus === 'processing' && <Upload className="w-5 h-5 flex-shrink-0 animate-pulse" />}
+            <p className="text-sm font-medium">{uploadMessage}</p>
+          </div>
+        )}
+
+        {/* Results Summary */}
+        {uploadResults && uploadResults.success && (
+          <div className="bg-white/10 rounded-lg p-4 space-y-3">
+            <h4 className="text-white font-medium flex items-center space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <span>Upload Complete</span>
+            </h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="text-white/70">
+                <span className="block text-white font-medium">{uploadResults.totalTransactions}</span>
+                <span>Total Transactions</span>
+              </div>
+              <div className="text-white/70">
+                <span className="block text-white font-medium">{uploadResults.filesProcessed}</span>
+                <span>Files Processed</span>
+              </div>
+            </div>
+            {uploadResults.errors.length > 0 && (
+              <div className="mt-3">
+                <p className="text-red-300 text-sm font-medium mb-1">Errors:</p>
+                <ul className="text-red-300/70 text-xs space-y-1">
+                  {uploadResults.errors.map((error, index) => (
+                    <li key={index}>• {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Feature Info */}
+        <div className="bg-white/5 rounded-lg p-4">
+          <h4 className="text-white font-medium mb-3">Supported Features</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-white/70">
+            <div>✅ Multiple file upload</div>
+            <div>✅ NZ bank format detection</div>
+            <div>✅ Automatic data normalization</div>
+            <div>✅ Error handling & validation</div>
+          </div>
+        </div>
       </div>
     </div>
   );
