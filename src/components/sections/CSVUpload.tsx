@@ -213,8 +213,10 @@ export const CSVUpload = () => {
 
   async function handleFilesSelected(files: FileList) {
     console.log('📁 Processing selected files:', files.length);
+    console.log('👤 Current user:', user?.id);
     
     if (!user) {
+      console.error('❌ No user found - authentication required');
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
       return;
@@ -273,8 +275,10 @@ export const CSVUpload = () => {
           if (!session) {
             throw new Error('No active session found');
           }
+          console.log('🔑 Session token available:', !!session.access_token);
 
           // Send to Supabase edge function for processing
+          console.log('📤 Calling process-csv edge function...');
           const { data, error } = await supabase.functions.invoke('process-csv', {
             body: {
               csvData: text,
@@ -285,6 +289,8 @@ export const CSVUpload = () => {
               Authorization: `Bearer ${session.access_token}`,
             },
           });
+
+          console.log('📥 Edge function response:', { data, error });
 
           if (error) {
             console.error(`❌ Error processing ${file.name}:`, error);
