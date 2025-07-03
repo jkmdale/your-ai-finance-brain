@@ -223,7 +223,7 @@ export class TransactionClassifier {
       };
     }
 
-    // For positive amounts, check income patterns
+    // For positive amounts, check income patterns ONLY if specific income patterns match
     if (amount > 0) {
       for (const [incomeType, patterns] of Object.entries(this.incomePatterns)) {
         for (const pattern of patterns) {
@@ -241,15 +241,15 @@ export class TransactionClassifier {
         }
       }
       
-      // Default for positive amounts (but low confidence)
+      // For positive amounts without income patterns, classify as ignored/other
       return {
-        isIncome: true,
+        isIncome: false,
         isExpense: false,
         isTransfer: false,
         isReversal: false,
-        category: 'Income',
-        subcategory: 'OTHER',
-        confidence: 0.5
+        category: 'Other',
+        subcategory: 'UNCLASSIFIED_CREDIT',
+        confidence: 0.3
       };
     }
 
@@ -283,7 +283,7 @@ export class TransactionClassifier {
   }
 
   /**
-   * Detect and remove reversal pairs
+   * Detect and remove reversal pairs - improved matching logic
    */
   private detectReversalPairs(transactions: any[]): { 
     validTransactions: any[], 
@@ -303,7 +303,7 @@ export class TransactionClassifier {
       
       if (processedIds.has(transaction.id)) continue;
 
-      // Look for matching reversal within 7 days
+      // Look for matching reversal within 14 days with improved matching
       const matchingTransaction = sortedTransactions.find((other, otherIndex) => {
         if (otherIndex <= i || processedIds.has(other.id)) return false;
         
@@ -315,8 +315,9 @@ export class TransactionClassifier {
         const amountMatch = Math.abs(Math.abs(other.amount) - Math.abs(transaction.amount)) < 0.01;
         const oppositeSigns = (transaction.amount > 0) !== (other.amount > 0);
         const descriptionSimilar = this.isDescriptionSimilar(transaction.description, other.description);
+        const merchantSimilar = this.isDescriptionSimilar(transaction.merchant || '', other.merchant || '');
         
-        return dateDiff <= 7 && amountMatch && oppositeSigns && descriptionSimilar;
+        return dateDiff <= 14 && amountMatch && oppositeSigns && (descriptionSimilar || merchantSimilar);
       });
 
       if (matchingTransaction) {
@@ -422,7 +423,7 @@ export class TransactionClassifier {
         isExpense: classification.isExpense,
         isTransfer: classification.isTransfer,
         isReversal: classification.isReversal,
-        isIgnored: classification.isTransfer || classification.isReversal,
+        isIgnored: classification.isTransfer || classification.isReversal || classification.category === 'Other',
         monthYear: this.getMonthYear(transaction.transaction_date),
         confidence: classification.confidence,
         bankMetadata: transaction.bankMetadata
@@ -490,22 +491,26 @@ export class TransactionClassifier {
   }
 
   /**
-   * Remove duplicates across uploads
+   * Remove duplicates across uploads - improved matching
    */
   public async removeDuplicates(newTransactions: any[], userId: string): Promise<any[]> {
     const { data: existingTransactions } = await supabase
       .from('transactions')
-      .select('description, amount, transaction_date')
+      .select('description, amount, transaction_date, merchant')
       .eq('user_id', userId);
 
     const existingSignatures = new Set(
-      (existingTransactions || []).map(t => 
-        `${t.transaction_date}-${Math.abs(t.amount)}-${t.description.substring(0, 100)}`.toLowerCase()
-      )
+      (existingTransactions || []).map(t => {
+        const cleanDesc = t.description.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const cleanMerchant = (t.merchant || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+        return `${t.transaction_date}-${Math.abs(t.amount)}-${cleanDesc}-${cleanMerchant}`;
+      })
     );
 
     const uniqueTransactions = newTransactions.filter(tx => {
-      const signature = `${tx.transaction_date}-${Math.abs(tx.amount)}-${tx.description.substring(0, 100)}`.toLowerCase();
+      const cleanDesc = tx.description.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const cleanMerchant = (tx.merchant || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const signature = `${tx.transaction_date}-${Math.abs(tx.amount)}-${cleanDesc}-${cleanMerchant}`;
       return !existingSignatures.has(signature);
     });
 
