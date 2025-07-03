@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
 import { claudeTransactionCategorizer, type CategorizationProgress } from '@/services/claudeTransactionCategorizer';
+import { filterUniqueTransactions } from '@/utils/transactionUtils';
 
 interface Transaction {
   date: string;
@@ -173,13 +174,25 @@ export const CSVUpload = () => {
 
   const startCategorization = async (transactions: Transaction[]) => {
     setUploadStatus('categorizing');
-    setUploadMessage(`Starting AI categorization with Claude...`);
+    setUploadMessage(`Filtering duplicates and starting AI categorization...`);
     setProgress(0);
-    setCategorizationProgress({ total: transactions.length, completed: 0, failed: 0 });
 
     try {
+      // Filter out duplicate transactions
+      const uniqueTransactions = await filterUniqueTransactions(transactions, user!.id);
+      
+      if (uniqueTransactions.length === 0) {
+        setUploadStatus('success');
+        setUploadMessage('No new transactions found - all were duplicates');
+        return;
+      }
+
+      console.log(`📊 Processing ${uniqueTransactions.length} unique transactions (filtered ${transactions.length - uniqueTransactions.length} duplicates)`);
+      
+      setCategorizationProgress({ total: uniqueTransactions.length, completed: 0, failed: 0 });
+
       const categorizedTransactions = await claudeTransactionCategorizer.categorizeTransactions(
-        transactions,
+        uniqueTransactions,
         (progress: CategorizationProgress) => {
           setCategorizationProgress(progress);
           const progressPercent = Math.round((progress.completed / progress.total) * 100);

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppState } from '@/store/appState';
+import { detectActiveMonth } from '@/utils/transactionUtils';
 import type { DashboardStats, Transaction } from '@/types/dashboard';
 
 export const useDashboardData = () => {
@@ -10,6 +12,7 @@ export const useDashboardData = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
   const { user } = useAuth();
+  const { activeMonth, setActiveMonth, setTotalTransactions } = useAppState();
 
   const generateBudget = (transactions: any[]) => {
     const totals = { Needs: 0, Wants: 0, Savings: 0 };
@@ -76,27 +79,31 @@ export const useDashboardData = () => {
       console.log('🏦 Bank accounts:', accounts?.length || 0);
 
       if (allTransactions && allTransactions.length > 0) {
+        // Auto-detect active month from uploaded data
+        const detectedMonth = detectActiveMonth(allTransactions);
+        setActiveMonth(detectedMonth);
+        setTotalTransactions(allTransactions.length);
+
         // Get recent transactions for display (limit 10)
         const recentTransactionsData = allTransactions.slice(0, 10);
 
-        // Calculate stats using ALL transactions for accuracy
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
+        // Calculate stats using detected active month instead of current month
+        const [activeYear, activeMonthNum] = detectedMonth.split('-').map(Number);
         
-        // Get current month transactions
-        const currentMonthTransactions = allTransactions.filter(t => {
+        // Get active month transactions
+        const activeMonthTransactions = allTransactions.filter(t => {
           const transactionDate = new Date(t.transaction_date);
-          return transactionDate.getMonth() === currentMonth && 
-                 transactionDate.getFullYear() === currentYear &&
+          return transactionDate.getMonth() === (activeMonthNum - 1) && 
+                 transactionDate.getFullYear() === activeYear &&
                  (!t.tags || !t.tags.includes('transfer'));
         });
 
-        // Calculate totals from current month using is_income field
-        const monthlyIncome = currentMonthTransactions
+        // Calculate totals from active month using is_income field
+        const monthlyIncome = activeMonthTransactions
           .filter(t => t.is_income === true)
           .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-        const monthlyExpenses = currentMonthTransactions
+        const monthlyExpenses = activeMonthTransactions
           .filter(t => t.is_income === false)
           .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
@@ -125,7 +132,7 @@ export const useDashboardData = () => {
         console.log('📈 Calculated dashboard stats from Supabase:', {
           ...dashboardStats,
           budgetSummary,
-          currentMonthTransactions: currentMonthTransactions.length,
+          activeMonthTransactions: activeMonthTransactions.length,
           totalTransactions: allTransactions.length
         });
 
