@@ -88,14 +88,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
         </div>
       </motion.header>
 
-      {/* Debug Info - This will show temporarily to help diagnose */}
-      <div className="fixed top-20 left-4 z-50 bg-black/80 text-white p-4 rounded text-xs">
-        <div>Debug Info:</div>
-        <div>Base URL: {window.location.origin}</div>
-        <div>Logo path: {window.location.origin}/logo.png</div>
-        <div>Check console for logo loading messages</div>
-      </div>
-
       {/* Hero Section */}
       <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
         {/* Background Elements */}
