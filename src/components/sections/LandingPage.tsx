@@ -196,8 +196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
               </Button>
               <Button
                 onClick={() => onSignIn('signin')}
-                variant="outline"
-                className="backdrop-blur-sm bg-black/20 border border-white/10 text-white px-10 py-4 rounded-full hover:bg-black/30 transition-all duration-200 text-lg font-semibold"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-10 py-4 rounded-full transition-all duration-200 text-lg font-semibold"
               >
                 Log In
               </Button>
@@ -516,8 +515,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
               </Button>
               <Button
                 onClick={() => onSignIn('signin')}
-                variant="outline"
-                className="backdrop-blur-sm bg-white/10 border border-white/20 text-white px-10 py-4 rounded-full hover:bg-white/20 transition-all duration-200 text-lg font-semibold"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-10 py-4 rounded-full transition-all duration-200 text-lg font-semibold"
               >
                 Sign In
               </Button>
