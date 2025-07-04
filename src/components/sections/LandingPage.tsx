@@ -72,8 +72,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             <div className="flex items-center space-x-4">
               <Button
                 onClick={() => onSignIn('signin')}
-                variant="ghost"
-                className="text-white hover:bg-white/10 border-white/20"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
               >
                 Log In
               </Button>
