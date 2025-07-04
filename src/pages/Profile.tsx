@@ -25,16 +25,16 @@ const Profile = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4 sm:p-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center space-x-3 mb-8">
-          <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
-            <User className="w-6 h-6 text-white" />
+        <div className="flex items-center space-x-3 mb-6 sm:mb-8">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+            <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">Profile</h1>
-            <p className="text-purple-200">Your financial journey overview</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Profile</h1>
+            <p className="text-sm sm:text-base text-purple-200">Your financial journey overview</p>
           </div>
         </div>
 
@@ -47,11 +47,11 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center space-x-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-10 h-10 text-white" />
+            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
+                <User className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
               </div>
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 text-center sm:text-left">
                 <div className="flex items-center space-x-2">
                   <Mail className="w-4 h-4 text-purple-300" />
                   <span className="text-white">{user?.email || 'user@example.com'}</span>

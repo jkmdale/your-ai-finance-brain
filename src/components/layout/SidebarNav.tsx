@@ -156,10 +156,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 relative">
-          <div className="absolute top-4 left-4 z-50">
-            <SidebarTrigger className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-sm" />
+          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-50">
+            <SidebarTrigger className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10" />
           </div>
-          {children}
+          <div className="pt-12 sm:pt-16">
+            {children}
+          </div>
         </main>
       </div>
     </SidebarProvider>

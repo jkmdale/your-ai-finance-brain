@@ -9,16 +9,16 @@ import { Badge } from '@/components/ui/badge';
 
 const Settings = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4 sm:p-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center space-x-3 mb-8">
-          <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
-            <SettingsIcon className="w-6 h-6 text-white" />
+        <div className="flex items-center space-x-3 mb-6 sm:mb-8">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+            <SettingsIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">Settings</h1>
-            <p className="text-purple-200">Customize your SmartFinanceAI experience</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Settings</h1>
+            <p className="text-sm sm:text-base text-purple-200">Customize your SmartFinanceAI experience</p>
           </div>
         </div>
 

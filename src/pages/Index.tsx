@@ -75,7 +75,7 @@ const Index = () => {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-4 p-4">
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-3 sm:space-y-4 p-3 sm:p-4">
         <Dashboard />
         <BudgetOverview />
         <GoalTracking />
