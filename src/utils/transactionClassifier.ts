@@ -32,90 +32,135 @@ export interface MonthlyClassification {
 }
 
 export class TransactionClassifier {
-  // Enhanced NZ bank transfer patterns
+  // Enhanced NZ bank transfer patterns - more conservative
   private transferPatterns = [
-    // Generic transfer keywords
-    /transfer/i,
-    /trf\b/i,
-    /xfer/i,
-    /internal.*payment/i,
+    // Explicit transfer keywords
+    /\btransfer\b/i,
+    /\btrf\b/i,
+    /\bxfer\b/i,
+    /transfer.*to.*account/i,
+    /transfer.*from.*account/i,
+    /internal.*transfer/i,
     /between.*accounts/i,
-    /own.*account/i,
-    /payment.*to.*account/i,
-    /from.*savings/i,
-    /to.*savings/i,
-    /top.*up/i,
-    /balance.*adjustment/i,
+    /own.*account.*transfer/i,
+    /account.*to.*account/i,
     
-    // NZ-specific patterns
-    /j\s*k\s*m\s*dale/i, // Common NZ name pattern
-    /automatic.*payment/i,
-    /ap\s+\d+/i, // Automatic payment codes
-    /internet.*banking/i,
+    // Specific transfer identifiers
+    /from.*savings.*to/i,
+    /to.*savings.*from/i,
+    /savings.*transfer/i,
+    /checking.*to.*savings/i,
+    /loan.*advance/i, // Loan advances are transfers
+    /balance.*transfer/i,
+    
+    // NZ-specific internal payment patterns
+    /j\s*k\s*m\s*dale.*transfer/i, // Only if explicitly contains transfer
+    /automatic.*payment.*internal/i,
+    /ap\s+\d+.*transfer/i,
+    /internet.*banking.*transfer/i,
     /online.*transfer/i,
     
-    // Account number patterns (NZ format: XX-XXXX-XXXXXXX-XXX)
-    /\d{2}-\d{4}-\d{7}-\d{3}/,
-    /06[-\s]?0817/i, // Specific account patterns
-    /9171\s*$/i,
-    /88419319/i,
-    /662330/i
+    // Account number patterns - more specific
+    /transfer.*\d{2}-\d{4}-\d{7}-\d{3}/,
+    /\d{2}-\d{4}-\d{7}-\d{3}.*transfer/i,
+    
+    // Clear internal movement patterns
+    /move.*money/i,
+    /funds.*transfer/i,
+    /account.*movement/i
   ];
 
-  // Enhanced reversal patterns
+  // Enhanced reversal patterns - more specific
   private reversalPatterns = [
-    /reversal/i,
-    /reverse/i,
-    /refund/i,
-    /correction/i,
-    /cancelled/i,
-    /failed/i,
-    /returned/i,
-    /void/i,
-    /dispute/i,
-    /chargeback/i,
-    /pending.*auth/i
+    /\breversal\b/i,
+    /\breverse\b/i,
+    /\brefund\b/i,
+    /\bcorrection\b/i,
+    /\bcancelled\b/i,
+    /\bfailed.*payment\b/i,
+    /\breturned.*payment\b/i,
+    /\bvoid\b/i,
+    /\bdispute\b/i,
+    /\bchargeback\b/i,
+    /\bpending.*auth.*reversal/i,
+    /\bdeclined.*reversal/i,
+    /\berror.*correction/i,
+    /\bauth.*reversal/i,
+    /\bwrongly.*charged/i
   ];
 
-  // Enhanced income patterns (external sources only)
+  // Enhanced income patterns (external sources only) - more comprehensive
   private incomePatterns = {
     SALARY: [
-      /salary/i,
-      /wage/i,
-      /payroll/i,
-      /employer/i,
+      /\bsalary\b/i,
+      /\bwage\b/i,
+      /\bpayroll\b/i,
+      /\bemployer\b/i,
+      /\bpay.*period\b/i,
+      /\bnet.*pay\b/i,
+      /\bgross.*pay\b/i,
+      /\bpayment.*salary\b/i,
       /pathway.*engineer/i, // Specific employer pattern
-      /pay.*period/i
+      /\bwages.*credit\b/i,
+      /\bfortnightly.*pay\b/i,
+      /\bweekly.*pay\b/i,
+      /\bmonthly.*salary\b/i
     ],
     GOVERNMENT: [
-      /ird/i,
+      /\bird\b/i,
       /working.*for.*families/i,
       /accommodation.*supplement/i,
-      /benefit/i,
+      /\bbenefit\b/i,
       /tax.*credit/i,
-      /winz/i,
-      /studylink/i
+      /\bwinz\b/i,
+      /\bstudylink\b/i,
+      /government.*payment/i,
+      /pension.*payment/i,
+      /disability.*allowance/i,
+      /family.*tax.*benefit/i,
+      /child.*support.*payment/i
     ],
     INVESTMENT: [
-      /dividend/i,
+      /\bdividend\b/i,
       /interest.*received/i,
-      /capital.*gain/i,
+      /\bcapital.*gain\b/i,
       /investment.*return/i,
-      /sharesies/i,
-      /kiwisaver.*contribution/i
+      /\bsharesies\b/i,
+      /kiwisaver.*contribution/i,
+      /\bbond.*interest\b/i,
+      /\bterm.*deposit.*interest\b/i,
+      /\bmutual.*fund\b/i,
+      /\betf.*dividend\b/i,
+      /\bcrypto.*gain\b/i
     ],
     BUSINESS: [
-      /invoice/i,
+      /\binvoice.*paid\b/i,
       /payment.*received/i,
-      /freelance/i,
-      /contractor/i,
+      /\bfreelance\b/i,
+      /\bcontractor.*payment\b/i,
       /client.*payment/i,
-      /trade.*income/i
+      /trade.*income/i,
+      /\bbusiness.*income\b/i,
+      /\bconsulting.*fee\b/i,
+      /\bservice.*payment\b/i,
+      /\bcommission\b/i
     ],
     RENTAL: [
       /rental.*income/i,
       /rent.*received/i,
-      /property.*income/i
+      /property.*income/i,
+      /tenant.*payment/i,
+      /\bletting.*income\b/i
+    ],
+    OTHER_INCOME: [
+      /\bgift.*received\b/i,
+      /\blottery.*win\b/i,
+      /\bcash.*back\b/i,
+      /\bbonus.*payment\b/i,
+      /\bprize.*money\b/i,
+      /\binsurance.*payout\b/i,
+      /\btax.*refund\b/i,
+      /\brebate\b/i
     ]
   };
 
@@ -153,23 +198,26 @@ export class TransactionClassifier {
   };
 
   /**
-   * Detect if transaction is a transfer between accounts
+   * Detect if transaction is a transfer between accounts - more conservative approach
    */
   private isTransfer(description: string, merchant?: string, amount?: number, bankMetadata?: any): boolean {
     const textToCheck = `${description} ${merchant || ''}`.toLowerCase();
     
-    // Check against transfer patterns
+    // Check against transfer patterns - must be explicit
     const hasTransferPattern = this.transferPatterns.some(pattern => pattern.test(textToCheck));
     
-    // Check for round amounts (common in transfers)
-    const isRoundAmount = amount && (amount % 50 === 0 || amount % 100 === 0) && amount > 500;
-    
-    // Check bank metadata for transfer indicators
+    // Check bank metadata for explicit transfer indicators
     const hasTransferMetadata = bankMetadata?.type === 'transfer' || 
                                bankMetadata?.code?.includes('TRF') ||
                                bankMetadata?.particulars?.toLowerCase().includes('transfer');
     
-    return hasTransferPattern || hasTransferMetadata || (isRoundAmount && hasTransferPattern);
+    // Only consider round amounts if there's also a transfer keyword
+    const isRoundAmountWithKeyword = amount && 
+                                   (amount % 100 === 0 || amount % 500 === 0) && 
+                                   amount > 1000 && 
+                                   hasTransferPattern;
+    
+    return hasTransferPattern || hasTransferMetadata || isRoundAmountWithKeyword;
   }
 
   /**
@@ -253,32 +301,58 @@ export class TransactionClassifier {
       };
     }
 
-    // For negative amounts, check expense patterns
-    for (const [expenseType, patterns] of Object.entries(this.expensePatterns)) {
-      for (const pattern of patterns) {
-        if (pattern.test(textToCheck)) {
-          return {
-            isIncome: false,
-            isExpense: true,
-            isTransfer: false,
-            isReversal: false,
-            category: 'Expense',
-            subcategory: expenseType,
-            confidence: 0.85
-          };
+    // For negative amounts, first check if it's a transfer or reversal
+    if (amount < 0) {
+      // Re-check transfers for negative amounts using same logic
+      if (this.isTransfer(description, merchant, Math.abs(amount), bankMetadata)) {
+        return {
+          isIncome: false,
+          isExpense: false,
+          isTransfer: true,
+          isReversal: false,
+          category: 'Transfer',
+          confidence: 0.9
+        };
+      }
+      
+      // Check expense patterns
+      for (const [expenseType, patterns] of Object.entries(this.expensePatterns)) {
+        for (const pattern of patterns) {
+          if (pattern.test(textToCheck)) {
+            return {
+              isIncome: false,
+              isExpense: true,
+              isTransfer: false,
+              isReversal: false,
+              category: 'Expense',
+              subcategory: expenseType,
+              confidence: 0.85
+            };
+          }
         }
       }
+      
+      // For unmatched negative amounts, be conservative - might be transfers
+      return {
+        isIncome: false,
+        isExpense: false,
+        isTransfer: false,
+        isReversal: false,
+        category: 'Other',
+        subcategory: 'UNCLASSIFIED_DEBIT',
+        confidence: 0.3
+      };
     }
 
-    // Default for negative amounts
+    // Default fallback (should not reach here)
     return {
       isIncome: false,
-      isExpense: true,
+      isExpense: false,
       isTransfer: false,
       isReversal: false,
-      category: 'Expense',
-      subcategory: 'OTHER',
-      confidence: 0.5
+      category: 'Other',
+      subcategory: 'UNKNOWN',
+      confidence: 0.1
     };
   }
 
@@ -423,7 +497,8 @@ export class TransactionClassifier {
         isExpense: classification.isExpense,
         isTransfer: classification.isTransfer,
         isReversal: classification.isReversal,
-        isIgnored: classification.isTransfer || classification.isReversal || classification.category === 'Other',
+        isIgnored: classification.isTransfer || classification.isReversal || 
+                   (classification.category === 'Other' && !classification.isIncome && !classification.isExpense),
         monthYear: this.getMonthYear(transaction.transaction_date),
         confidence: classification.confidence,
         bankMetadata: transaction.bankMetadata
