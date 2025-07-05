@@ -5,6 +5,7 @@
 
 import { unifiedTransactionProcessor } from './unifiedTransactionProcessor';
 import { zeroBudgetGenerator } from './zeroBudgetGenerator';
+import { smartGoalsService } from './smartGoalsService';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ProcessingResult {
@@ -86,6 +87,11 @@ export class SmartFinanceCore {
       // Stage 5: Generate SMART goals
       onProgress?.('Generating SMART goals...', 95);
       result.smartGoals = await this.generateSmartGoals(userId, monthlyBudgets);
+      
+      // Save SMART goals to database
+      if (result.smartGoals && result.smartGoals.length > 0) {
+        await smartGoalsService.saveSmartGoals(userId, result.smartGoals);
+      }
 
       onProgress?.('Complete!', 100);
       result.success = true;

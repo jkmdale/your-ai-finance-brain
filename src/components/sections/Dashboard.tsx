@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/dashboard/EmptyState';
 import { AIInsightsCard } from '@/components/dashboard/AIInsightsCard';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
+import { SmartGoalsCard } from '@/components/dashboard/SmartGoalsCard';
 
 export const Dashboard = () => {
   const {
@@ -72,10 +73,13 @@ export const Dashboard = () => {
 
         <CSVUpload />
 
-        <RecentTransactions 
-          recentTransactions={recentTransactions} 
-          stats={stats} 
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SmartGoalsCard />
+          <RecentTransactions 
+            recentTransactions={recentTransactions} 
+            stats={stats} 
+          />
+        </div>
       </section>
     </>
   );

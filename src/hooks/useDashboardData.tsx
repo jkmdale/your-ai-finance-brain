@@ -148,6 +148,20 @@ export const useDashboardData = () => {
   useEffect(() => {
     console.log('🔄 Dashboard useEffect triggered - initial load');
     fetchDashboardData();
+
+    // Listen for SmartFinance completion events
+    const handleSmartFinanceComplete = () => {
+      console.log('🎉 SmartFinance processing complete - refreshing dashboard');
+      setTimeout(() => {
+        fetchDashboardData(true);
+      }, 2000); // Small delay to ensure database writes are complete
+    };
+
+    window.addEventListener('smartfinance-complete', handleSmartFinanceComplete);
+
+    return () => {
+      window.removeEventListener('smartfinance-complete', handleSmartFinanceComplete);
+    };
   }, [user]);
 
   // Separate effect for refresh key changes
