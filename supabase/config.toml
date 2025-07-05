@@ -52,7 +52,7 @@ jwt_expiry = 3600
 enable_signup = true
 enable_confirmations = true
 hook_send_email_enabled = true
-hook_send_email_uri = "https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/send-auth-email"
+hook_send_email_uri = "https://a29b8699-11a7-4b06-985f-e3c27ee69b05.supabase.co/functions/v1/send-auth-email"
 hook_send_email_secrets = "AUTH_EMAIL_HOOK_SECRET"
 
 [auth.email]
