@@ -203,7 +203,7 @@ export const UnlockScreen: React.FC = () => {
               </div>
             )}
 
-            {/* Number Pad - Match reference image layout */}
+            {/* Number Pad - Match PinSetupScreen layout */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               {/* First 3 rows: 1-9 */}
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
@@ -211,49 +211,50 @@ export const UnlockScreen: React.FC = () => {
                   key={num}
                   onClick={() => handleNumberClick(num)}
                   disabled={isUnlocking}
-                  className="w-16 h-16 backdrop-blur-sm bg-white/10 hover:bg-white/20 disabled:opacity-50 rounded-2xl flex items-center justify-center text-white text-xl font-semibold transition-all duration-200 border border-white/10"
+                  className="glass-button w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-semibold transition-all duration-200 border-white/20 hover:bg-white/20 disabled:opacity-50 touch-target"
                   whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.05 }}
                 >
                   {num}
                 </motion.button>
               ))}
               
-              {/* Bottom row: Empty, 0, Delete - matching reference layout */}
-              <div className="w-16 h-16"></div>
-              
+              {/* Bottom row: Delete, 0, Biometric/Empty */}
+              <motion.button
+                onClick={handleDelete}
+                disabled={isUnlocking || pin.length === 0}
+                className="glass-button w-16 h-16 rounded-2xl flex items-center justify-center text-white transition-all duration-200 border-white/20 hover:bg-white/20 disabled:opacity-30 touch-target"
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.05 }}
+              >
+                <Delete className="w-5 h-5" />
+              </motion.button>
+
               <motion.button
                 onClick={() => handleNumberClick('0')}
                 disabled={isUnlocking}
-                className="w-16 h-16 backdrop-blur-sm bg-white/10 hover:bg-white/20 disabled:opacity-50 rounded-2xl flex items-center justify-center text-white text-xl font-semibold transition-all duration-200 border border-white/10"
+                className="glass-button w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-semibold transition-all duration-200 border-white/20 hover:bg-white/20 disabled:opacity-50 touch-target"
                 whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.05 }}
               >
                 0
               </motion.button>
 
-              <motion.button
-                onClick={handleDelete}
-                disabled={isUnlocking || pin.length === 0}
-                className="w-16 h-16 backdrop-blur-sm bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-2xl flex items-center justify-center text-white transition-all duration-200 border border-white/10"
-                whileTap={{ scale: 0.95 }}
-              >
-                <Delete className="w-5 h-5" />
-              </motion.button>
-            </div>
-
-            {/* Biometric option below keypad if available */}
-            {biometricAvailable && (
-              <div className="mb-4">
-                <Button
+              {/* Biometric button or empty space */}
+              {biometricAvailable ? (
+                <motion.button
                   onClick={handleBiometricUnlock}
                   disabled={isUnlocking}
-                  variant="outline"
-                  className="w-full border-white/20 bg-white/5 hover:bg-white/10 text-white rounded-xl h-12 flex items-center justify-center space-x-2"
+                  className="glass-button w-16 h-16 rounded-2xl flex items-center justify-center text-white transition-all duration-200 border-white/20 hover:bg-white/20 disabled:opacity-30 touch-target"
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.05 }}
                 >
                   <Fingerprint className="w-5 h-5" />
-                  <span>Use Biometric Instead</span>
-                </Button>
-              </div>
-            )}
+                </motion.button>
+              ) : (
+                <div className="w-16 h-16"></div>
+              )}
+            </div>
 
             {isUnlocking && (
               <div className="text-center mb-4">
