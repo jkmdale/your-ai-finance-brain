@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/dashboard/EmptyState';
 import { AIInsightsCard } from '@/components/dashboard/AIInsightsCard';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
-import { SmartGoalsCard } from '@/components/dashboard/SmartGoalsCard';
+import { BudgetBreakdown } from '@/components/dashboard/BudgetBreakdown';
+import { SmartBudgetGoals } from '@/components/dashboard/SmartBudgetGoals';
 
 export const Dashboard = () => {
   const {
@@ -76,7 +77,11 @@ export const Dashboard = () => {
         <CSVUpload />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SmartGoalsCard />
+          <BudgetBreakdown />
+          <SmartBudgetGoals />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
           <RecentTransactions 
             recentTransactions={recentTransactions} 
             stats={stats} 
