@@ -149,16 +149,16 @@ export const UnlockScreen: React.FC = () => {
   const shouldShowPinInterface = preferredUnlockMethod === 'pin' || showPinMode;
 
   return (
-    <div className="fixed inset-0 app-gradient-bg flex items-center justify-center p-4 z-50 safe-area-top safe-area-bottom">
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full blur-3xl animate-pulse delay-1000"></div>
+    <div className="fixed inset-0 app-gradient-bg flex items-center justify-center p-4 z-50 min-h-screen w-full overflow-hidden">
+      <div className="absolute inset-0 opacity-20 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-56 h-56 sm:w-80 sm:h-80 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="relative z-10 glass-card rounded-3xl p-6 max-w-sm w-full"
+        className="relative z-10 glass-card rounded-3xl p-4 sm:p-6 w-full max-w-sm mx-auto overflow-hidden"
       >
         {shouldShowPinInterface ? (
           <>
