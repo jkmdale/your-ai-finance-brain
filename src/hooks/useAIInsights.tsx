@@ -4,11 +4,13 @@ import { supabase } from '@/integrations/supabase/client';
 export const useAIInsights = () => {
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [processingInsights, setProcessingInsights] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const generateAIInsights = async (transactions: any[]) => {
     if (!transactions.length || processingInsights) return;
 
     setProcessingInsights(true);
+    setError(null);
     try {
       console.log('🤖 Generating AI insights for dashboard...');
       
@@ -27,10 +29,12 @@ export const useAIInsights = () => {
 
       if (error) throw error;
 
-      setAiInsights(data.response);
+      setAiInsights(data.response || 'No insights available at this time.');
       console.log('✅ AI insights generated');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to generate AI insights:', error);
+      setError(error.message || 'Failed to generate insights. Please try again.');
+      setAiInsights('Unable to generate insights at this time. Please try again later.');
     } finally {
       setProcessingInsights(false);
     }
@@ -38,11 +42,13 @@ export const useAIInsights = () => {
 
   const resetInsights = () => {
     setAiInsights(null);
+    setError(null);
   };
 
   return {
     aiInsights,
     processingInsights,
+    error,
     generateAIInsights,
     resetInsights
   };

@@ -133,6 +133,30 @@
   .safe-area-right {
     padding-right: env(safe-area-inset-right);
   }
+
+  /* Fix mobile viewport zoom issues */
+  html {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Prevent zoom on input focus on mobile */
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  /* Smooth scrolling for navigation */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Fix button hover states on mobile */
+  @media (hover: none) {
+    .hover\:bg-white\/10:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+  }
 }
 
 @layer components {

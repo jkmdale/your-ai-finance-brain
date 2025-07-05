@@ -24,7 +24,8 @@ export const Dashboard = () => {
     aiInsights,
     processingInsights,
     generateAIInsights,
-    resetInsights
+    resetInsights,
+    error
   } = useAIInsights();
 
   // Generate AI insights when we have new data
@@ -66,7 +67,8 @@ export const Dashboard = () => {
 
         <AIInsightsCard 
           aiInsights={aiInsights} 
-          processingInsights={processingInsights} 
+          processingInsights={processingInsights}
+          error={error}
         />
 
         <StatsCards stats={stats} />

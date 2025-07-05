@@ -7,8 +7,8 @@ export const useSidebarHandlers = () => {
   const { signOut } = useAuth();
 
   const handleSectionClick = (url: string) => {
-    // For hash links, handle scrolling
-    const element = document.querySelector(url.replace('/', ''));
+    // For hash links, handle scrolling to element with ID
+    const element = document.getElementById(url);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {

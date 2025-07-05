@@ -4,33 +4,28 @@ import { TrendingUp, Target, PieChart, CreditCard, Upload, User, Settings, Bell,
 export const menuItems = [
   {
     title: 'Dashboard',
-    url: '/#dashboard',
+    url: 'dashboard',
     icon: TrendingUp,
   },
   {
-    title: 'Goals',
-    url: '/#goals',
+    title: 'Budget & Goals',
+    url: 'goals',
     icon: Target,
   },
   {
-    title: 'Budget',
-    url: '/#budget',
-    icon: PieChart,
-  },
-  {
     title: 'AI Insights',
-    url: '/#insights',
+    url: 'insights',
     icon: 'ai-icon', // Special case for AI icon
   },
   {
-    title: 'Transactions',
-    url: '/#transactions',
-    icon: CreditCard,
+    title: 'CSV Upload',
+    url: 'csv-upload',
+    icon: Upload,
   },
   {
-    title: 'Upload CSV',
-    url: '/#upload',
-    icon: Upload,
+    title: 'AI Coach',
+    url: 'coach',
+    icon: PieChart,
   },
 ];
 
@@ -42,14 +37,15 @@ export const accountItems = [
     isRoute: true,
   },
   {
-    title: 'Notifications',
-    url: '/#notifications',
-    icon: Bell,
-  },
-  {
     title: 'Settings',
     url: '/settings',
     icon: Settings,
+    isRoute: true,
+  },
+  {
+    title: 'Help',
+    url: '/help',
+    icon: HelpCircle,
     isRoute: true,
   },
 ];

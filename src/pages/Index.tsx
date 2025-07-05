@@ -75,14 +75,24 @@ const Index = () => {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-3 sm:space-y-4 p-3 sm:p-4">
-        <Dashboard />
-        <BudgetOverview />
-        <GoalTracking />
-        <SmartGoalsCard />
-        
-        <AIInsights />
-        <TransactionHistory />
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-3 sm:space-y-4 p-3 sm:p-4 safe-area-top safe-area-bottom">
+        <div id="dashboard">
+          <Dashboard />
+        </div>
+        <div id="goals">
+          <BudgetOverview />
+          <GoalTracking />
+          <SmartGoalsCard />
+        </div>
+        <div id="insights">
+          <AIInsights />  
+        </div>
+        <div id="csv-upload">
+          <TransactionHistory />
+        </div>
+        <div id="coach">
+          <AIInsights />
+        </div>
       </div>
     </SidebarLayout>
   );
