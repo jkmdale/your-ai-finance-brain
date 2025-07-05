@@ -155,7 +155,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-        <main className="flex-1 relative">
+        <main className="flex-1 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-50">
             <SidebarTrigger className="bg-purple-500/20 hover:bg-purple-500/30 text-white border-purple-300/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10" />
           </div>
