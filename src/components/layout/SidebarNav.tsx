@@ -68,8 +68,8 @@ export function AppSidebar() {
   const appVersion = "1.0.0";
 
   return (
-    <Sidebar className="border-r border-purple-200/20 bg-purple-600">
-      <SidebarHeader className="border-b border-purple-200/20 p-6 bg-purple-600">
+    <Sidebar className="border-r border-purple-200/20 bg-purple-900/80">
+      <SidebarHeader className="border-b border-purple-200/20 p-6 bg-purple-900/80">
         <div className="flex items-center space-x-3">
           <div className="relative w-12 h-12 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-300/30 via-purple-300/30 to-blue-300/30 rounded-xl blur-lg"></div>
@@ -84,7 +84,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="bg-purple-600">
+      <SidebarContent className="bg-purple-900/80">
         <SidebarGroup>
           <SidebarGroupLabel className="text-white/80 font-medium">Main</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -133,7 +133,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-purple-200/20 bg-purple-600">
+      <SidebarFooter className="border-t border-purple-200/20 bg-purple-900/80">
         <div className="p-4 space-y-2">
           {user && (
             <div className="flex items-center space-x-2 text-white/80 text-sm">
