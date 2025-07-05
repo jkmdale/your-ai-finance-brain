@@ -13,8 +13,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 
 const navigationItems = [
@@ -151,15 +152,27 @@ export function AppSidebar() {
 }
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
+  const CustomTrigger = () => {
+    const { toggleSidebar } = useSidebar();
+    
+    return (
+      <Button
+        onClick={toggleSidebar}
+        size="sm"
+        className="bg-purple-500/20 hover:bg-purple-500/30 text-white border-purple-300/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center p-0"
+      >
+        <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+      </Button>
+    );
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-50">
-            <SidebarTrigger className="bg-purple-500/20 hover:bg-purple-500/30 text-white border-purple-300/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center">
-              <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
-            </SidebarTrigger>
+            <CustomTrigger />
           </div>
           <div className="pt-12 sm:pt-16">
             {children}
