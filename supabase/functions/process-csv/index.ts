@@ -245,29 +245,55 @@ function parseCSVLine(line: string): string[] {
 function parseDate(dateStr: string): string | null {
   if (!dateStr) return null;
   
-  // Try various date formats
-  const formats = [
-    // ISO format
-    /^\d{4}-\d{2}-\d{2}$/,
-    // DD/MM/YYYY or DD-MM-YYYY
-    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/,
-    // MM/DD/YYYY or MM-DD-YYYY  
-    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/,
+  const cleanDateStr = String(dateStr).trim();
+  if (!cleanDateStr) return null;
+  
+  // NZ bank date format patterns
+  const patterns = [
+    // DD/MM/YYYY (most common NZ format)
+    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
+    // DD/MM/YY (2-digit year)
+    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
+    // YYYY-MM-DD (ISO format)
+    { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
+    // Compact formats: DDMMYYYY, YYYYMMDD
+    { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy_compact' },
+    { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd_compact' }
   ];
-  
-  // Try direct parsing first
-  const directDate = new Date(dateStr);
-  if (!isNaN(directDate.getTime())) {
-    return directDate.toISOString().split('T')[0];
-  }
-  
-  // Try DD/MM/YYYY format (common in NZ banks)
-  const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (ddmmyyyy) {
-    const [, day, month, year] = ddmmyyyy;
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+
+  for (const pattern of patterns) {
+    const match = cleanDateStr.match(pattern.regex);
+    if (match) {
+      try {
+        let day: number, month: number, year: number;
+        
+        if (pattern.type === 'ymd' || pattern.type === 'ymd_compact') {
+          [, year, month, day] = match.map(Number);
+        } else if (pattern.type === 'dmy2') {
+          [, day, month, year] = match.map(Number);
+          // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
+          year = year > 50 ? 1900 + year : 2000 + year;
+        } else {
+          [, day, month, year] = match.map(Number);
+        }
+        
+        // Validate ranges
+        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+          continue;
+        }
+        
+        // Create date object (month is 0-indexed in JS)
+        const date = new Date(year, month - 1, day);
+        
+        // Verify the date is valid (handles leap years, month days, etc.)
+        if (date.getFullYear() === year && 
+            date.getMonth() === month - 1 && 
+            date.getDate() === day) {
+          return date.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        continue;
+      }
     }
   }
   
