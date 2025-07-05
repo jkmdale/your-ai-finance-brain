@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Target, TrendingUp, Calendar, DollarSign, CheckCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { calculateBudgetSummary, recommendSmartGoals } from '@/modules/goals/recommendations';
+import { smartGoalsService } from '@/services/smartGoalsService';
 
 interface SmartGoal {
   id: string;
@@ -28,9 +30,69 @@ export const SmartGoalsCard = () => {
       const handleSmartFinanceComplete = () => {
         setTimeout(() => fetchSmartGoals(), 3000);
       };
+
+      // Listen for CSV upload completion to regenerate goals
+      const handleCsvComplete = async (event: any) => {
+        if (!user) return;
+        
+        setLoading(true);
+        try {
+          // Get recent transactions from Supabase
+          const { data: transactions } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('transaction_date', { ascending: false })
+            .limit(200);
+
+          if (transactions && transactions.length > 0) {
+            // Transform to Transaction format for goal recommendations
+            const formattedTransactions = transactions.map((t: any) => ({
+              date: t.transaction_date,
+              description: t.description,
+              amount: t.amount,
+              type: t.amount > 0 ? 'credit' : 'debit' as 'debit' | 'credit',
+              account: 'imported',
+              category: t.notes || 'Other'
+            }));
+
+            // Generate new goals based on actual transaction data with disposable income logic
+            const newGoals = recommendSmartGoals(formattedTransactions);
+            
+            // Save to database if valid goals exist
+            if (newGoals.length > 0) {
+              const goalsForSaving = newGoals
+                .filter(g => g.amount > 0)
+                .map(goal => ({
+                  name: goal.description,
+                  target_amount: goal.amount,
+                  deadline: new Date(Date.now() + goal.timeframeMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  rationale: goal.rationale
+                }));
+              
+              if (goalsForSaving.length > 0) {
+                await smartGoalsService.saveSmartGoals(user.id, goalsForSaving);
+                console.log(`🎯 Generated and saved ${goalsForSaving.length} SMART goals based on transaction analysis`);
+              }
+            }
+            
+            // Refresh the goals display
+            await fetchSmartGoals();
+          }
+        } catch (error) {
+          console.error('Error generating goals after CSV upload:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
       
       window.addEventListener('smartfinance-complete', handleSmartFinanceComplete);
-      return () => window.removeEventListener('smartfinance-complete', handleSmartFinanceComplete);
+      window.addEventListener('csv-upload-complete', handleCsvComplete);
+      
+      return () => {
+        window.removeEventListener('smartfinance-complete', handleSmartFinanceComplete);
+        window.removeEventListener('csv-upload-complete', handleCsvComplete);
+      };
     }
   }, [user]);
 
