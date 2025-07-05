@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home } from 'lucide-react';
+import { Home, Hash } from 'lucide-react';
 import { PinPad } from './PinPad';
 import { AuthMode } from './types';
 
@@ -33,14 +32,14 @@ export const PinLoginForm: React.FC<PinLoginFormProps> = ({
       initial="initial"
       animate="animate"
       exit="exit"
-      className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
+      className="glass-card rounded-3xl p-8 max-w-sm w-full safe-area-bottom"
     >
       <div className="flex justify-between items-center mb-6">
         <div></div>
         {onHome && (
           <button
             onClick={onHome}
-            className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
+            className="p-3 text-white/70 hover:text-white glass-button rounded-xl transition-all duration-200 touch-target"
           >
             <Home className="w-5 h-5" />
           </button>
@@ -48,8 +47,12 @@ export const PinLoginForm: React.FC<PinLoginFormProps> = ({
       </div>
 
       <div className="text-center mb-8">
+        <div className="w-16 h-16 app-gradient-purple rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <Hash className="w-8 h-8 text-white" />
+        </div>
         <h2 className="text-2xl font-bold text-white mb-2">Enter PIN</h2>
-        <p className="text-white/70">Enter your secure PIN code for {email}</p>
+        <p className="text-white/70 text-sm px-4">Enter your secure PIN code for</p>
+        <p className="text-purple-300 font-medium text-sm truncate px-4">{email}</p>
       </div>
 
       <PinPad 
@@ -60,7 +63,7 @@ export const PinLoginForm: React.FC<PinLoginFormProps> = ({
       <div className="mt-8 text-center">
         <button
           onClick={() => onModeChange('email-entry')}
-          className="text-white/70 hover:text-white transition-colors duration-200"
+          className="text-white/70 hover:text-white transition-colors duration-200 text-sm touch-target py-2"
           disabled={loading}
         >
           ← Use different method

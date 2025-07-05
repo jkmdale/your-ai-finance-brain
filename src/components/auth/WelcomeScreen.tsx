@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Fingerprint, Hash } from 'lucide-react';
@@ -49,21 +48,21 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         return {
           title: 'Use PIN',
           icon: Hash,
-          color: 'from-green-600 to-emerald-600',
+          variant: 'glass-primary' as const,
           action: onPinAuth
         };
       case 'biometric':
         return {
           title: 'Use Biometric',
           icon: Fingerprint,
-          color: 'from-orange-600 to-red-600',
+          variant: 'glass-secondary' as const,
           action: onBiometricAuth
         };
       default:
         return {
           title: 'Use Email & Password',
           icon: Shield,
-          color: 'from-blue-600 to-purple-600',
+          variant: 'glass-primary' as const,
           action: () => onModeChange('email')
         };
     }
@@ -78,18 +77,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       initial="initial"
       animate="animate"
       exit="exit"
-      className="backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-8 shadow-2xl"
+      className="glass-card rounded-3xl p-8 max-w-sm w-full safe-area-bottom"
     >
       <div className="text-center mb-8">
-        <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <div className="w-20 h-20 app-gradient-purple rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
           <Shield className="w-10 h-10 text-white" />
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Welcome Back!</h2>
-        <p className="text-white/70 mb-2">Choose your preferred sign-in method for</p>
-        <p className="text-purple-300 font-medium">{email}</p>
+        <p className="text-white/70 mb-2 text-sm">Choose your preferred sign-in method for</p>
+        <p className="text-purple-300 font-medium text-sm truncate px-4">{email}</p>
         {userPreference && (
-          <p className="text-white/50 text-sm mt-2">
-            Your preferred method: {userPreference.charAt(0).toUpperCase() + userPreference.slice(1)}
+          <p className="text-white/50 text-xs mt-2">
+            Preferred: {userPreference.charAt(0).toUpperCase() + userPreference.slice(1)}
           </p>
         )}
       </div>
@@ -100,7 +99,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={primaryMethodInfo.action}
             disabled={loading}
-            className={`w-full bg-gradient-to-r ${primaryMethodInfo.color} hover:opacity-90 text-white rounded-xl h-12 flex items-center justify-center space-x-3`}
+            variant={primaryMethodInfo.variant}
+            size="touch"
+            className="w-full"
           >
             <primaryMethodInfo.icon className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : `${primaryMethodInfo.title} (Preferred)`}</span>
@@ -111,7 +112,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={primaryMethodInfo.action}
             disabled={loading}
-            className={`w-full bg-gradient-to-r ${primaryMethodInfo.color} hover:opacity-90 text-white rounded-xl h-12 flex items-center justify-center space-x-3`}
+            variant={primaryMethodInfo.variant}
+            size="touch"
+            className="w-full"
           >
             <primaryMethodInfo.icon className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : `${primaryMethodInfo.title} (Preferred)`}</span>
@@ -123,8 +126,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={onPinAuth}
             disabled={loading}
-            variant="outline"
-            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-3"
+            variant="glass-outline"
+            size="touch"
+            className="w-full"
           >
             <Hash className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : 'Use PIN'}</span>
@@ -135,8 +139,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={onBiometricAuth}
             disabled={loading}
-            variant="outline"
-            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12 flex items-center justify-center space-x-3"
+            variant="glass-outline"
+            size="touch"
+            className="w-full"
           >
             <Fingerprint className="w-5 h-5" />
             <span>{loading ? 'Authenticating...' : 'Use Biometric'}</span>
@@ -147,8 +152,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={() => onModeChange('email')}
             disabled={loading}
-            variant="outline"
-            className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl h-12"
+            variant="glass-outline"
+            size="touch"
+            className="w-full"
           >
             Use Email & Password
           </Button>
@@ -158,7 +164,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <Button
             onClick={() => onModeChange('email')}
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white rounded-xl h-12"
+            variant="glass-primary"
+            size="touch"
+            className="w-full"
           >
             {loading ? 'Authenticating...' : 'Use Email & Password (Preferred)'}
           </Button>
@@ -168,7 +176,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       <div className="mt-6 text-center">
         <button
           onClick={() => onModeChange('email-entry')}
-          className="text-white/70 hover:text-white transition-colors duration-200"
+          className="text-white/70 hover:text-white transition-colors duration-200 text-sm touch-target py-2"
           disabled={loading}
         >
           ← Use different email

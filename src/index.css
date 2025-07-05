@@ -15,8 +15,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 250 84% 54%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -24,17 +24,25 @@
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 262 80% 50%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 250 84% 54%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    /* App-specific theme colors */
+    --app-primary: 250 84% 54%;
+    --app-primary-dark: 250 84% 45%;
+    --app-secondary: 220 91% 65%;
+    --app-glass-bg: 0 0% 0% / 0.2;
+    --app-glass-border: 0 0% 100% / 0.2;
+    --app-glass-hover: 0 0% 100% / 0.1;
 
     --sidebar-background: 0 0% 98%;
 
@@ -54,33 +62,41 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 250 20% 10%;
+    --foreground: 0 0% 98%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 250 20% 10%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 250 20% 10%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 250 84% 54%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 250 15% 20%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 250 15% 20%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 262 80% 50%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 250 15% 20%;
+    --input: 250 15% 20%;
+    --ring: 250 84% 54%;
+
+    /* Dark theme app colors */
+    --app-primary: 250 84% 54%;
+    --app-primary-dark: 250 84% 45%;
+    --app-secondary: 220 91% 65%;
+    --app-glass-bg: 0 0% 0% / 0.3;
+    --app-glass-border: 0 0% 100% / 0.2;
+    --app-glass-hover: 0 0% 100% / 0.1;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -99,5 +115,68 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* iOS safe area support */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+@layer components {
+  /* Glassmorphism components */
+  .glass-card {
+    @apply backdrop-blur-xl border border-white/20 shadow-2xl;
+    background: hsl(var(--app-glass-bg));
+  }
+  
+  .glass-button {
+    @apply backdrop-blur-sm border border-white/10 transition-all duration-200;
+    background: hsl(var(--app-glass-bg));
+  }
+  
+  .glass-button:hover {
+    background: hsl(var(--app-glass-hover));
+  }
+
+  /* Touch-friendly button sizing */
+  .touch-target {
+    @apply min-h-[48px] min-w-[48px];
+  }
+
+  /* App gradient backgrounds */
+  .app-gradient-bg {
+    background: linear-gradient(135deg, 
+      hsl(250 95% 15%) 0%, 
+      hsl(240 95% 20%) 25%, 
+      hsl(260 95% 25%) 75%, 
+      hsl(270 95% 30%) 100%
+    );
+  }
+
+  .app-gradient-purple {
+    background: linear-gradient(135deg, 
+      hsl(var(--app-primary)) 0%, 
+      hsl(var(--app-primary-dark)) 100%
+    );
+  }
+
+  .app-gradient-blue {
+    background: linear-gradient(135deg, 
+      hsl(220 91% 65%) 0%, 
+      hsl(240 91% 55%) 100%
+    );
   }
 }

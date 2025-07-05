@@ -149,7 +149,7 @@ export const UnlockScreen: React.FC = () => {
   const shouldShowPinInterface = preferredUnlockMethod === 'pin' || showPinMode;
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-purple-950 via-blue-950 to-indigo-950 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 app-gradient-bg flex items-center justify-center p-4 z-50 safe-area-top safe-area-bottom">
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full blur-3xl animate-pulse delay-1000"></div>
@@ -158,7 +158,7 @@ export const UnlockScreen: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="relative z-10 backdrop-blur-xl bg-black/20 border border-white/20 rounded-3xl p-6 max-w-sm w-full shadow-2xl"
+        className="relative z-10 glass-card rounded-3xl p-6 max-w-sm w-full"
       >
         {shouldShowPinInterface ? (
           <>
