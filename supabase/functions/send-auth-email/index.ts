@@ -38,16 +38,16 @@ const createEmailTemplate = (
     <title>${title}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
-  <body style="font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #7c3aed 0%, #1e1b4b 100%); font-size: 16px; line-height: 1.5;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: linear-gradient(to right, #8B5CF6, #EC4899); font-size: 16px; line-height: 1.5;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
       
       <!-- Header with gradient -->
-      <div style="background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%); padding: 40px 30px; text-align: center;">
+      <div style="background: linear-gradient(to right, #8B5CF6, #EC4899); padding: 40px 30px; text-align: center;">
         <div style="margin-bottom: 20px;">
-          <img src="https://jkmdale.github.io/SmartFinanceAI/public/icon_512x512.png" alt="SmartFinanceAI logo" width="80" style="border-radius: 16px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);" />
+          <img src="https://jkmdale.github.io/SmartFinanceAI/public/icon_512x512.png" alt="SmartFinanceAI logo" width="120" height="120" style="display:block; margin: 0 auto; border-radius: 16px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);" />
         </div>
-        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">SmartFinanceAI</h1>
-        <p style="color: rgba(255, 255, 255, 0.9); margin: 8px 0 0 0; font-size: 16px;">${title}</p>
+        <h1 style="color: #FFFFFF; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">SmartFinanceAI</h1>
+        <p style="color: #F8FAFC; margin: 8px 0 0 0; font-size: 16px;">${title}</p>
       </div>
 
       <!-- Content -->
@@ -59,18 +59,18 @@ const createEmailTemplate = (
 
         <!-- CTA Button -->
         <div style="text-align: center; margin: 40px 0;">
-          <a href="${buttonUrl}" 
+           <a href="${buttonUrl}" 
              style="display: inline-block; 
-                    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%); 
-                    color: white; 
-                    padding: 12px 24px; 
+                    background: linear-gradient(to right, #8B5CF6, #EC4899); 
+                    color: #FFFFFF; 
+                    padding: 18px 36px; 
                     text-decoration: none; 
                     border-radius: 12px; 
                     font-weight: 600; 
                     font-size: 16px;
-                    box-shadow: 0 4px 14px 0 rgba(168, 85, 247, 0.4);">
-            ${buttonText}
-          </a>
+                    box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.4);">
+             ${buttonText}
+           </a>
         </div>
 
         <!-- Fallback link -->
