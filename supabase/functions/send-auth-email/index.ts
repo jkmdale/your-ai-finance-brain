@@ -265,6 +265,7 @@ async function processEmailAsync(req: Request) {
       to: [user.email],
       subject: emailTemplate.subject,
       html: emailTemplate.html,
+      reply_to: 'SmartFinanceAI <noreply@smartfinanceai.app>'
     });
 
     console.log('📨 Resend API Response:', JSON.stringify(emailResponse, null, 2));
