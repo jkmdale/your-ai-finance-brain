@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Home, TrendingUp, Target, PieChart, CreditCard, Settings, User, HelpCircle, LogOut } from 'lucide-react';
+import { Home, TrendingUp, Target, PieChart, CreditCard, Settings, User, HelpCircle, LogOut, Menu } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -157,7 +157,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <main className="flex-1 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-50">
-            <SidebarTrigger className="bg-purple-500/20 hover:bg-purple-500/30 text-white border-purple-300/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10" />
+            <SidebarTrigger className="bg-purple-500/20 hover:bg-purple-500/30 text-white border-purple-300/20 backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center">
+              <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+            </SidebarTrigger>
           </div>
           <div className="pt-12 sm:pt-16">
             {children}
