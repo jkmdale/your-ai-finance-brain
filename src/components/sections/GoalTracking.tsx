@@ -470,10 +470,6 @@ export const GoalTracking = () => {
                     <Button variant="outline" size="sm" className="bg-white/10 hover:bg-white/20 text-white border-white/20">
                       Adjust
                     </Button>
-                    <Button size="sm" className={`bg-gradient-to-r from-${color}-400 to-${color}-500 hover:opacity-90`}>
-                      <DollarSign className="w-4 h-4 mr-1" />
-                      Add Funds
-                    </Button>
                   </div>
                 </div>
               </div>
