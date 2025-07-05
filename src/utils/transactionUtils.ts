@@ -34,24 +34,37 @@ export const detectActiveMonth = (transactions: any[]): string => {
     return new Date().toISOString().slice(0, 7); // Current month as fallback
   }
 
+  // Filter out transfers and reversals before detecting active month
+  const validTransactions = transactions.filter(tx => 
+    !isTransferOrReversal(tx) && 
+    tx.category !== 'Transfer' &&
+    tx.category !== 'Reversal'
+  );
+
+  if (validTransactions.length === 0) {
+    return new Date().toISOString().slice(0, 7);
+  }
+
   // Group transactions by month
   const monthCounts: { [month: string]: number } = {};
   
-  transactions.forEach(tx => {
+  validTransactions.forEach(tx => {
     const date = typeof tx.date === 'string' ? tx.date : tx.transaction_date;
     const month = date.slice(0, 7); // Extract YYYY-MM
     monthCounts[month] = (monthCounts[month] || 0) + 1;
   });
 
-  // Find the month with most transactions (most common month)
+  // Find the most recent complete month with significant transaction activity
   const sortedMonths = Object.entries(monthCounts)
     .sort(([a, countA], [b, countB]) => {
-      // First sort by count (descending), then by date (descending for most recent)
-      if (countB !== countA) return countB - countA;
-      return b.localeCompare(a);
-    });
+      // First sort by date (descending for most recent), then by count
+      const dateComparison = b.localeCompare(a);
+      if (dateComparison !== 0) return dateComparison;
+      return countB - countA;
+    })
+    .filter(([month, count]) => count >= 3); // At least 3 transactions to be considered active
 
-  return sortedMonths[0][0];
+  return sortedMonths.length > 0 ? sortedMonths[0][0] : new Date().toISOString().slice(0, 7);
 };
 
 export const filterUniqueTransactions = async (

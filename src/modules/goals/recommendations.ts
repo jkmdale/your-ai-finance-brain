@@ -23,12 +23,27 @@ export interface BudgetSummary {
 }
 
 export function calculateBudgetSummary(transactions: Transaction[]): BudgetSummary {
-  // Filter out transfers and reversals first
-  const validTransactions = transactions.filter(tx => 
-    tx.category !== 'Transfer' && 
-    !tx.description?.toLowerCase().includes('reversal') &&
-    !tx.description?.toLowerCase().includes('refund')
-  );
+  // Enhanced filtering: exclude transfers, reversals, and other non-budget items
+  const validTransactions = transactions.filter(tx => {
+    const description = tx.description?.toLowerCase() || '';
+    
+    // Exclude transfers
+    if (tx.category === 'Transfer' || tx.category === 'Reversal') return false;
+    
+    // Exclude reversals and corrections
+    if (description.includes('reversal') || 
+        description.includes('refund') || 
+        description.includes('correction') ||
+        description.includes('failed') ||
+        description.includes('declined') ||
+        description.includes('void')) return false;
+    
+    // Exclude clear internal transfers
+    if (description.includes('transfer') && 
+        (description.includes('savings') || description.includes('account'))) return false;
+    
+    return true;
+  });
 
   const incomeTransactions = validTransactions.filter(tx => 
     tx.amount > 0 || tx.category?.includes('Income')
@@ -42,9 +57,14 @@ export function calculateBudgetSummary(transactions: Transaction[]): BudgetSumma
   const totalExpenses = expenseTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const disposableIncome = totalIncome - totalExpenses;
 
-  // Calculate monthly averages (assume data spans multiple months)
-  const monthlyIncome = totalIncome / Math.max(1, Math.ceil(transactions.length / 30));
-  const monthlyExpenses = totalExpenses / Math.max(1, Math.ceil(transactions.length / 30));
+  // Calculate monthly averages based on actual date range
+  const dates = validTransactions.map(tx => new Date(tx.date));
+  const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  const monthsSpanned = Math.max(1, Math.round((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24 * 30)));
+  
+  const monthlyIncome = totalIncome / monthsSpanned;
+  const monthlyExpenses = totalExpenses / monthsSpanned;
 
   return {
     totalIncome,
@@ -96,7 +116,7 @@ export function recommendSmartGoals(transactions: Transaction[]): SmartGoal[] {
     }];
   }
 
-  const monthlyDisposable = budgetSummary.disposableIncome / Math.max(1, Math.ceil(transactions.length / 30));
+  const monthlyDisposable = budgetSummary.monthlyAverage.income - budgetSummary.monthlyAverage.expenses;
 
   // Emergency Fund Goal (3-6 months of expenses)
   const monthlyExpenses = budgetSummary.monthlyAverage.expenses;
