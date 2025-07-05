@@ -36,14 +36,15 @@ const createEmailTemplate = (
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+  <body style="font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #7c3aed 0%, #1e1b4b 100%); font-size: 16px; line-height: 1.5;">
     <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
       
       <!-- Header with gradient -->
-      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-        <div style="width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-          <span style="font-size: 24px; color: white;">💰</span>
+      <div style="background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%); padding: 40px 30px; text-align: center;">
+        <div style="margin-bottom: 20px;">
+          <img src="https://jkmdale.github.io/SmartFinanceAI/public/icon_512x512.png" alt="SmartFinanceAI logo" width="80" style="border-radius: 16px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);" />
         </div>
         <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">SmartFinanceAI</h1>
         <p style="color: rgba(255, 255, 255, 0.9); margin: 8px 0 0 0; font-size: 16px;">${title}</p>
@@ -60,14 +61,14 @@ const createEmailTemplate = (
         <div style="text-align: center; margin: 40px 0;">
           <a href="${buttonUrl}" 
              style="display: inline-block; 
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%); 
                     color: white; 
-                    padding: 16px 32px; 
+                    padding: 12px 24px; 
                     text-decoration: none; 
-                    border-radius: 8px; 
+                    border-radius: 12px; 
                     font-weight: 600; 
                     font-size: 16px;
-                    box-shadow: 0 4px 14px 0 rgba(102, 126, 234, 0.4);">
+                    box-shadow: 0 4px 14px 0 rgba(168, 85, 247, 0.4);">
             ${buttonText}
           </a>
         </div>
@@ -75,9 +76,9 @@ const createEmailTemplate = (
         <!-- Fallback link -->
         <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin: 30px 0;">
           <p style="color: #718096; font-size: 14px; margin: 0 0 10px 0;">
-            If the button doesn't work, copy and paste this link:
+            Click here if the button doesn't work:
           </p>
-          <a href="${buttonUrl}" style="color: #667eea; word-break: break-all; font-size: 14px;">${buttonUrl}</a>
+          <a href="${buttonUrl}" style="color: #7c3aed; word-break: break-all; font-size: 14px;">${buttonUrl}</a>
         </div>
 
         <!-- Security notice -->
