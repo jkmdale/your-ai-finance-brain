@@ -4,7 +4,7 @@ import { SidebarHeader } from '@/components/ui/sidebar';
 
 export const AppSidebarHeader = () => {
   return (
-    <SidebarHeader className="border-b border-purple-700/30 p-6 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 sticky top-0 z-10">
+    <SidebarHeader className="border-b border-purple-200/20 p-6 bg-purple-900/80 sticky top-0 z-10">
       <div className="flex items-center space-x-3">
         <div className="relative h-12 w-12 group cursor-pointer">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
