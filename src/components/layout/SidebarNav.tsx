@@ -168,13 +168,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full max-w-full overflow-x-hidden">
         <AppSidebar />
-        <main className="flex-1 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <main className="flex-1 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 w-full max-w-full overflow-x-hidden">
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-50">
             <CustomTrigger />
           </div>
-          <div className="pt-12 sm:pt-16">
+          <div className="pt-12 sm:pt-16 w-full max-w-full">
             {children}
           </div>
         </main>

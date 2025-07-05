@@ -50,7 +50,7 @@ export const Dashboard = () => {
         onResetInsights={resetInsights} 
       />
       
-      <section className="min-h-screen w-full p-4 space-y-6">
+      <section className="min-h-screen w-full max-w-full p-4 space-y-6 overflow-x-hidden">
         <div className="text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
             AI-Powered Financial Intelligence Dashboard
