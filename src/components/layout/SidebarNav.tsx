@@ -75,7 +75,7 @@ export function AppSidebar() {
           <div className="relative w-12 h-12 group cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-violet-300/30 via-purple-300/30 to-blue-300/30 rounded-xl blur-lg"></div>
             <div className="relative w-12 h-12 bg-gradient-to-br from-purple-500 via-purple-600 to-purple-700 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-xl">
-              <img src="/icon_96x96.png" alt="SmartFinanceAI" className="w-8 h-8 object-contain" />
+              <img src="/android_icon_1024x1024.png" alt="SmartFinanceAI" className="w-8 h-8 object-contain" />
             </div>
           </div>
           <div className="flex flex-col">
