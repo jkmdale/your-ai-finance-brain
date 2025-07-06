@@ -83,11 +83,17 @@ export function AppSidebar() {
     <Sidebar className="border-r border-purple-200/20 bg-purple-900/80">
       <SidebarHeader className="border-b border-purple-200/20 p-6 bg-purple-900/80">
         <div className="flex items-center space-x-3">
-          <div className="relative w-12 h-12 group cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-300/30 via-purple-300/30 to-blue-300/30 rounded-xl blur-lg"></div>
-            <div className="relative w-12 h-12 bg-gradient-to-br from-purple-500 via-purple-600 to-purple-700 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-xl">
-              <img src="/cleaned_logo.png" alt="SmartFinanceAI" className="w-10 h-10 object-cover rounded-lg" />
-            </div>
+          <div className="h-12 w-12 flex items-center justify-center">
+            <img
+              src="/main-logo-black.png"
+              alt="SmartFinanceAI"
+              style={{
+                width: 48,
+                height: 48,
+                objectFit: "cover",
+                display: "block",
+              }}
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-white">SmartFinanceAI</span>
