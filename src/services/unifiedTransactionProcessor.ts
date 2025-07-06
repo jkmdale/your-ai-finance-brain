@@ -373,9 +373,13 @@ export class UnifiedTransactionProcessor {
     if (!cleaned) return null;
 
     // Try direct ISO parsing first
-    const directDate = new Date(cleaned);
-    if (!isNaN(directDate.getTime()) && cleaned.includes('-')) {
-      return directDate.toISOString().split('T')[0];
+    try {
+      const directDate = new Date(cleaned);
+      if (!isNaN(directDate.getTime()) && cleaned.includes('-')) {
+        return directDate.toISOString().split('T')[0];
+      }
+    } catch (error) {
+      // Continue to other parsing methods
     }
 
     // Try DD/MM/YYYY format (common in NZ)
@@ -399,9 +403,13 @@ export class UnifiedTransactionProcessor {
     }
 
     // Try other formats
-    const fallbackDate = new Date(cleaned);
-    if (!isNaN(fallbackDate.getTime())) {
-      return fallbackDate.toISOString().split('T')[0];
+    try {
+      const fallbackDate = new Date(cleaned);
+      if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate.toISOString().split('T')[0];
+      }
+    } catch (error) {
+      // Fallback parsing failed
     }
 
     console.warn(`⚠️ Could not parse date: ${cleaned}`);
