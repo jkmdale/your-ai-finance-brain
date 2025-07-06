@@ -91,6 +91,7 @@ export function AppSidebar() {
                 width: 48,
                 height: 48,
                 objectFit: "cover",
+                borderRadius: 12,
                 display: "block",
               }}
             />
