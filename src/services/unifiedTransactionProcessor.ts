@@ -534,29 +534,38 @@ Analyze and return JSON only.`;
 
               if (error) {
                 console.warn('Claude categorization error:', error);
-                return this.fallbackCategorization(transaction);
+                return {
+                  ...transaction,
+                  category: 'Uncategorised',
+                  confidence: 0.3
+                };
               }
 
-              const result = this.parseClaudeResponse(data.response, transaction);
+              // Simple category extraction from Claude response
+              const category = this.extractCategoryFromResponse(data.response, transaction);
               
-              // Apply strict filtering for transfers and reversals
-              if (result.excludeFromBudget || this.isTransferOrReversal(transaction.description)) {
+              // Check for transfers and reversals
+              if (this.isTransferOrReversal(transaction.description)) {
                 console.log(`🚫 Excluding from budget: ${transaction.description}`);
                 return {
                   ...transaction,
-                  category: result.excludeFromBudget ? 'Transfer' : result.category,
-                  confidence: result.confidence
+                  category: 'Transfer',
+                  confidence: 0.9
                 };
               }
 
               return {
                 ...transaction,
-                category: result.category,
-                confidence: result.confidence
+                category,
+                confidence: 0.8
               };
             } catch (error) {
               console.error('Error categorizing single transaction:', error);
-              return this.fallbackCategorization(transaction);
+              return {
+                ...transaction,
+                category: 'Uncategorised',
+                confidence: 0.3
+              };
             }
           })
         );
@@ -572,7 +581,11 @@ Analyze and return JSON only.`;
       } catch (error) {
         console.error(`Error processing batch ${Math.floor(i/batchSize) + 1}:`, error);
         // Fallback to rule-based categorization for failed batch
-        const fallbackResults = batch.map(tx => this.fallbackCategorization(tx));
+        const fallbackResults = batch.map(tx => ({
+          ...tx,
+          category: 'Uncategorised',
+          confidence: 0.3
+        }));
         categorizedTransactions.push(...fallbackResults);
       }
     }
@@ -597,28 +610,26 @@ Analyze and return JSON only.`;
   }
 
   /**
-   * Parse Claude's JSON response safely
+   * Extract category from Claude response
    */
-  private parseClaudeResponse(claudeResponse: string, transaction: NormalizedTransaction): CategorizationResult {
+  private extractCategoryFromResponse(claudeResponse: string, transaction: NormalizedTransaction): string {
     try {
-      // Extract JSON from Claude's response
+      // Try to extract category from JSON response
       const jsonMatch = claudeResponse.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in Claude response');
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed.category || (transaction.is_income ? 'Other Income' : 'Uncategorised');
       }
       
-      const parsed = JSON.parse(jsonMatch[0]);
+      // Fallback to text parsing
+      if (transaction.is_income) {
+        return claudeResponse.includes('salary') ? 'Salary' : 'Other Income';
+      }
       
-      return {
-        category: parsed.category || (transaction.is_income ? 'Other Income' : 'Uncategorised'),
-        budgetGroup: parsed.budgetGroup || (transaction.is_income ? 'savings' : 'wants'),
-        excludeFromBudget: Boolean(parsed.excludeFromBudget),
-        confidence: Math.min(1, Math.max(0, parsed.confidence || 0.7)),
-        reasoning: parsed.reasoning || 'Claude AI analysis'
-      };
+      return 'Uncategorised';
     } catch (error) {
       console.warn('Failed to parse Claude response:', error);
-      return this.fallbackCategorization(transaction);
+      return transaction.is_income ? 'Other Income' : 'Uncategorised';
     }
   }
 

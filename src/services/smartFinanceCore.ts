@@ -67,7 +67,7 @@ export class SmartFinanceCore {
 
       // Stage 3: Save to Supabase
       onProgress?.('Saving to database...', 75);
-      await unifiedTransactionProcessor.saveToSupabase(categorizedTransactions, userId);
+      await this.saveTransactionsToSupabase(categorizedTransactions, userId);
 
       // Stage 4: Generate budgets for each month
       onProgress?.('Generating budgets...', 85);
@@ -102,6 +102,60 @@ export class SmartFinanceCore {
     }
 
     return result;
+  }
+
+  /**
+   * Save transactions to Supabase
+   */
+  private async saveTransactionsToSupabase(transactions: any[], userId: string): Promise<void> {
+    const { supabase } = await import('@/integrations/supabase/client');
+    
+    // Ensure user has a bank account
+    let { data: accounts } = await supabase
+      .from('bank_accounts')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+
+    let accountId: string;
+    if (!accounts || accounts.length === 0) {
+      const { data: newAccount, error } = await supabase
+        .from('bank_accounts')
+        .insert({
+          user_id: userId,
+          account_name: 'Imported Transactions',
+          bank_name: 'Mixed Banks',
+          account_type: 'checking',
+          currency: 'NZD',
+          balance: 0
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      accountId = newAccount.id;
+    } else {
+      accountId = accounts[0].id;
+    }
+
+    // Prepare and insert transactions
+    const transactionsToInsert = transactions.map(tx => ({
+      user_id: userId,
+      account_id: accountId,
+      transaction_date: tx.date,
+      description: tx.description,
+      amount: tx.amount,
+      is_income: tx.is_income,
+      merchant: tx.merchant || null,
+      imported_from: `CSV Upload - ${tx.source_bank}`,
+      tags: tx.category === 'Transfer' ? ['transfer'] : null
+    }));
+
+    const { error } = await supabase
+      .from('transactions')
+      .insert(transactionsToInsert);
+
+    if (error) throw error;
   }
 
   private getUniqueMonths(transactions: any[]): string[] {
