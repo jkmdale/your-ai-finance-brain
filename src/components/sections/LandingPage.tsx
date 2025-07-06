@@ -53,7 +53,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             <div className="flex items-center space-x-3">
               <div className="h-16 w-16 flex items-center justify-center">
                 <img 
-                  src="/logo.png" 
+                  src="/main-logo-black.png" 
                   alt="SmartFinanceAI" 
                   className="h-15 w-15 object-contain"
                   onError={(e) => {
@@ -545,7 +545,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
               <img 
-                src="/logo.png" 
+                src="/main-logo-black.png" 
                 alt="SmartFinanceAI" 
                 className="w-12 h-12"
                 onError={(e) => {
@@ -563,7 +563,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
             {/* Large icon at the very bottom */}
             <div className="flex justify-center">
               <img 
-                src="/logo.png" 
+                src="/main-logo-black.png" 
                 alt="SmartFinanceAI Large Icon" 
                 className="w-32 h-32 opacity-20 hover:opacity-40 transition-opacity duration-300"
                 onError={(e) => {
