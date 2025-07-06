@@ -50,6 +50,7 @@ const navigationItems = [
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          marginLeft: -5,
         }}
       >
         <img
