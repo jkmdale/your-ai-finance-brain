@@ -17,14 +17,22 @@ export async function parseCSV(file, onComplete, onError) {
         return onError('CSV format not recognized');
       }
 
-      const cleanedData = results.data.map((row) => {
-        return {
-          date: normalizeDate(row[detectedSchema.date]),
-          description: row[detectedSchema.description] || '',
-          amount: parseFloat(row[detectedSchema.amount] || 0),
-          category: null // to be filled later
-        };
-      });
+      const cleanedData = results.data
+        .map((row) => {
+          const rawDate = row[detectedSchema.date];
+          const parsedDate = normalizeDate(rawDate);
+          if (!parsedDate) {
+            console.warn(`Skipping row with invalid date: ${rawDate}`);
+            return null;
+          }
+          return {
+            date: parsedDate,
+            description: row[detectedSchema.description] || '',
+            amount: parseFloat(row[detectedSchema.amount] || 0),
+            category: null // to be filled later
+          };
+        })
+        .filter(Boolean);
 
       onComplete(cleanedData);
     },
