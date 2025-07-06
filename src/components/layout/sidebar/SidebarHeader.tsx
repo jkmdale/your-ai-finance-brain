@@ -6,11 +6,8 @@ export const AppSidebarHeader = () => {
   return (
     <SidebarHeader className="border-b border-purple-200/20 p-6 bg-purple-900/80 sticky top-0 z-10">
       <div className="flex items-center space-x-3">
-        <div className="relative h-12 w-12 group cursor-pointer">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-purple-500/30 to-blue-500/30 rounded-xl blur-lg"></div>
-          <div className="relative h-12 w-12 bg-gradient-to-br from-slate-900 via-purple-900/50 to-blue-900/50 rounded-3xl flex items-center justify-center backdrop-blur-sm border border-white/20 overflow-hidden">
-            <img src="/logo.png" alt="Smart Finance AI" className="h-10 w-10 object-cover rounded-2xl" />
-          </div>
+        <div className="h-12 w-12 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
+          <img src="/logo.png" alt="Smart Finance AI" className="h-8 w-8 object-contain" />
         </div>
         <div>
           <h2 className="text-purple-100 font-bold text-sm">SmartFinanceAI</h2>
