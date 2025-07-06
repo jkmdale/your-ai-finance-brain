@@ -42,7 +42,7 @@ const navigationItems = [
   {
     title: "AI Insights",
     url: "#insights",
-    icon: TrendingUp,
+    icon: 'custom-logo',
   },
 ];
 
@@ -94,7 +94,11 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="text-white hover:text-white hover:bg-purple-500/50 data-[active=true]:bg-purple-500/70 data-[active=true]:text-white">
                     <a href={item.url} className="flex items-center gap-3 px-3 py-2 rounded-lg">
-                      <item.icon className="w-4 h-4" />
+                      {item.icon === 'custom-logo' ? (
+                        <img src="/cleaned_logo.png" alt="AI Insights" className="w-4 h-4 object-contain" />
+                      ) : (
+                        <item.icon className="w-4 h-4" />
+                      )}
                       <span>{item.title}</span>
                     </a>
                   </SidebarMenuButton>
