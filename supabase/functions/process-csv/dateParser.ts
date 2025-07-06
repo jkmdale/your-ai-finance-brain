@@ -59,24 +59,33 @@ const parseNZDate = (dateStr: string): Date | null => {
 };
 
 export const parseDate = (dateString: string, rowNumber: number): { date: string; warning?: string } => {
-  if (!dateString?.trim()) {
-    return { date: new Date().toISOString().split('T')[0], warning: `Row ${rowNumber}: Empty date, used today` };
+  // Clean input dates by removing zero-width spaces, newlines, and trimming
+  const cleanedDateString = dateString?.replace(/[\u200B\r\n]/g, '').trim();
+  
+  if (!cleanedDateString) {
+    const fallbackDate = new Date().toISOString().split('T')[0];
+    console.warn(`⚠️ Row ${rowNumber}: Empty date, using today: ${fallbackDate}`);
+    return { date: fallbackDate, warning: `Row ${rowNumber}: Empty date, used today` };
   }
   
-  console.log(`🗓️ Row ${rowNumber}: Parsing date "${dateString}"`);
+  console.log(`🗓️ Row ${rowNumber}: Parsing cleaned date "${cleanedDateString}"`);
   
-  const parsedDate = parseNZDate(dateString);
-  if (parsedDate) {
-    const formattedDate = parsedDate.toISOString().split('T')[0];
-    console.log(`✅ Row ${rowNumber}: Date parsed successfully: ${formattedDate}`);
-    return { date: formattedDate };
+  try {
+    const parsedDate = parseNZDate(cleanedDateString);
+    if (parsedDate) {
+      const formattedDate = parsedDate.toISOString().split('T')[0];
+      console.log(`✅ Row ${rowNumber}: Date parsed successfully: ${formattedDate}`);
+      return { date: formattedDate };
+    }
+  } catch (error) {
+    console.error(`❌ Row ${rowNumber}: Date parsing error:`, error);
   }
   
   // If parsing fails, use today as fallback
-  const todayDate = new Date().toISOString().split('T')[0];
-  console.log(`❌ Row ${rowNumber}: Could not parse date "${dateString}", using today: ${todayDate}`);
+  const fallbackDate = new Date().toISOString().split('T')[0];
+  console.warn(`❌ Row ${rowNumber}: Could not parse date "${cleanedDateString}", using fallback: ${fallbackDate}`);
   return { 
-    date: todayDate,
-    warning: `Row ${rowNumber}: Could not parse date "${dateString}", used today`
+    date: fallbackDate,
+    warning: `Row ${rowNumber}: Could not parse date "${cleanedDateString}", used today as fallback`
   };
 };

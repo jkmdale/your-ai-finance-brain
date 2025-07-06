@@ -1,6 +1,7 @@
 // File: supabase/functions/process-csv/index.ts
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { parseDate } from './dateParser.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -117,8 +118,23 @@ serve(async (req) => {
         const values = parseCSVLine(line);
         
         if (values.length >= 3) {
-          // Enhanced date parsing
-          const transactionDate = parseDate(values[0]) || new Date().toISOString().split('T')[0];
+          // Enhanced date parsing with proper error handling
+          let transactionDate: string;
+          let dateWarning: string | undefined;
+          
+          try {
+            const dateResult = parseDate(values[0], i);
+            transactionDate = dateResult.date;
+            if (dateResult.warning) {
+              dateWarning = dateResult.warning;
+              warnings.push(dateResult.warning);
+            }
+          } catch (dateError) {
+            console.error(`❌ Row ${i}: Date parsing failed:`, dateError);
+            transactionDate = new Date().toISOString().split('T')[0];
+            const fallbackWarning = `Row ${i}: Date parsing failed, used today as fallback`;
+            warnings.push(fallbackWarning);
+          }
           
           // Enhanced amount parsing
           const amountStr = values[2].replace(/[$,\s]/g, '');
@@ -240,64 +256,6 @@ function parseCSVLine(line: string): string[] {
   
   result.push(current.trim());
   return result.map(val => val.replace(/^"|"$/g, ''));
-}
-
-function parseDate(dateStr: string): string | null {
-  if (!dateStr) return null;
-  
-  const cleanDateStr = String(dateStr).trim();
-  if (!cleanDateStr) return null;
-  
-  // NZ bank date format patterns
-  const patterns = [
-    // DD/MM/YYYY (most common NZ format)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
-    // DD/MM/YY (2-digit year)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
-    // YYYY-MM-DD (ISO format)
-    { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
-    // Compact formats: DDMMYYYY, YYYYMMDD
-    { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy_compact' },
-    { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd_compact' }
-  ];
-
-  for (const pattern of patterns) {
-    const match = cleanDateStr.match(pattern.regex);
-    if (match) {
-      try {
-        let day: number, month: number, year: number;
-        
-        if (pattern.type === 'ymd' || pattern.type === 'ymd_compact') {
-          [, year, month, day] = match.map(Number);
-        } else if (pattern.type === 'dmy2') {
-          [, day, month, year] = match.map(Number);
-          // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
-          year = year > 50 ? 1900 + year : 2000 + year;
-        } else {
-          [, day, month, year] = match.map(Number);
-        }
-        
-        // Validate ranges
-        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-          continue;
-        }
-        
-        // Create date object (month is 0-indexed in JS)
-        const date = new Date(year, month - 1, day);
-        
-        // Verify the date is valid (handles leap years, month days, etc.)
-        if (date.getFullYear() === year && 
-            date.getMonth() === month - 1 && 
-            date.getDate() === day) {
-          return date.toISOString().split('T')[0];
-        }
-      } catch (error) {
-        continue;
-      }
-    }
-  }
-  
-  return null;
 }
 
 function extractMerchant(description: string): string | null {
