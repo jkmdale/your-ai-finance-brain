@@ -55,7 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                 <img 
                   src="/main-logo-black.png" 
                   alt="SmartFinanceAI" 
-                  className="h-15 w-15 object-contain"
+                  className="h-15 w-15 object-contain rounded-xl"
                   onError={(e) => {
                     handleLogoError('header', e);
                     e.currentTarget.src = '/cleaned_logo.png';
