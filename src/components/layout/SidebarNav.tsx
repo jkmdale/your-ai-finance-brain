@@ -42,13 +42,12 @@ const navigationItems = [
   {
     title: "AI Insights",
     url: "#insights",
-    icon: () => (
+    icon: ({ className }: { className?: string }) => (
       <img
         src="/ai-icon.png"
         alt="AI Insights"
+        className={className}
         style={{
-          width: 24,
-          height: 24,
           objectFit: "contain",
           display: "block",
         }}
