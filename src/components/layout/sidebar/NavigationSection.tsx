@@ -29,7 +29,7 @@ export const NavigationSection = ({ onSectionClick }: NavigationSectionProps) =>
                   className="w-full text-purple-200 hover:text-purple-100 hover:bg-purple-700/30 data-[active=true]:bg-purple-600/40 cursor-pointer transition-colors duration-200"
                 >
                   {item.icon === 'ai-icon' ? (
-                    <img src="/android_icon_1024x1024.png" alt="AI Insights" className="w-4 h-4 object-contain" />
+                    <img src="/cleaned_logo.png" alt="AI Insights" className="w-4 h-4 object-cover rounded-sm" />
                   ) : (
                     <item.icon className="w-4 h-4 text-purple-200" />
                   )}
