@@ -43,27 +43,16 @@ const navigationItems = [
     title: "AI Insights",
     url: "#insights",
     icon: () => (
-      <div
+      <img
+        src="/sidebar_icon_white_sharper_24x24.png"
+        alt="AI Insights"
         style={{
           width: 24,
           height: 24,
-          backgroundColor: "black",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
+          objectFit: "contain",
+          display: "block",
         }}
-      >
-        <img
-          src="/cleaned_logo.png"
-          alt="AI Insights"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
-        />
-      </div>
+      />
     ),
   },
 ];
