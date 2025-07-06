@@ -44,7 +44,7 @@ const navigationItems = [
     url: "#insights",
     icon: () => (
       <img
-        src="/sidebar_icon_white_sharper_24x24.png"
+        src="/ai-icon.png"
         alt="AI Insights"
         style={{
           width: 24,
