@@ -10,19 +10,19 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/android_icon_1024x1024.png",
+      "src": "/main-logo-black.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable any"
     },
     {
-      "src": "/android_icon_1024x1024.png",
+      "src": "/main-logo-black.png",
       "sizes": "512x512",  
       "type": "image/png",
       "purpose": "maskable any"
     },
     {
-      "src": "/android_icon_1024x1024.png",
+      "src": "/main-logo-black.png",
       "sizes": "1024x1024",  
       "type": "image/png",
       "purpose": "maskable any"
@@ -49,14 +49,14 @@
       "short_name": "Dashboard",
       "description": "View your financial dashboard",
       "url": "/#dashboard",
-      "icons": [{"src": "/android_icon_1024x1024.png", "sizes": "192x192"}]
+      "icons": [{"src": "/main-logo-black.png", "sizes": "192x192"}]
     },
     {
       "name": "Add Transaction",
       "short_name": "Add Transaction",
       "description": "Quick add transaction",
       "url": "/#add-transaction",
-      "icons": [{"src": "/android_icon_1024x1024.png", "sizes": "192x192"}]
+      "icons": [{"src": "/main-logo-black.png", "sizes": "192x192"}]
     }
   ]
 }
