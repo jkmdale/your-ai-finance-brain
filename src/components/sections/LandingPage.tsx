@@ -43,19 +43,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
     <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       {/* Navigation Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 border-b border-purple-700/30"
+        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 border-b border-purple-700/30 safe-area-top"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="h-16 w-16 flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 safe-area-left safe-area-right">
+          <div className="flex justify-between items-center h-20 sm:h-16 py-2">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className="h-12 w-12 sm:h-16 sm:w-16 flex items-center justify-center">
                 <img 
                   src="/main-logo-black.png" 
                   alt="SmartFinanceAI" 
-                  className="h-15 w-15 object-contain rounded-xl"
+                  className="h-10 w-10 sm:h-15 sm:w-15 object-contain rounded-xl"
                   onError={(e) => {
                     handleLogoError('header', e);
                     e.currentTarget.src = '/cleaned_logo.png';
@@ -63,19 +63,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
                   onLoad={() => handleLogoLoad('header')}
                 />
               </div>
-              <span className="text-white font-bold text-xl">SmartFinanceAI</span>
+              <span className="text-white font-bold text-lg sm:text-xl">SmartFinanceAI</span>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Button
                 onClick={() => onSignIn('signin')}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm sm:text-base px-3 py-2 sm:px-4 sm:py-2"
               >
                 Log In
               </Button>
               <Button
                 onClick={() => onSignIn('signup')}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm sm:text-base px-3 py-2 sm:px-4 sm:py-2"
               >
                 Sign Up Free
               </Button>
@@ -85,7 +85,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
       </motion.header>
 
       {/* Hero Section */}
-      <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+      <section className="pt-28 sm:pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
         {/* Background Elements */}
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full blur-3xl animate-pulse"></div>
