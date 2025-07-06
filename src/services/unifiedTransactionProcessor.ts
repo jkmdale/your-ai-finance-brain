@@ -502,269 +502,203 @@ export class UnifiedTransactionProcessor {
   async categorizeWithClaude(
     transactions: NormalizedTransaction[],
     onProgress?: (completed: number, total: number) => void
-  ): Promise<(NormalizedTransaction & CategorizationResult)[]> {
-    if (transactions.length === 0) return [];
-
+  ): Promise<NormalizedTransaction[]> {
     console.log(`🧠 Starting Claude categorization for ${transactions.length} transactions...`);
-
-    const categorizedTransactions: (NormalizedTransaction & CategorizationResult)[] = [];
-    const batchSize = 20; // Process in batches of 20
-
+    
+    const categorizedTransactions: NormalizedTransaction[] = [];
+    const batchSize = 5; // Process in smaller batches for better reliability
+    
     for (let i = 0; i < transactions.length; i += batchSize) {
       const batch = transactions.slice(i, i + batchSize);
-      console.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(transactions.length / batchSize)}`);
-
+      console.log(`🔄 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(transactions.length/batchSize)}`);
+      
       try {
-        const batchResults = await this.categorizeBatch(batch);
+        const batchResults = await Promise.all(
+          batch.map(async (transaction) => {
+            try {
+              const prompt = `Categorize this transaction:
+Description: "${transaction.description}"
+Amount: $${transaction.amount}
+Is Income: ${transaction.is_income}
+Merchant: "${transaction.merchant || 'Unknown'}"
+Bank: ${transaction.source_bank}
+
+Analyze and return JSON only.`;
+
+              const { data, error } = await supabase.functions.invoke('claude-ai-coach', {
+                body: { 
+                  message: prompt,
+                  type: 'transaction_categorization'
+                }
+              });
+
+              if (error) {
+                console.warn('Claude categorization error:', error);
+                return this.fallbackCategorization(transaction);
+              }
+
+              const result = this.parseClaudeResponse(data.response, transaction);
+              
+              // Apply strict filtering for transfers and reversals
+              if (result.excludeFromBudget || this.isTransferOrReversal(transaction.description)) {
+                console.log(`🚫 Excluding from budget: ${transaction.description}`);
+                return {
+                  ...transaction,
+                  category: result.excludeFromBudget ? 'Transfer' : result.category,
+                  confidence: result.confidence
+                };
+              }
+
+              return {
+                ...transaction,
+                category: result.category,
+                confidence: result.confidence
+              };
+            } catch (error) {
+              console.error('Error categorizing single transaction:', error);
+              return this.fallbackCategorization(transaction);
+            }
+          })
+        );
+        
         categorizedTransactions.push(...batchResults);
+        onProgress?.(categorizedTransactions.length, transactions.length);
         
-        if (onProgress) {
-          onProgress(Math.min(i + batchSize, transactions.length), transactions.length);
+        // Small delay between batches to avoid rate limiting
+        if (i + batchSize < transactions.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-      } catch (error: any) {
-        console.error(`❌ Error categorizing batch ${Math.floor(i / batchSize) + 1}:`, error);
         
-        // Add transactions with fallback categorization
-        const fallbackResults = batch.map(tx => ({
-          ...tx,
-          category: 'Uncategorized',
-          budgetGroup: 'wants' as const,
-          excludeFromBudget: false,
-          confidence: 0.3,
-          reasoning: 'Fallback categorization due to AI error'
-        }));
-        
+      } catch (error) {
+        console.error(`Error processing batch ${Math.floor(i/batchSize) + 1}:`, error);
+        // Fallback to rule-based categorization for failed batch
+        const fallbackResults = batch.map(tx => this.fallbackCategorization(tx));
         categorizedTransactions.push(...fallbackResults);
       }
-
-      // Add small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
-
-    console.log(`✅ Claude categorization complete: ${categorizedTransactions.length} transactions categorized`);
+    
+    console.log(`✅ Claude categorization complete: ${categorizedTransactions.length} transactions processed`);
     return categorizedTransactions;
   }
 
   /**
-   * Categorize a batch of transactions using Claude
+   * Check if transaction is a transfer or reversal that should be excluded
    */
-  private async categorizeBatch(
-    batch: NormalizedTransaction[]
-  ): Promise<(NormalizedTransaction & CategorizationResult)[]> {
-    const prompt = `Categorize these financial transactions into appropriate categories and budget groups.
-
-For each transaction, determine:
-1. category: Specific category (e.g., "Groceries", "Rent", "Salary", "Entertainment") 
-2. budgetGroup: "needs" (essentials), "wants" (discretionary), or "savings" (investments/savings)
-3. excludeFromBudget: true if this is a transfer/reversal that shouldn't count in budget (false otherwise)
-4. confidence: 0.0-1.0 confidence score
-5. reasoning: Brief explanation
-
-Transactions to categorize:
-${batch.map((tx, i) => `${i + 1}. $${tx.amount} - "${tx.description}" ${tx.merchant ? `(${tx.merchant})` : ''}`).join('\n')}
-
-Respond with a JSON array with exactly ${batch.length} objects in the same order:
-[
-  {
-    "category": "string",
-    "budgetGroup": "needs|wants|savings",
-    "excludeFromBudget": boolean,
-    "confidence": number,
-    "reasoning": "string"
+  private isTransferOrReversal(description: string): boolean {
+    const lowerDesc = description.toLowerCase();
+    const transferPatterns = [
+      'transfer', 'trnsfr', 'tfr', 'xfer',
+      'reversal', 'reverse', 'refund', 'credit adjustment',
+      'deposit correction', 'withdrawal correction',
+      'account fee reversal', 'duplicate transaction'
+    ];
+    
+    return transferPatterns.some(pattern => lowerDesc.includes(pattern));
   }
-]`;
 
+  /**
+   * Parse Claude's JSON response safely
+   */
+  private parseClaudeResponse(claudeResponse: string, transaction: NormalizedTransaction): CategorizationResult {
     try {
-      const { data, error } = await supabase.functions.invoke('claude-ai-coach', {
-        body: {
-          input: prompt,
-          model: 'claude-3-haiku-20240307',
-          system_prompt: 'You are a financial categorization expert. Always respond with valid JSON only, no other text.'
-        }
-      });
-
-      if (error) throw error;
-
-      const response = data?.content?.[0]?.text || data?.response || '';
-      
-      // Extract JSON from response
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('No JSON found in response');
-
-      const categorizations = JSON.parse(jsonMatch[0]);
-      
-      if (!Array.isArray(categorizations) || categorizations.length !== batch.length) {
-        throw new Error(`Expected ${batch.length} categorizations, got ${categorizations?.length || 0}`);
+      // Extract JSON from Claude's response
+      const jsonMatch = claudeResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
       }
-
-      return batch.map((tx, i) => ({
-        ...tx,
-        ...categorizations[i]
-      }));
-
-    } catch (error: any) {
-      console.error('Claude categorization error:', error);
-      throw error;
+      
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      return {
+        category: parsed.category || (transaction.is_income ? 'Other Income' : 'Uncategorised'),
+        budgetGroup: parsed.budgetGroup || (transaction.is_income ? 'savings' : 'wants'),
+        excludeFromBudget: Boolean(parsed.excludeFromBudget),
+        confidence: Math.min(1, Math.max(0, parsed.confidence || 0.7)),
+        reasoning: parsed.reasoning || 'Claude AI analysis'
+      };
+    } catch (error) {
+      console.warn('Failed to parse Claude response:', error);
+      return this.fallbackCategorization(transaction);
     }
   }
 
   /**
-   * Save categorized transactions to Supabase
+   * Fallback categorization when Claude fails
    */
-  async saveToSupabase(
-    categorizedTransactions: (NormalizedTransaction & CategorizationResult)[],
-    userId: string
-  ): Promise<void> {
-    if (categorizedTransactions.length === 0) return;
-
-    console.log(`💾 Saving ${categorizedTransactions.length} transactions to Supabase...`);
-
-    // Ensure user has a bank account
-    let { data: accounts } = await supabase
-      .from('bank_accounts')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .limit(1);
-
-    let accountId: string;
-    if (!accounts || accounts.length === 0) {
-      const { data: newAccount, error } = await supabase
-        .from('bank_accounts')
-        .insert({
-          user_id: userId,
-          account_name: 'Imported Transactions',
-          bank_name: 'Mixed Banks',
-          account_type: 'checking',
-          currency: 'NZD',
-          balance: 0
-        })
-        .select('id')
-        .single();
-
-      if (error) throw error;
-      accountId = newAccount.id;
-    } else {
-      accountId = accounts[0].id;
+  private fallbackCategorization(transaction: NormalizedTransaction): CategorizationResult {
+    const desc = transaction.description.toLowerCase();
+    
+    // Check if it's a transfer/reversal first
+    if (this.isTransferOrReversal(transaction.description)) {
+      return {
+        category: 'Transfer',
+        budgetGroup: 'wants',
+        excludeFromBudget: true,
+        confidence: 0.9,
+        reasoning: 'Detected transfer/reversal pattern'
+      };
     }
-
-    // Get or create categories
-    const categoryMap = await this.ensureCategories(categorizedTransactions, userId);
-
-    // Prepare transaction data
-    const transactionsToInsert = categorizedTransactions.map(tx => ({
-      user_id: userId,
-      account_id: accountId,
-      transaction_date: tx.date,
-      description: tx.description,
-      amount: tx.amount,
-      is_income: tx.is_income,
-      category_id: categoryMap.get(tx.category) || null,
-      merchant: tx.merchant || null,
-      imported_from: `CSV Upload - ${tx.source_bank}`,
-      tags: tx.excludeFromBudget ? ['transfer'] : [tx.budgetGroup],
-      notes: tx.reasoning
-    }));
-
-    // Insert in batches
-    const batchSize = 100;
-    for (let i = 0; i < transactionsToInsert.length; i += batchSize) {
-      const batch = transactionsToInsert.slice(i, i + batchSize);
-      const { error } = await supabase
-        .from('transactions')
-        .insert(batch);
-
-      if (error) throw error;
-      
-      console.log(`💾 Saved batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(transactionsToInsert.length / batchSize)}`);
-    }
-
-    console.log(`✅ Successfully saved all ${categorizedTransactions.length} transactions to Supabase`);
-  }
-
-  /**
-   * Ensure categories exist for all transactions
-   */
-  private async ensureCategories(
-    transactions: (NormalizedTransaction & CategorizationResult)[],
-    userId: string
-  ): Promise<Map<string, string>> {
-    const { data: existingCategories } = await supabase
-      .from('categories')
-      .select('id, name')
-      .eq('user_id', userId);
-
-    const categoryMap = new Map<string, string>();
-    existingCategories?.forEach(cat => categoryMap.set(cat.name, cat.id));
-
-    // Find missing categories
-    const missingCategories: string[] = [];
-    transactions.forEach(tx => {
-      if (!categoryMap.has(tx.category) && !missingCategories.includes(tx.category)) {
-        missingCategories.push(tx.category);
+    
+    // Income categorization
+    if (transaction.is_income) {
+      if (desc.includes('salary') || desc.includes('wage') || desc.includes('pay')) {
+        return { 
+          category: 'Salary', 
+          budgetGroup: 'savings',
+          excludeFromBudget: false,
+          confidence: 0.8,
+          reasoning: 'Salary/wage pattern detected'
+        };
       }
-    });
-
-    // Create missing categories
-    if (missingCategories.length > 0) {
-      const newCategories = missingCategories.map(name => ({
-        user_id: userId,
-        name,
-        color: this.getCategoryColor(name),
-        icon: this.getCategoryIcon(name),
-        is_income: transactions.find(tx => tx.category === name)?.is_income || false
-      }));
-
-      const { data: createdCategories, error } = await supabase
-        .from('categories')
-        .insert(newCategories)
-        .select('id, name');
-
-      if (error) throw error;
-
-      createdCategories?.forEach(cat => categoryMap.set(cat.name, cat.id));
-      console.log(`✅ Created ${missingCategories.length} new categories`);
+      if (desc.includes('dividend') || desc.includes('interest') || desc.includes('investment')) {
+        return { 
+          category: 'Investment Income', 
+          budgetGroup: 'savings',
+          excludeFromBudget: false,
+          confidence: 0.8,
+          reasoning: 'Investment income pattern detected'
+        };
+      }
+      return { 
+        category: 'Other Income', 
+        budgetGroup: 'savings',
+        excludeFromBudget: false,
+        confidence: 0.6,
+        reasoning: 'Generic income classification'
+      };
     }
-
-    return categoryMap;
-  }
-
-  private getCategoryColor(categoryName: string): string {
-    const colorMap: { [key: string]: string } = {
-      'groceries': '#22c55e',
-      'rent': '#3b82f6', 
-      'salary': '#10b981',
-      'dining': '#f59e0b',
-      'transport': '#8b5cf6',
-      'entertainment': '#ec4899',
-      'utilities': '#06b6d4',
-      'healthcare': '#ef4444'
+    
+    // Expense categorization with NZ-specific patterns
+    const categoryMap = {
+      'Groceries': ['countdown', 'paknsave', 'new world', 'woolworths', 'grocery', 'supermarket', 'fresh choice'],
+      'Transportation': ['bp', 'shell', 'z energy', 'caltex', 'mobil', 'uber', 'taxi', 'bus', 'train'],
+      'Dining Out': ['mcdonald', 'kfc', 'subway', 'pizza', 'restaurant', 'cafe', 'takeaway'],
+      'Housing & Utilities': ['rent', 'mortgage', 'power', 'gas', 'water', 'internet', 'phone', 'rates'],
+      'Healthcare': ['pharmacy', 'chemist', 'doctor', 'medical', 'dental', 'hospital'],
+      'Entertainment': ['netflix', 'spotify', 'cinema', 'movie', 'entertainment', 'games'],
+      'Shopping': ['warehouse', 'kmart', 'target', 'amazon', 'shopping', 'retail']
     };
     
-    for (const [key, color] of Object.entries(colorMap)) {
-      if (categoryName.toLowerCase().includes(key)) return color;
+    for (const [category, keywords] of Object.entries(categoryMap)) {
+      if (keywords.some(keyword => desc.includes(keyword))) {
+        const budgetGroup = ['Housing & Utilities', 'Groceries', 'Healthcare'].includes(category) ? 'needs' : 'wants';
+        return { 
+          category, 
+          budgetGroup: budgetGroup as 'needs' | 'wants',
+          excludeFromBudget: false,
+          confidence: 0.7,
+          reasoning: `Matched keyword patterns for ${category}`
+        };
+      }
     }
     
-    return '#6b7280'; // Default gray
-  }
-
-  private getCategoryIcon(categoryName: string): string {
-    const iconMap: { [key: string]: string } = {
-      'groceries': '🛒',
-      'rent': '🏠',
-      'salary': '💰',
-      'dining': '🍽️',
-      'transport': '🚗',
-      'entertainment': '🎬',
-      'utilities': '⚡',
-      'healthcare': '🏥'
+    return { 
+      category: 'Uncategorised', 
+      budgetGroup: 'wants',
+      excludeFromBudget: false,
+      confidence: 0.3,
+      reasoning: 'No matching patterns found'
     };
-    
-    for (const [key, icon] of Object.entries(iconMap)) {
-      if (categoryName.toLowerCase().includes(key)) return icon;
-    }
-    
-    return '📄'; // Default
   }
 }
 
