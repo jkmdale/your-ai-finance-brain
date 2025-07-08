@@ -136,18 +136,23 @@ export const CSVUpload = () => {
           </label>
         </div>
 
-        {/* Progress Bar */}
+        {/* Enhanced Progress Bar */}
         {progress > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex justify-between text-sm text-white/70">
-              <span>Processing Pipeline...</span>
-              <span>{Math.round(progress)}%</span>
+              <span className="font-medium">{uploadMessage || 'Processing Pipeline...'}</span>
+              <span className="font-bold">{Math.round(progress)}%</span>
             </div>
-            <div className="w-full bg-white/20 rounded-full h-3">
+            <div className="w-full bg-white/20 rounded-full h-4 shadow-inner">
               <div 
-                className="bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 h-3 rounded-full transition-all duration-500"
+                className="bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 h-4 rounded-full transition-all duration-300 ease-out relative overflow-hidden"
                 style={{ width: `${progress}%` }}
-              />
+              >
+                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+              </div>
+            </div>
+            <div className="text-xs text-white/60 text-center">
+              Mobile-optimized processing with enhanced retry logic
             </div>
           </div>
         )}

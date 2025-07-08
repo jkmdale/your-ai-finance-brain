@@ -505,101 +505,152 @@ export class UnifiedTransactionProcessor {
   }
 
   /**
-   * Categorize transactions using Claude AI in batches
+   * Enhanced Claude categorization with retry logic and mobile optimization
    */
   async categorizeWithClaude(
     transactions: NormalizedTransaction[],
     onProgress?: (completed: number, total: number) => void
   ): Promise<NormalizedTransaction[]> {
-    console.log(`🧠 Starting Claude categorization for ${transactions.length} transactions...`);
+    console.log(`🧠 Starting enhanced Claude categorization for ${transactions.length} transactions...`);
     
     const categorizedTransactions: NormalizedTransaction[] = [];
-    const batchSize = 5; // Process in smaller batches for better reliability
+    const batchSize = 20; // Optimized batch size for mobile performance
+    const maxRetries = 2;
     
     for (let i = 0; i < transactions.length; i += batchSize) {
       const batch = transactions.slice(i, i + batchSize);
-      console.log(`🔄 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(transactions.length/batchSize)}`);
+      const batchNumber = Math.floor(i/batchSize) + 1;
+      const totalBatches = Math.ceil(transactions.length/batchSize);
       
-      try {
-        const batchResults = await Promise.all(
-          batch.map(async (transaction) => {
-            try {
-              const prompt = `Categorize this transaction:
-Description: "${transaction.description}"
-Amount: $${transaction.amount}
-Is Income: ${transaction.is_income}
-Merchant: "${transaction.merchant || 'Unknown'}"
-Bank: ${transaction.source_bank}
-
-Analyze and return JSON only.`;
-
-              const { data, error } = await supabase.functions.invoke('claude-ai-coach', {
-                body: { 
-                  message: prompt,
-                  type: 'transaction_categorization'
-                }
-              });
-
-              if (error) {
-                console.warn('Claude categorization error:', error);
-                return {
-                  ...transaction,
-                  category: 'Uncategorised',
-                  confidence: 0.3
-                };
-              }
-
-              // Simple category extraction from Claude response
-              const category = this.extractCategoryFromResponse(data.response, transaction);
-              
-              // Check for transfers and reversals
-              if (this.isTransferOrReversal(transaction.description)) {
-                console.log(`🚫 Excluding from budget: ${transaction.description}`);
-                return {
-                  ...transaction,
-                  category: 'Transfer',
-                  confidence: 0.9
-                };
-              }
-
-              return {
-                ...transaction,
-                category,
-                confidence: 0.8
-              };
-            } catch (error) {
-              console.error('Error categorizing single transaction:', error);
-              return {
-                ...transaction,
-                category: 'Uncategorised',
-                confidence: 0.3
-              };
+      console.log(`🔄 Processing batch ${batchNumber}/${totalBatches} (${batch.length} transactions)`);
+      
+      let retryCount = 0;
+      let batchResults: NormalizedTransaction[] = [];
+      
+      while (retryCount <= maxRetries) {
+        try {
+          // Batch categorization prompt for efficiency
+          const batchPrompt = this.createBatchCategorizationPrompt(batch);
+          
+          const { data, error } = await supabase.functions.invoke('claude-ai-coach', {
+            body: { 
+              message: batchPrompt,
+              type: 'batch_transaction_categorization'
             }
-          })
-        );
-        
-        categorizedTransactions.push(...batchResults);
-        onProgress?.(categorizedTransactions.length, transactions.length);
-        
-        // Small delay between batches to avoid rate limiting
-        if (i + batchSize < transactions.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          });
+
+          if (error) {
+            throw new Error(`Claude API error: ${error.message}`);
+          }
+
+          // Parse batch response
+          batchResults = this.parseBatchCategorizationResponse(data.response, batch);
+          break; // Success, exit retry loop
+          
+        } catch (error) {
+          retryCount++;
+          console.warn(`Batch ${batchNumber} attempt ${retryCount} failed:`, error);
+          
+          if (retryCount > maxRetries) {
+            console.error(`Batch ${batchNumber} failed after ${maxRetries} retries, using fallback categorization`);
+            batchResults = batch.map(tx => this.createFallbackTransaction(tx));
+          } else {
+            // Exponential backoff for retries
+            const delay = Math.pow(2, retryCount) * 1000;
+            console.log(`Retrying batch ${batchNumber} in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
         }
-        
-      } catch (error) {
-        console.error(`Error processing batch ${Math.floor(i/batchSize) + 1}:`, error);
-        // Fallback to rule-based categorization for failed batch
-        const fallbackResults = batch.map(tx => ({
-          ...tx,
-          category: 'Uncategorised',
-          confidence: 0.3
-        }));
-        categorizedTransactions.push(...fallbackResults);
+      }
+      
+      categorizedTransactions.push(...batchResults);
+      onProgress?.(categorizedTransactions.length, transactions.length);
+      
+      // Rate limiting delay for mobile networks
+      if (i + batchSize < transactions.length) {
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
     
-    console.log(`✅ Claude categorization complete: ${categorizedTransactions.length} transactions processed`);
+    console.log(`✅ Enhanced Claude categorization complete: ${categorizedTransactions.length} transactions processed`);
     return categorizedTransactions;
+  }
+
+  /**
+   * Create efficient batch categorization prompt
+   */
+  private createBatchCategorizationPrompt(transactions: NormalizedTransaction[]): string {
+    const transactionList = transactions.map((tx, index) => 
+      `${index + 1}. "${tx.description}" | $${tx.amount} | ${tx.is_income ? 'Income' : 'Expense'} | ${tx.source_bank}`
+    ).join('\n');
+
+    return `Categorize these ${transactions.length} New Zealand banking transactions. Return a JSON array with exactly ${transactions.length} objects, each containing: {"index": number, "category": string, "reasoning": string}
+
+Categories for expenses: Housing, Transportation, Food & Dining, Utilities, Healthcare, Entertainment, Shopping, Personal Care, Education, Other
+Categories for income: Salary, Investment Income, Other Income
+Special: Transfer (for internal transfers/reversals)
+
+Transactions:
+${transactionList}
+
+Return only the JSON array, no other text.`;
+  }
+
+  /**
+   * Parse batch categorization response with fallback
+   */
+  private parseBatchCategorizationResponse(
+    response: string, 
+    originalBatch: NormalizedTransaction[]
+  ): NormalizedTransaction[] {
+    try {
+      // Extract JSON from response
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error('No JSON array found in response');
+      }
+
+      const categories = JSON.parse(jsonMatch[0]);
+      
+      if (!Array.isArray(categories) || categories.length !== originalBatch.length) {
+        throw new Error(`Expected ${originalBatch.length} categories, got ${categories.length}`);
+      }
+
+      return originalBatch.map((transaction, index) => {
+        const categoryData = categories.find(cat => cat.index === index + 1) || categories[index];
+        
+        // Check for transfers/reversals
+        if (this.isTransferOrReversal(transaction.description)) {
+          return {
+            ...transaction,
+            category: 'Transfer',
+            confidence: 0.9
+          };
+        }
+
+        return {
+          ...transaction,
+          category: categoryData?.category || 'Uncategorised',
+          confidence: categoryData?.category ? 0.85 : 0.3
+        };
+      });
+      
+    } catch (error) {
+      console.error('Failed to parse batch categorization response:', error);
+      return originalBatch.map(tx => this.createFallbackTransaction(tx));
+    }
+  }
+
+  /**
+   * Create fallback transaction with rule-based categorization
+   */
+  private createFallbackTransaction(transaction: NormalizedTransaction): NormalizedTransaction {
+    const fallbackResult = this.fallbackCategorization(transaction);
+    return {
+      ...transaction,
+      category: fallbackResult.category,
+      confidence: fallbackResult.confidence
+    };
   }
 
   /**
