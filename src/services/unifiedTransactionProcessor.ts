@@ -5,6 +5,7 @@
  */
 
 import Papa from 'papaparse';
+import { parse, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
 // Core transaction interface - unified schema
@@ -363,72 +364,74 @@ export class UnifiedTransactionProcessor {
   }
 
   /**
-   * Robust date parser for NZ bank CSV formats
+   * Robust date parser using date-fns for NZ bank CSV formats
+   * Handles: dd/MM/yyyy (ANZ), yyyy-MM-dd (ASB), dd MMM yyyy (Kiwibank), dd-MM-yy (Westpac)
    */
-  private normalizeDate(dateStr: string | null): string | null {
+  private tryParseDate(dateStr: string | null): string | null {
     if (!dateStr?.trim()) {
-      console.warn('Empty date string provided');
+      console.warn('❌ Empty date string provided');
       return null;
     }
 
     const cleanDateStr = String(dateStr).trim();
     console.log(`🗓️ Parsing date: "${cleanDateStr}"`);
     
-    // NZ bank date format patterns
-    const patterns = [
-      // DD/MM/YYYY (most common NZ format)
-      { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
-      // DD/MM/YY (2-digit year)
-      { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
-      // YYYY-MM-DD (ISO format)
-      { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
-      // Compact formats: DDMMYYYY, YYYYMMDD
-      { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy_compact' },
-      { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd_compact' }
+    // NZ bank date formats in order of preference
+    const formats = [
+      'dd/MM/yyyy',    // ANZ: 12/05/2024
+      'yyyy-MM-dd',    // ASB: 2024-05-12  
+      'dd MMM yyyy',   // Kiwibank: 12 May 2024
+      'dd-MM-yy',      // Westpac: 12-05-24
+      'dd-MM-yyyy',    // Alternative format
+      'dd.MM.yyyy',    // Dot separator
+      'MM/dd/yyyy',    // US format fallback
+      'yyyy/MM/dd'     // Alternative ISO
     ];
 
-    for (const pattern of patterns) {
-      const match = cleanDateStr.match(pattern.regex);
-      if (match) {
-        try {
-          let day: number, month: number, year: number;
+    // Try each format using date-fns
+    for (const format of formats) {
+      try {
+        const parsedDate = parse(cleanDateStr, format, new Date());
+        
+        // Validate the parsed date
+        if (isValid(parsedDate) && 
+            parsedDate.getFullYear() >= 1900 && 
+            parsedDate.getFullYear() <= 2100) {
           
-          if (pattern.type === 'ymd' || pattern.type === 'ymd_compact') {
-            [, year, month, day] = match.map(Number);
-          } else if (pattern.type === 'dmy2') {
-            [, day, month, year] = match.map(Number);
-            // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
-            year = year > 50 ? 1900 + year : 2000 + year;
-          } else {
-            [, day, month, year] = match.map(Number);
-          }
-          
-          // Validate ranges
-          if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-            console.warn(`Invalid date ranges: ${day}/${month}/${year}`);
-            continue;
-          }
-          
-          // Create date object (month is 0-indexed in JS)
-          const date = new Date(year, month - 1, day);
-          
-          // Verify the date is valid (handles leap years, month days, etc.)
-          if (date.getFullYear() === year && 
-              date.getMonth() === month - 1 && 
-              date.getDate() === day) {
-            const formattedDate = date.toISOString().split('T')[0];
-            console.log(`✅ Date parsed successfully: ${formattedDate}`);
-            return formattedDate;
-          }
-        } catch (error) {
-          console.error(`Date parsing error for "${cleanDateStr}":`, error);
-          continue;
+          const isoDate = parsedDate.toISOString().split('T')[0];
+          console.log(`✅ Date parsed successfully with format "${format}": ${isoDate}`);
+          return isoDate;
         }
+      } catch (error) {
+        // Continue to next format
+        continue;
       }
     }
     
-    console.warn(`❌ Could not parse date: "${cleanDateStr}"`);
+    // Fallback: try native Date parsing for edge cases
+    try {
+      const fallbackDate = new Date(cleanDateStr);
+      if (isValid(fallbackDate) && 
+          fallbackDate.getFullYear() >= 1900 && 
+          fallbackDate.getFullYear() <= 2100) {
+        
+        const isoDate = fallbackDate.toISOString().split('T')[0];
+        console.log(`✅ Date parsed with fallback: ${isoDate}`);
+        return isoDate;
+      }
+    } catch (error) {
+      // Fallback failed
+    }
+    
+    console.error(`❌ Could not parse date: "${cleanDateStr}" - Skipping row`);
     return null;
+  }
+
+  /**
+   * Legacy method - redirects to tryParseDate for compatibility
+   */
+  private normalizeDate(dateStr: string | null): string | null {
+    return this.tryParseDate(dateStr);
   }
 
   /**
