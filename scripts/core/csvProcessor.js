@@ -1,113 +1,54 @@
-import Papa from 'papaparse';
-import { schemaTemplates } from '../data/schemaExamples.js';
+// scripts/core/csvProcessor.js
 
-export async function parseCSV(file, onComplete, onError) {
-  if (!file) return onError('No file selected');
+import Papa from 'papaparse'; import { parse as parseDate, isValid } from 'date-fns'; import { categoriseTransactions } from '../Ai/ai/claudeApi.js'; import { generateZeroBasedBudget } from './categoriser.js'; import { generateSmartGoals } from './categoriser.js'; import { updateDashboard } from '../../src/App.jsx'; // Adjust if needed
 
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: function (results) {
-      if (!results.data || results.data.length === 0) {
-        return onError('CSV appears to be empty');
-      }
+const supportedFormats = [ 'dd/MM/yyyy', 'yyyy-MM-dd', 'dd MMM yyyy', 'dd-MM-yy', 'MM/dd/yyyy', ];
 
-      const detectedSchema = detectSchema(results.meta.fields);
-      if (!detectedSchema) {
-        return onError('CSV format not recognized');
-      }
+function tryParseDate(dateStr) { const trimmed = dateStr.trim(); for (const fmt of supportedFormats) { const parsed = parseDate(trimmed, fmt, new Date()); if (isValid(parsed)) { return parsed.toISOString().split('T')[0]; } } console.warn('Unrecognized date format:', dateStr); return null; }
 
-      const cleanedData = results.data
-        .map((row) => {
-          const rawDate = row[detectedSchema.date];
-          const parsedDate = normalizeDate(rawDate);
-          if (!parsedDate) {
-            console.warn(`Skipping row with invalid date: ${rawDate}`);
-            return null;
-          }
-          return {
-            date: parsedDate,
-            description: row[detectedSchema.description] || '',
-            amount: parseFloat(row[detectedSchema.amount] || 0),
-            category: null // to be filled later
-          };
-        })
-        .filter(Boolean);
+function detectAndMap(row, headers) { const lowerHeaders = headers.map(h => h.toLowerCase());
 
-      onComplete(cleanedData);
-    },
-    error: function (err) {
-      onError('Error parsing CSV: ' + err.message);
-    }
-  });
-}
+const dateKey = lowerHeaders.find(h => h.includes('date')); const descKey = lowerHeaders.find(h => h.includes('desc') || h.includes('particulars') || h.includes('details')); const amtKey = lowerHeaders.find(h => h.includes('amount') || h.includes('debit') || h.includes('credit'));
 
-function detectSchema(headers) {
-  for (const template of schemaTemplates) {
-    const match = template.fields.every((field) =>
-      headers.some((h) => h.toLowerCase().includes(field))
-    );
-    if (match) {
-      return template.map;
-    }
-  }
-  return null;
-}
+if (!dateKey || !descKey || !amtKey) { throw new Error('CSV format not supported — could not detect columns'); }
 
-function normalizeDate(dateStr) {
-  if (!dateStr) return null;
-  
-  const cleanDateStr = String(dateStr).trim();
-  if (!cleanDateStr) return null;
-  
-  // NZ bank date format patterns
-  const patterns = [
-    // DD/MM/YYYY (most common NZ format)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
-    // DD/MM/YY (2-digit year)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
-    // YYYY-MM-DD (ISO format)
-    { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
-    // Compact formats: DDMMYYYY, YYYYMMDD
-    { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy_compact' },
-    { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd_compact' }
-  ];
+return { date: tryParseDate(row[dateKey] || ''), description: row[descKey]?.trim() || '', amount: parseFloat((row[amtKey] || '0').replace(/[^\d.-]/g, '')), }; }
 
-  for (const pattern of patterns) {
-    const match = cleanDateStr.match(pattern.regex);
-    if (match) {
+export function handleCSVUpload(files) { if (!files.length) return;
+
+const allTransactions = []; let filesProcessed = 0;
+
+Array.from(files).forEach(file => { Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (results) => { const headers = results.meta.fields || []; const rows = results.data;
+
+for (let row of rows) {
       try {
-        let day, month, year;
-        
-        if (pattern.type === 'ymd' || pattern.type === 'ymd_compact') {
-          [, year, month, day] = match.map(Number);
-        } else if (pattern.type === 'dmy2') {
-          [, day, month, year] = match.map(Number);
-          // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
-          year = year > 50 ? 1900 + year : 2000 + year;
-        } else {
-          [, day, month, year] = match.map(Number);
+        const tx = detectAndMap(row, headers);
+        if (tx.date && !isNaN(tx.amount)) {
+          allTransactions.push(tx);
         }
-        
-        // Validate ranges
-        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-          continue;
-        }
-        
-        // Create date object (month is 0-indexed in JS)
-        const date = new Date(year, month - 1, day);
-        
-        // Verify the date is valid (handles leap years, month days, etc.)
-        if (date.getFullYear() === year && 
-            date.getMonth() === month - 1 && 
-            date.getDate() === day) {
-          return date.toISOString().split('T')[0];
-        }
-      } catch (error) {
+      } catch (err) {
+        console.warn('Skipping row due to error:', err.message, row);
         continue;
       }
     }
-  }
-  
-  return null;
-}
+
+    filesProcessed++;
+    if (filesProcessed === files.length) {
+      try {
+        const categorised = await categoriseTransactions(allTransactions);
+        const budget = generateZeroBasedBudget(categorised);
+        const goals = generateSmartGoals(budget);
+        updateDashboard(categorised, budget, goals);
+        console.log('✔ CSV upload and processing complete');
+      } catch (e) {
+        console.error('❌ Error running post-upload pipeline:', e);
+      }
+    }
+  },
+  error: (err) => {
+    console.error('❌ CSV parse failed:', err.message);
+  },
+});
+
+}); }
+
