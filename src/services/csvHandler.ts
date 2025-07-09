@@ -1,54 +1,30 @@
-// /src/services/csv-handler.ts
+// src/components/sections/CSVUpload.tsx
 
-import Papa from 'papaparse'; import { parse as parseDate, isValid } from 'date-fns'; import { categoriseTransactions } from '@/services/claude'; import { generateZeroBasedBudget } from '@/services/budget'; import { generateSmartGoals } from '@/services/goals'; import { updateDashboard } from '@/services/dashboard';
+import React, { useState } from 'react'; import { Upload, FileText, CheckCircle, AlertCircle, Brain, Loader2, TrendingUp, Target } from 'lucide-react'; import { useAuth } from '@/hooks/useAuth'; import { useToast } from '@/hooks/use-toast'; import { handleCSVUpload } from '../../../../scripts/core/csvProcessor.js'; // ✅ Make sure this path is correct
 
-const supportedFormats = [ 'dd/MM/yyyy', 'yyyy-MM-dd', 'dd MMM yyyy', 'dd-MM-yy', 'MM/dd/yyyy', ];
+export const CSVUpload = () => { const [uploading, setUploading] = useState(false); const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle'); const [uploadMessage, setUploadMessage] = useState(''); const [progress, setProgress] = useState(0); const { user } = useAuth(); const { toast } = useToast();
 
-function tryParseDate(dateStr: string): string | null { const trimmed = dateStr.trim(); for (const fmt of supportedFormats) { const parsed = parseDate(trimmed, fmt, new Date()); if (isValid(parsed)) { return parsed.toISOString().split('T')[0]; } } console.warn('Unrecognized date format:', dateStr); return null; }
+const handleFileUpload = async (files: FileList) => { if (!user) { setUploadStatus('error'); setUploadMessage('Please log in to upload CSV files'); return; }
 
-function detectAndMap(row: Record<string, string>, headers: string[]) { const lowerHeaders = headers.map(h => h.toLowerCase());
+try {
+  setUploading(true);
+  setUploadStatus('processing');
+  setUploadMessage('Uploading and processing CSV...');
 
-let dateKey = lowerHeaders.find(h => h.includes('date')); let descKey = lowerHeaders.find(h => h.includes('desc') || h.includes('particulars') || h.includes('details')); let amtKey = lowerHeaders.find(h => h.includes('amount') || h.includes('debit') || h.includes('credit'));
+  await handleCSVUpload(files); // ✅ Call new working function
 
-if (!dateKey || !descKey || !amtKey) { throw new Error('CSV format not supported — could not detect columns'); }
+  setUploading(false);
+  setUploadStatus('success');
+  setUploadMessage('Upload and processing complete');
+  toast({ title: '✅ CSV Processed', description: 'Budget and goals generated.' });
+} catch (error) {
+  console.error(error);
+  setUploadStatus('error');
+  setUploadMessage('Upload failed');
+  toast({ title: '❌ Upload Failed', description: error.message });
+}
 
-return { date: tryParseDate(row[dateKey] ?? ''), description: row[descKey]?.trim() ?? '', amount: parseFloat((row[amtKey] ?? '0').replace(/[^\d.-]/g, '')), }; }
+};
 
-export async function handleCSVUpload(files: FileList | File[]) { if (!files.length) return;
-
-const allTransactions: any[] = []; let filesProcessed = 0;
-
-Array.from(files).forEach(file => { Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (results: Papa.ParseResult<Record<string, string>>) => { const headers = results.meta.fields ?? []; const rows = results.data;
-
-for (let row of rows) {
-      try {
-        const tx = detectAndMap(row, headers);
-        if (tx.date && !isNaN(tx.amount)) {
-          allTransactions.push(tx);
-        }
-      } catch (err: any) {
-        console.warn('Skipping row due to error:', err.message, row);
-        continue;
-      }
-    }
-
-    filesProcessed++;
-    if (filesProcessed === files.length) {
-      try {
-        const categorised = await categoriseTransactions(allTransactions);
-        const budget = generateZeroBasedBudget(categorised);
-        const goals = generateSmartGoals(budget);
-        updateDashboard(categorised, budget, goals);
-        console.log('✔ CSV upload and processing complete');
-      } catch (e) {
-        console.error('❌ Error running post-upload pipeline:', e);
-      }
-    }
-  },
-  error: (err) => {
-    console.error('❌ CSV parse failed:', err.message);
-  },
-});
-
-}); }
+return ( <div className="p-4"> <h2 className="text-xl font-semibold mb-2">📂 Upload Your CSV File</h2> <input type="file" accept=".csv" multiple onChange={(e) => handleFileUpload(e.target.files)} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" /> {uploadStatus !== 'idle' && ( <p className="mt-2 text-sm"> {uploadStatus === 'processing' && 'Processing...'} {uploadStatus === 'success' && '✅ Success!'} {uploadStatus === 'error' && '❌ ' + uploadMessage} </p> )} </div> ); };
 
