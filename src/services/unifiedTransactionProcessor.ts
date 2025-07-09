@@ -5,7 +5,6 @@
  */
 
 import Papa from 'papaparse';
-import { parse, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
 // Core transaction interface - unified schema
@@ -364,74 +363,57 @@ export class UnifiedTransactionProcessor {
   }
 
   /**
-   * Robust date parser using date-fns for NZ bank CSV formats
-   * Handles: dd/MM/yyyy (ANZ), yyyy-MM-dd (ASB), dd MMM yyyy (Kiwibank), dd-MM-yy (Westpac)
-   */
-  private tryParseDate(dateStr: string | null): string | null {
-    if (!dateStr?.trim()) {
-      console.warn('❌ Empty date string provided');
-      return null;
-    }
-
-    const cleanDateStr = String(dateStr).trim();
-    console.log(`🗓️ Parsing date: "${cleanDateStr}"`);
-    
-    // NZ bank date formats in order of preference
-    const formats = [
-      'dd/MM/yyyy',    // ANZ: 12/05/2024
-      'yyyy-MM-dd',    // ASB: 2024-05-12  
-      'dd MMM yyyy',   // Kiwibank: 12 May 2024
-      'dd-MM-yy',      // Westpac: 12-05-24
-      'dd-MM-yyyy',    // Alternative format
-      'dd.MM.yyyy',    // Dot separator
-      'MM/dd/yyyy',    // US format fallback
-      'yyyy/MM/dd'     // Alternative ISO
-    ];
-
-    // Try each format using date-fns
-    for (const format of formats) {
-      try {
-        const parsedDate = parse(cleanDateStr, format, new Date());
-        
-        // Validate the parsed date
-        if (isValid(parsedDate) && 
-            parsedDate.getFullYear() >= 1900 && 
-            parsedDate.getFullYear() <= 2100) {
-          
-          const isoDate = parsedDate.toISOString().split('T')[0];
-          console.log(`✅ Date parsed successfully with format "${format}": ${isoDate}`);
-          return isoDate;
-        }
-      } catch (error) {
-        // Continue to next format
-        continue;
-      }
-    }
-    
-    // Fallback: try native Date parsing for edge cases
-    try {
-      const fallbackDate = new Date(cleanDateStr);
-      if (isValid(fallbackDate) && 
-          fallbackDate.getFullYear() >= 1900 && 
-          fallbackDate.getFullYear() <= 2100) {
-        
-        const isoDate = fallbackDate.toISOString().split('T')[0];
-        console.log(`✅ Date parsed with fallback: ${isoDate}`);
-        return isoDate;
-      }
-    } catch (error) {
-      // Fallback failed
-    }
-    
-    console.error(`❌ Could not parse date: "${cleanDateStr}" - Skipping row`);
-    return null;
-  }
-
-  /**
-   * Legacy method - redirects to tryParseDate for compatibility
+   * Normalize date to YYYY-MM-DD format
    */
   private normalizeDate(dateStr: string | null): string | null {
-    return this.tryParseDate(dateStr);
+    if (!dateStr) return null;
+
+    // Clean the date string
+    const cleaned = dateStr.trim();
+    if (!cleaned) return null;
+
+    // Try direct ISO parsing first
+    try {
+      const directDate = new Date(cleaned);
+      if (!isNaN(directDate.getTime()) && cleaned.includes('-')) {
+        return directDate.toISOString().split('T')[0];
+      }
+    } catch (error) {
+      // Continue to other parsing methods
+    }
+
+    // Try DD/MM/YYYY format (common in NZ)
+    const ddmmyyyy = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (ddmmyyyy) {
+      const [, day, month, year] = ddmmyyyy;
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+
+    // Try MM/DD/YYYY format
+    const mmddyyyy = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (mmddyyyy) {
+      const [, month, day, year] = mmddyyyy;
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+
+    // Try other formats
+    try {
+      const fallbackDate = new Date(cleaned);
+      if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate.toISOString().split('T')[0];
+      }
+    } catch (error) {
+      // Fallback parsing failed
+    }
+
+    console.warn(`⚠️ Could not parse date: ${cleaned}`);
+    return null;
   }
 
   /**

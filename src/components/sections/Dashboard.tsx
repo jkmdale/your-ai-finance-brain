@@ -1,85 +1,93 @@
-// src/components/sections/Dashboard.tsx
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { CSVUpload } from './CSVUpload';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import { useAIInsights } from '@/hooks/useAIInsights';
+import { DashboardEvents } from '@/components/dashboard/DashboardEvents';
+import { LoadingState } from '@/components/dashboard/LoadingState';
+import { EmptyState } from '@/components/dashboard/EmptyState';
+import { AIInsightsCard } from '@/components/dashboard/AIInsightsCard';
 import { StatsCards } from '@/components/dashboard/StatsCards';
+import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { BudgetBreakdown } from '@/components/dashboard/BudgetBreakdown';
 import { SmartBudgetGoals } from '@/components/dashboard/SmartBudgetGoals';
-import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
-import { useAuth } from '@/hooks/useAuth';
 
-export default function Dashboard() {
-  const { user } = useAuth();
-  const [categorised, setCategorised] = useState([]);
-  const [budget, setBudget] = useState(null);
-  const [goals, setGoals] = useState([]);
+export const Dashboard = () => {
+  const {
+    stats,
+    recentTransactions,
+    loading,
+    lastDataRefresh,
+    triggerRefresh,
+    refreshKey
+  } = useDashboardData();
 
+  const {
+    aiInsights,
+    processingInsights,
+    generateAIInsights,
+    resetInsights,
+    error
+  } = useAIInsights();
+
+  // Generate AI insights when we have new data
   useEffect(() => {
-    const handleData = (e: any) => {
-      const { transactions = [], budget = null, goals = [] } = e.detail || {};
-      setCategorised(transactions);
-      setBudget(budget);
-      setGoals(goals);
-    };
+    if (refreshKey > 0 || (!aiInsights && recentTransactions.length > 5)) {
+      generateAIInsights(recentTransactions.slice(0, 20));
+    }
+  }, [refreshKey, recentTransactions, aiInsights, generateAIInsights]);
 
-    window.addEventListener('csv-data-ready', handleData);
-    return () => window.removeEventListener('csv-data-ready', handleData);
-  }, []);
+  if (loading) {
+    return <LoadingState lastDataRefresh={lastDataRefresh} />;
+  }
 
-  if (!user) {
-    return <div className="p-4">Please log in to view your dashboard.</div>;
+  if (!stats) {
+    return <EmptyState lastDataRefresh={lastDataRefresh} />;
   }
 
   return (
-    <div className="p-4 space-y-6">
-      <h1 className="text-2xl font-bold">Welcome back 👋</h1>
-
-      {categorised.length > 0 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h3 className="font-semibold">Total Transactions</h3>
-              <p className="text-2xl font-bold">{categorised.length}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h3 className="font-semibold">Income</h3>
-              <p className="text-2xl font-bold text-green-600">
-                ${categorised.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-              </p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h3 className="font-semibold">Expenses</h3>
-              <p className="text-2xl font-bold text-red-600">
-                ${Math.abs(categorised.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0)).toFixed(2)}
-              </p>
-            </div>
-          </div>
+    <>
+      <DashboardEvents 
+        onRefresh={triggerRefresh} 
+        onResetInsights={resetInsights} 
+      />
+      
+      <section className="min-h-screen w-full max-w-full p-4 space-y-6 overflow-x-hidden">
+        <div className="text-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            AI-Powered Financial Intelligence Dashboard
+          </h2>
+          <p className="text-lg text-white/70">
+            Smart insights powered by advanced AI analysis and bank format detection
+          </p>
+          {lastDataRefresh && (
+            <p className="text-white/50 text-sm mt-2">
+              Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed from Supabase
+            </p>
+          )}
         </div>
-      )}
 
-      {categorised.length > 0 && (
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-4">Recent Transactions</h3>
-          <div className="space-y-2">
-            {categorised.slice(0, 5).map((transaction: any, index: number) => (
-              <div key={index} className="flex justify-between items-center p-2 border-b">
-                <div>
-                  <p className="font-medium">{transaction.description}</p>
-                  <p className="text-sm text-gray-500">{transaction.date}</p>
-                </div>
-                <p className={`font-bold ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${Math.abs(transaction.amount).toFixed(2)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        <AIInsightsCard 
+          aiInsights={aiInsights} 
+          processingInsights={processingInsights}
+          error={error}
+        />
 
-      {categorised.length === 0 && (
-        <div className="bg-gray-50 p-8 rounded-lg text-center">
-          <p className="text-gray-600">No transactions uploaded yet. Upload some CSV files to get started!</p>
+        <StatsCards stats={stats} />
+
+        <CSVUpload />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <BudgetBreakdown />
+          <SmartBudgetGoals />
         </div>
-      )}
-    </div>
+
+        <div className="grid grid-cols-1 gap-6">
+          <RecentTransactions 
+            recentTransactions={recentTransactions} 
+            stats={stats} 
+          />
+        </div>
+      </section>
+    </>
   );
-}
+};

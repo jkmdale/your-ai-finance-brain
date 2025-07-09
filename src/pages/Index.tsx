@@ -1,7 +1,7 @@
 // src/pages/Index.tsx
 
 import { LandingPage } from "@/components/sections/LandingPage";
-import Dashboard from "@/components/sections/Dashboard";
+import { Dashboard } from "@/components/sections/Dashboard";
 import { BudgetOverview } from "@/components/sections/BudgetOverview";
 import { GoalTracking } from "@/components/sections/GoalTracking";
 import { AIInsights } from "@/components/sections/AIInsights";
@@ -16,83 +16,84 @@ import { useAppSecurity } from "@/hooks/useAppSecurity";
 import { useSimpleInactivityTimer } from "@/hooks/useSimpleInactivityTimer";
 import { useState } from "react";
 import SmartGoalsCard from "@/components/goals/SmartGoalsCard";
-import { CSVUpload } from "@/components/sections/CSVUpload";
 
 const Index = () => {
   const { user, loading } = useAuth();
   const { isAppLocked, setupComplete, preferredUnlockMethod, isPinSetup } = useAppSecurity();
-  const [showAuth, setShowAuth] = useState<'signup' | 'signin'>('signup');
-  const [showAuthScreen, setShowAuthScreen] = useState(false);
-
-  // Inactivity timer
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
+  
+  // Add inactivity timer
   useSimpleInactivityTimer();
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-background to-muted">
-        <span className="text-muted-foreground">Loading...</span>
+      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-400"></div>
       </div>
     );
   }
 
-  // Show auth screen if user explicitly requests it OR if no user and not set up
-  if (showAuthScreen || (!user && !setupComplete)) {
-    console.log('🔵 Showing AuthScreen with mode:', showAuth);
-    return <AuthScreen onAuthSuccess={() => {
-      console.log('🔵 Auth success, hiding auth screen');
-      setShowAuthScreen(false);
-    }} />;
+  const handleGetStarted = () => {
+    setAuthMode('signup');
+    setShowAuth(true);
+  };
+
+  const handleSignIn = (mode: 'signup' | 'signin' = 'signin') => {
+    setAuthMode(mode);
+    setShowAuth(true);
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuth(false);
+  };
+
+  if (showAuth && !user) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
-  // If user exists but security setup isn't complete
-  if (user && !setupComplete) {
-    return <SecurityMethodSetup />;
+  if (!user) {
+    return (
+      <LandingPage 
+        onGetStarted={handleGetStarted}
+        onSignIn={handleSignIn}
+      />
+    );
   }
 
-  // If user exists but PIN isn't set up
   if (user && !isPinSetup) {
     return <PinSetupScreen />;
   }
 
-  // If app is locked
-  if (isAppLocked) {
+  if (user && isPinSetup && !setupComplete) {
+    return <SecurityMethodSetup />;
+  }
+
+  if (user && setupComplete && isAppLocked) {
     return <UnlockScreen />;
   }
 
-  const handleGetStarted = () => {
-    console.log('🔵 Get Started clicked');
-    setShowAuthScreen(true);
-    setShowAuth('signup');
-  };
-
-  const handleSignIn = (mode: 'signup' | 'signin' = 'signin') => {
-    console.log('🔵 Sign In clicked with mode:', mode);
-    setShowAuth(mode);
-    setShowAuthScreen(true);
-  };
-
-  // If no user, show landing page
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900">
-        <LandingPage 
-          onGetStarted={handleGetStarted} 
-          onSignIn={handleSignIn} 
-        />
-      </div>
-    );
-  }
-
-  // User is logged in and everything is set up - show the main app
   return (
     <SidebarLayout>
-      <CSVUpload />
-      <Dashboard />
-      <BudgetOverview />
-      <GoalTracking />
-      <AIInsights />
-      <TransactionHistory />
-      <SmartGoalsCard />
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 space-y-3 sm:space-y-4 p-3 sm:p-4 safe-area-top safe-area-bottom">
+        <div id="dashboard">
+          <Dashboard />
+        </div>
+        <div id="goals">
+          <BudgetOverview />
+          <GoalTracking />
+          <SmartGoalsCard />
+        </div>
+        <div id="insights">
+          <AIInsights />  
+        </div>
+        <div id="csv-upload">
+          <TransactionHistory />
+        </div>
+        <div id="coach">
+          <AIInsights />
+        </div>
+      </div>
     </SidebarLayout>
   );
 };
