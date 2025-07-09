@@ -1,93 +1,24 @@
-import React, { useEffect } from 'react';
-import { CSVUpload } from './CSVUpload';
-import { useDashboardData } from '@/hooks/useDashboardData';
-import { useAIInsights } from '@/hooks/useAIInsights';
-import { DashboardEvents } from '@/components/dashboard/DashboardEvents';
-import { LoadingState } from '@/components/dashboard/LoadingState';
-import { EmptyState } from '@/components/dashboard/EmptyState';
-import { AIInsightsCard } from '@/components/dashboard/AIInsightsCard';
-import { StatsCards } from '@/components/dashboard/StatsCards';
-import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
-import { BudgetBreakdown } from '@/components/dashboard/BudgetBreakdown';
-import { SmartBudgetGoals } from '@/components/dashboard/SmartBudgetGoals';
+// src/components/sections/Dashboard.tsx
 
-export const Dashboard = () => {
-  const {
-    stats,
-    recentTransactions,
-    loading,
-    lastDataRefresh,
-    triggerRefresh,
-    refreshKey
-  } = useDashboardData();
+import React, { useState, useEffect } from 'react'; import { StatsCards } from '@/components/dashboard/StatsCards'; import { BudgetBreakdown } from '@/components/dashboard/BudgetBreakdown'; import { SmartBudgetGoals } from '@/components/dashboard/SmartBudgetGoals'; import { RecentTransactions } from '@/components/dashboard/RecentTransactions'; import { useAuth } from '@/hooks/useAuth';
 
-  const {
-    aiInsights,
-    processingInsights,
-    generateAIInsights,
-    resetInsights,
-    error
-  } = useAIInsights();
+export default function Dashboard({ data }) { const { user } = useAuth();
 
-  // Generate AI insights when we have new data
-  useEffect(() => {
-    if (refreshKey > 0 || (!aiInsights && recentTransactions.length > 5)) {
-      generateAIInsights(recentTransactions.slice(0, 20));
-    }
-  }, [refreshKey, recentTransactions, aiInsights, generateAIInsights]);
+const [categorised, setCategorised] = useState([]); const [budget, setBudget] = useState(null); const [goals, setGoals] = useState([]);
 
-  if (loading) {
-    return <LoadingState lastDataRefresh={lastDataRefresh} />;
-  }
+// These would come from csvProcessor's runFullPipeline useEffect(() => { if (data?.transactions?.length > 0) { setCategorised(data.transactions); setBudget(data.budget); setGoals(data.goals); } }, [data]);
 
-  if (!stats) {
-    return <EmptyState lastDataRefresh={lastDataRefresh} />;
-  }
+if (!user) return <div className="p-4">Please log in to view your dashboard.</div>;
 
-  return (
-    <>
-      <DashboardEvents 
-        onRefresh={triggerRefresh} 
-        onResetInsights={resetInsights} 
-      />
-      
-      <section className="min-h-screen w-full max-w-full p-4 space-y-6 overflow-x-hidden">
-        <div className="text-center">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-            AI-Powered Financial Intelligence Dashboard
-          </h2>
-          <p className="text-lg text-white/70">
-            Smart insights powered by advanced AI analysis and bank format detection
-          </p>
-          {lastDataRefresh && (
-            <p className="text-white/50 text-sm mt-2">
-              Data refreshed: {lastDataRefresh.toLocaleTimeString()} • {stats.transactionCount} transactions analyzed from Supabase
-            </p>
-          )}
-        </div>
+return ( <div className="p-4 space-y-6"> <h1 className="text-2xl font-bold">Welcome back 👋</h1>
 
-        <AIInsightsCard 
-          aiInsights={aiInsights} 
-          processingInsights={processingInsights}
-          error={error}
-        />
+<StatsCards transactions={categorised} />
 
-        <StatsCards stats={stats} />
+  <BudgetBreakdown budget={budget} />
 
-        <CSVUpload />
+  <SmartBudgetGoals goals={goals} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <BudgetBreakdown />
-          <SmartBudgetGoals />
-        </div>
+  <RecentTransactions transactions={categorised} />
+</div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <RecentTransactions 
-            recentTransactions={recentTransactions} 
-            stats={stats} 
-          />
-        </div>
-      </section>
-    </>
-  );
-};
+); }
