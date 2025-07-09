@@ -16,6 +16,7 @@ import { useAppSecurity } from "@/hooks/useAppSecurity";
 import { useSimpleInactivityTimer } from "@/hooks/useSimpleInactivityTimer";
 import { useState } from "react";
 import SmartGoalsCard from "@/components/goals/SmartGoalsCard";
+import { CSVUpload } from "@/components/sections/CSVUpload";
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -34,7 +35,7 @@ const Index = () => {
   }
 
   if (!user && !setupComplete) {
-    return <AuthScreen mode={showAuth} setMode={setShowAuth} />;
+    return <AuthScreen onAuthSuccess={() => {}} />;
   }
 
   if (!setupComplete) {
@@ -51,7 +52,11 @@ const Index = () => {
 
   return (
     <SidebarLayout>
-      <LandingPage />
+      <LandingPage 
+        onGetStarted={() => {}} 
+        onSignIn={() => {}} 
+      />
+      <CSVUpload />
       <Dashboard />
       <BudgetOverview />
       <GoalTracking />
