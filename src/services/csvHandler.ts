@@ -297,43 +297,68 @@ class CSVHandler {
    * Parse date from various formats
    */
   private parseDate(dateStr: string): string | null {
-    const formats = [
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})/, // DD/MM/YYYY or MM/DD/YYYY
-      /(\d{4})-(\d{1,2})-(\d{1,2})/, // YYYY-MM-DD
-      /(\d{1,2})-(\d{1,2})-(\d{4})/, // DD-MM-YYYY
+    if (!dateStr?.trim()) {
+      console.warn('Empty date string provided');
+      return null;
+    }
+
+    const cleanDateStr = String(dateStr).trim();
+    console.log(`🗓️ Parsing date: "${cleanDateStr}"`);
+    
+    // NZ bank date format patterns
+    const patterns = [
+      // DD/MM/YYYY (most common NZ format)
+      { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
+      // DD/MM/YY (2-digit year)
+      { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
+      // YYYY-MM-DD (ISO format)
+      { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
+      // Compact formats: DDMMYYYY, YYYYMMDD
+      { regex: /^(\d{2})(\d{2})(\d{4})$/, type: 'dmy_compact' },
+      { regex: /^(\d{4})(\d{2})(\d{2})$/, type: 'ymd_compact' }
     ];
 
-    for (const format of formats) {
-      const match = dateStr.match(format);
+    for (const pattern of patterns) {
+      const match = cleanDateStr.match(pattern.regex);
       if (match) {
-        const [, part1, part2, part3] = match;
-        
-        // Try parsing as DD/MM/YYYY first (NZ standard)
-        let day, month, year;
-        if (format === formats[0]) { // DD/MM/YYYY format
-          day = parseInt(part1);
-          month = parseInt(part2);
-          year = parseInt(part3);
-        } else if (format === formats[1]) { // YYYY-MM-DD
-          year = parseInt(part1);
-          month = parseInt(part2);
-          day = parseInt(part3);
-        } else { // DD-MM-YYYY
-          day = parseInt(part1);
-          month = parseInt(part2);
-          year = parseInt(part3);
-        }
-
-        // Validate date components
-        if (day > 31 || month > 12 || year < 1900) continue;
-
-        const date = new Date(year, month - 1, day);
-        if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
-          return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+        try {
+          let day: number, month: number, year: number;
+          
+          if (pattern.type === 'ymd' || pattern.type === 'ymd_compact') {
+            [, year, month, day] = match.map(Number);
+          } else if (pattern.type === 'dmy2') {
+            [, day, month, year] = match.map(Number);
+            // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
+            year = year > 50 ? 1900 + year : 2000 + year;
+          } else {
+            [, day, month, year] = match.map(Number);
+          }
+          
+          // Validate ranges
+          if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+            console.warn(`Invalid date ranges: ${day}/${month}/${year}`);
+            continue;
+          }
+          
+          // Create date object (month is 0-indexed in JS)
+          const date = new Date(year, month - 1, day);
+          
+          // Verify the date is valid (handles leap years, month days, etc.)
+          if (date.getFullYear() === year && 
+              date.getMonth() === month - 1 && 
+              date.getDate() === day) {
+            const formattedDate = date.toISOString().split('T')[0];
+            console.log(`✅ Date parsed successfully: ${formattedDate}`);
+            return formattedDate;
+          }
+        } catch (error) {
+          console.error(`Date parsing error for "${cleanDateStr}":`, error);
+          continue;
         }
       }
     }
-
+    
+    console.warn(`❌ Could not parse date: "${cleanDateStr}"`);
     return null;
   }
 
