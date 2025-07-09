@@ -37,7 +37,11 @@ const Index = () => {
 
   // Show auth screen if user explicitly requests it OR if no user and not set up
   if (showAuthScreen || (!user && !setupComplete)) {
-    return <AuthScreen onAuthSuccess={() => setShowAuthScreen(false)} />;
+    console.log('🔵 Showing AuthScreen with mode:', showAuth);
+    return <AuthScreen onAuthSuccess={() => {
+      console.log('🔵 Auth success, hiding auth screen');
+      setShowAuthScreen(false);
+    }} />;
   }
 
   // If user exists but security setup isn't complete
@@ -58,6 +62,7 @@ const Index = () => {
   const handleGetStarted = () => {
     console.log('🔵 Get Started clicked');
     setShowAuthScreen(true);
+    setShowAuth('signup');
   };
 
   const handleSignIn = (mode: 'signup' | 'signin' = 'signin') => {
