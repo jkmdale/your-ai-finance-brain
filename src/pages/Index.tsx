@@ -51,14 +51,22 @@ const Index = () => {
     return <UnlockScreen />;
   }
 
+  const handleGetStarted = () => {
+    console.log('🔵 Get Started clicked');
+    setShowAuthScreen(true);
+  };
+
+  const handleSignIn = (mode: 'signup' | 'signin' = 'signin') => {
+    console.log('🔵 Sign In clicked with mode:', mode);
+    setShowAuth(mode);
+    setShowAuthScreen(true);
+  };
+
   return (
     <SidebarLayout>
       <LandingPage 
-        onGetStarted={() => setShowAuthScreen(true)} 
-        onSignIn={(mode = 'signin') => {
-          setShowAuth(mode);
-          setShowAuthScreen(true);
-        }} 
+        onGetStarted={handleGetStarted} 
+        onSignIn={handleSignIn} 
       />
       <CSVUpload />
       <Dashboard />
