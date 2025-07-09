@@ -22,6 +22,7 @@ const Index = () => {
   const { user, loading } = useAuth();
   const { isAppLocked, setupComplete, preferredUnlockMethod, isPinSetup } = useAppSecurity();
   const [showAuth, setShowAuth] = useState<'signup' | 'signin'>('signup');
+  const [showAuthScreen, setShowAuthScreen] = useState(false);
 
   // Inactivity timer
   useSimpleInactivityTimer();
@@ -34,8 +35,8 @@ const Index = () => {
     );
   }
 
-  if (!user && !setupComplete) {
-    return <AuthScreen onAuthSuccess={() => {}} />;
+  if ((!user && !setupComplete) || showAuthScreen) {
+    return <AuthScreen onAuthSuccess={() => setShowAuthScreen(false)} />;
   }
 
   if (!setupComplete) {
@@ -53,8 +54,11 @@ const Index = () => {
   return (
     <SidebarLayout>
       <LandingPage 
-        onGetStarted={() => {}} 
-        onSignIn={() => {}} 
+        onGetStarted={() => setShowAuthScreen(true)} 
+        onSignIn={(mode = 'signin') => {
+          setShowAuth(mode);
+          setShowAuthScreen(true);
+        }} 
       />
       <CSVUpload />
       <Dashboard />
