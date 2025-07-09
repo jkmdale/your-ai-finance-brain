@@ -35,18 +35,22 @@ const Index = () => {
     );
   }
 
-  if ((!user && !setupComplete) || showAuthScreen) {
+  // Show auth screen if user explicitly requests it OR if no user and not set up
+  if (showAuthScreen || (!user && !setupComplete)) {
     return <AuthScreen onAuthSuccess={() => setShowAuthScreen(false)} />;
   }
 
-  if (!setupComplete) {
+  // If user exists but security setup isn't complete
+  if (user && !setupComplete) {
     return <SecurityMethodSetup />;
   }
 
-  if (!isPinSetup) {
+  // If user exists but PIN isn't set up
+  if (user && !isPinSetup) {
     return <PinSetupScreen />;
   }
 
+  // If app is locked
   if (isAppLocked) {
     return <UnlockScreen />;
   }
@@ -62,12 +66,21 @@ const Index = () => {
     setShowAuthScreen(true);
   };
 
+  // If no user, show landing page
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900">
+        <LandingPage 
+          onGetStarted={handleGetStarted} 
+          onSignIn={handleSignIn} 
+        />
+      </div>
+    );
+  }
+
+  // User is logged in and everything is set up - show the main app
   return (
     <SidebarLayout>
-      <LandingPage 
-        onGetStarted={handleGetStarted} 
-        onSignIn={handleSignIn} 
-      />
       <CSVUpload />
       <Dashboard />
       <BudgetOverview />
