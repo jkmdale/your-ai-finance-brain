@@ -75,25 +75,74 @@ function detectSchema(headers) {
 }
 
 function createFallbackSchema(headers) {
-  // Common column position patterns for NZ banks
+  const lowerHeaders = headers.map(h => h.toLowerCase());
+  
+  // Define close match patterns for each field type
+  const datePatterns = ['date', 'tran date', 'transaction date', 'posting date', 'posted date', 'trans date'];
+  const descPatterns = ['description', 'particulars', 'narrative', 'payee', 'details', 'reference', 'merchant', 'memo'];
+  const amountPatterns = ['amount', 'value', 'debit', 'credit', 'sum', 'total'];
+  
+  // Find best matches for each field
+  let dateMatch = null;
+  let descMatch = null;
+  let amountMatch = null;
+  
+  // Search for date field
+  for (const pattern of datePatterns) {
+    const found = headers.find(h => h.toLowerCase().includes(pattern));
+    if (found) {
+      dateMatch = found;
+      break;
+    }
+  }
+  
+  // Search for description field
+  for (const pattern of descPatterns) {
+    const found = headers.find(h => h.toLowerCase().includes(pattern));
+    if (found) {
+      descMatch = found;
+      break;
+    }
+  }
+  
+  // Search for amount field
+  for (const pattern of amountPatterns) {
+    const found = headers.find(h => h.toLowerCase().includes(pattern));
+    if (found) {
+      amountMatch = found;
+      break;
+    }
+  }
+  
+  // Check if we found all three required fields
+  if (dateMatch && descMatch && amountMatch) {
+    return {
+      date: dateMatch,
+      description: descMatch,
+      amount: amountMatch
+    };
+  }
+  
+  // Fallback to position-based matching if partial matches found
   if (headers.length >= 3) {
-    // Most common: Date, Description, Amount
+    // Use whatever we found, or fall back to position
     return {
-      date: headers[0],
-      description: headers[1], 
-      amount: headers[headers.length - 1] // Amount often last column
+      date: dateMatch || headers[0],
+      description: descMatch || headers[1],
+      amount: amountMatch || headers[headers.length - 1]
     };
   }
   
+  // Minimum viable fallback for 2 columns
   if (headers.length >= 2) {
-    // Minimal: Date, Amount (use date as description fallback)
     return {
-      date: headers[0],
-      description: headers[0],
-      amount: headers[1]
+      date: dateMatch || headers[0],
+      description: descMatch || headers[0], // Use date as description if no desc found
+      amount: amountMatch || headers[1]
     };
   }
   
+  // Cannot create a valid schema
   return null;
 }
 
