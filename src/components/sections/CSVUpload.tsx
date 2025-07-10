@@ -299,6 +299,13 @@ function normalizeDate(dateStr: string): string | null {
   }
   
   console.log('🔍 Parsing date:', cleanDateStr);
+  console.log('🔍 Date length:', cleanDateStr.length);
+  console.log('🔍 Date char codes:', Array.from(cleanDateStr).map(c => c.charCodeAt(0)));
+  console.log('🔍 Date raw value:', JSON.stringify(cleanDateStr));
+  
+  // Test the exact regex pattern
+  const testRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/;
+  console.log('🔍 Regex test result:', testRegex.test(cleanDateStr));
   
   // Try DD/MM/YYYY format (NZ standard)
   const ddmmyyyy = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
@@ -307,7 +314,7 @@ function normalizeDate(dateStr: string): string | null {
     const month = parseInt(ddmmyyyy[2]);
     const year = parseInt(ddmmyyyy[3]);
     
-    console.log(`🔍 DD/MM/YYYY matched: ${day}/${month}/${year}`);
+    console.log(`✅ DD/MM/YYYY matched: ${day}/${month}/${year}`);
     
     // Very permissive validation - just check basic ranges
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
@@ -317,25 +324,27 @@ function normalizeDate(dateStr: string): string | null {
     } else {
       console.log(`❌ Date out of range: day=${day}, month=${month}, year=${year}`);
     }
+  } else {
+    console.log('❌ DD/MM/YYYY regex did not match');
   }
   
-  // Try YYYY-MM-DD format
-  const yyyymmdd = cleanDateStr.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
-  if (yyyymmdd) {
-    const year = parseInt(yyyymmdd[1]);
-    const month = parseInt(yyyymmdd[2]);
-    const day = parseInt(yyyymmdd[3]);
+  // Try a much simpler pattern - just numbers and slashes
+  const simplePattern = cleanDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
+  if (simplePattern) {
+    const day = parseInt(simplePattern[1]);
+    const month = parseInt(simplePattern[2]);
+    const year = parseInt(simplePattern[3]);
     
-    console.log(`🔍 YYYY-MM-DD matched: ${year}-${month}-${day}`);
+    console.log(`🔍 Simple pattern matched: ${day}/${month}/${year}`);
     
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
       const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      console.log(`✅ Date converted: ${cleanDateStr} → ${isoDate}`);
+      console.log(`✅ Date converted via simple pattern: ${cleanDateStr} → ${isoDate}`);
       return isoDate;
     }
   }
   
-  console.log(`❌ No date pattern matched for: "${cleanDateStr}"`);
+  console.log(`❌ All patterns failed for: "${cleanDateStr}"`);
   return null;
 }
 
