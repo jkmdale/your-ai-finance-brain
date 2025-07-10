@@ -1,55 +1,65 @@
-import Papa from 'papaparse'; import { schemaTemplates } from '../data/schemaExamples.js';
-
-export async function parseCSV(file, onComplete, onError) { if (!file) return onError('No file selected');
-
-Papa.parse(file, { header: true, skipEmptyLines: true, complete: function (results) { if (!results.data || results.data.length === 0) { return onError('CSV appears to be empty'); }
-
-console.log('🔍 CSV Headers detected:', results.meta.fields);
-  const detectedSchema = detectSchema(results.meta.fields);
-  if (!detectedSchema) {
-    console.warn('⚠️ Using fallback schema for headers:', results.meta.fields);
-    const fallbackSchema = createFallbackSchema(results.meta.fields);
-    if (!fallbackSchema) {
-      return onError('CSV format not recognized - no suitable columns found');
+export const schemaTemplates = [
+  {
+    name: 'Generic Format',
+    fields: ['date', 'amount', 'description'],
+    map: {
+      date: 'Date',
+      amount: 'Amount',
+      description: 'Description'
     }
-    console.log('✅ Fallback schema applied:', fallbackSchema);
-    return parseWithSchema(results.data, fallbackSchema, onComplete, onError);
+  },
+  {
+    name: 'ANZ Bank',
+    fields: ['tran date', 'particulars', 'amount'],
+    map: {
+      date: 'Tran Date',
+      amount: 'Amount',
+      description: 'Particulars'
+    }
+  },
+  {
+    name: 'ASB Bank',
+    fields: ['date', 'particulars', 'amount'],
+    map: {
+      date: 'Date',
+      amount: 'Amount', 
+      description: 'Particulars'
+    }
+  },
+  {
+    name: 'Westpac Bank',
+    fields: ['date', 'narrative', 'amount'],
+    map: {
+      date: 'Date',
+      amount: 'Amount',
+      description: 'Narrative'
+    }
+  },
+  {
+    name: 'Kiwibank',
+    fields: ['date', 'payee', 'amount'],
+    map: {
+      date: 'Date',
+      amount: 'Amount',
+      description: 'Payee'
+    }
+  },
+  {
+    name: 'BNZ Bank',
+    fields: ['posting date', 'description', 'amount'],
+    map: {
+      date: 'Posting Date',
+      amount: 'Amount',
+      description: 'Description'
+    }
+  },
+  {
+    name: 'Common Debit/Credit Format',
+    fields: ['date', 'description', 'debit', 'credit'],
+    map: {
+      date: 'Date',
+      amount: 'Debit', // Will be handled specially in parsing
+      description: 'Description'
+    }
   }
-  
-  console.log('✅ Schema detected:', detectedSchema);
-  parseWithSchema(results.data, detectedSchema, onComplete, onError);
-},
-error: function (err) {
-  onError('Error parsing CSV: ' + err.message);
-}
-
-}); }
-
-function detectSchema(headers) { const lowerHeaders = headers.map(h => h.toLowerCase()); for (const template of schemaTemplates) { const match = template.fields.every(field => lowerHeaders.some(h => h.includes(field)) ); if (match) return template.map; } return null; }
-
-function createFallbackSchema(headers) { const lowerHeaders = headers.map(h => h.toLowerCase());
-
-const findMatch = (candidates) => headers.find((h, i) => candidates.some(c => h.toLowerCase().includes(c)));
-
-const dateKey = findMatch(['transactiondate', 'date', 'posting', 'transdate']) || findMatch(['processeddate']); const descKey = findMatch(['description', 'details', 'narrative', 'particulars', 'reference']); const amountKey = findMatch(['amount', 'value', 'debit', 'credit']);
-
-if (dateKey && descKey && amountKey) { return { date: dateKey, description: descKey, amount: amountKey }; }
-
-console.warn('❌ Fallback failed. Headers received:', headers); return null; }; }
-
-return null; }
-
-function parseWithSchema(data, schema, onComplete, onError) { const cleanedData = data.map((row, idx) => { const rawDate = row[schema.date]; const parsedDate = normalizeDate(rawDate); if (!parsedDate) { console.warn(Skipping row ${idx + 1} with invalid date: ${rawDate}); return null; } return { date: parsedDate, description: row[schema.description] || '', amount: parseFloat(row[schema.amount] || 0), category: null }; }).filter(Boolean);
-
-onComplete(cleanedData); }
-
-function normalizeDate(dateStr) { if (!dateStr) return null; const parts = dateStr.trim().split(/[/-]/); if (parts.length !== 3) return null;
-
-const [a, b, c] = parts; let day, month, year;
-
-if (c.length === 4) { // dd/mm/yyyy or mm/dd/yyyy day = parseInt(a); month = parseInt(b); year = parseInt(c); } else if (a.length === 4) { // yyyy-mm-dd year = parseInt(a); month = parseInt(b); day = parseInt(c); } else { return null; }
-
-if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-
-const iso = new Date(year, month - 1, day).toISOString(); return iso.split('T')[0]; }
-
+];
