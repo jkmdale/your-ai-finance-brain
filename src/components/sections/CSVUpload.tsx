@@ -75,11 +75,11 @@ function normalizeDate(dateStr: string): string | null {
   // NZ bank date format patterns
   const patterns = [
     // DD/MM/YYYY (most common NZ format)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
+    { regex: /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/, type: 'dmy' },
     // DD/MM/YY (2-digit year)
-    { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
+    { regex: /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/, type: 'dmy2' },
     // YYYY-MM-DD (ISO format)
-    { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, type: 'ymd' },
+    { regex: /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/, type: 'ymd' },
     // DD MMM YYYY (like 25 Dec 2023)
     { regex: /^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i, type: 'dmmy' }
   ];

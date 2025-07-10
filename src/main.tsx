@@ -3,6 +3,12 @@ import App from './App';
 import './index.css';
 import { toast } from 'sonner';
 
+// Define proper type for BeforeInstallPromptEvent
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element not found");
@@ -37,11 +43,11 @@ if ('serviceWorker' in navigator) {
 }
 
 // ✅ Prompt user to install app manually
-let deferredPrompt: any = null;
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredPrompt = e;
+  deferredPrompt = e as BeforeInstallPromptEvent;
 
   toast.info('Add SmartFinanceAI to your home screen', {
     action: {

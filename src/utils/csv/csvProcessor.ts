@@ -51,7 +51,7 @@ export async function parseCSV(
   });
 }
 
-function detectSchema(headers: string[]): SchemaTemplate['map'] | null {
+export function detectSchema(headers: string[]): SchemaTemplate['map'] | null {
   for (const template of schemaTemplates) {
     const match = template.fields.every((field) =>
       headers.some((h) => h.toLowerCase().includes(field))

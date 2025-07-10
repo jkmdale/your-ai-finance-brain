@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { PieChart, TrendingUp, TrendingDown, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,19 +28,7 @@ export const BudgetBreakdown = () => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  useEffect(() => {
-    fetchBudgetData();
-    
-    // Listen for budget updates
-    const handleBudgetUpdate = () => {
-      setTimeout(() => fetchBudgetData(), 1000);
-    };
-    
-    window.addEventListener('smartfinance-complete', handleBudgetUpdate);
-    return () => window.removeEventListener('smartfinance-complete', handleBudgetUpdate);
-  }, [user]);
-
-  const fetchBudgetData = async () => {
+  const fetchBudgetData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -124,7 +112,19 @@ export const BudgetBreakdown = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchBudgetData();
+    
+    // Listen for budget updates
+    const handleBudgetUpdate = () => {
+      setTimeout(() => fetchBudgetData(), 1000);
+    };
+    
+    window.addEventListener('smartfinance-complete', handleBudgetUpdate);
+    return () => window.removeEventListener('smartfinance-complete', handleBudgetUpdate);
+  }, [fetchBudgetData]);
 
   const categorizeBudgetGroup = (categoryName: string, isIncome: boolean): 'needs' | 'wants' | 'savings' => {
     if (isIncome) return 'savings';

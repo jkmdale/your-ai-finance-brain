@@ -2,8 +2,13 @@
 import React, { useCallback, useState } from 'react';
 import { Upload, FileText, Loader2 } from 'lucide-react';
 
+interface User {
+  id: string;
+  email?: string;
+}
+
 interface FileUploadZoneProps {
-  user: any;
+  user: User | null;
   uploading: boolean;
   processing: boolean;
   isPickerOpen: boolean;
