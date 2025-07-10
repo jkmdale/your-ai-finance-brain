@@ -1,49 +1,66 @@
-
 export interface SchemaTemplate {
-  name: string;
+  bank: string;
   fields: string[];
   map: {
     date: string;
-    amount: string;
     description: string;
+    amount: string;
   };
 }
 
 export const schemaTemplates: SchemaTemplate[] = [
   {
-    name: 'Generic Format',
+    bank: 'ANZ',
+    fields: ['date', 'amount', 'particulars', 'code', 'reference'],
+    map: {
+      date: 'Date',
+      description: 'Particulars',
+      amount: 'Amount'
+    }
+  },
+  {
+    bank: 'ASB',
     fields: ['date', 'amount', 'description'],
     map: {
       date: 'Date',
-      amount: 'Amount',
-      description: 'Description'
+      description: 'Particulars',
+      amount: 'Amount'
     }
   },
   {
-    name: 'ANZ Bank',
-    fields: ['tran date', 'particulars', 'amount'],
+    bank: 'Westpac',
+    fields: ['date', 'description', 'amount'],
     map: {
-      date: 'Tran Date',
-      amount: 'Amount',
-      description: 'Particulars'
+      date: 'Date',
+      description: 'Transaction Description',
+      amount: 'Amount'
     }
   },
   {
-    name: 'Wells Fargo',
-    fields: ['posted date', 'amount', 'payee'],
+    bank: 'BNZ',
+    fields: ['date', 'description', 'amount'],
     map: {
-      date: 'Posted Date',
-      amount: 'Amount',
-      description: 'Payee'
+      date: 'Date',
+      description: 'Description',
+      amount: 'Amount'
     }
   },
   {
-    name: 'Monzo',
-    fields: ['created', 'amount', 'merchant name'],
+    bank: 'Kiwibank',
+    fields: ['date', 'amount', 'description'],
     map: {
-      date: 'Created',
-      amount: 'Amount',
-      description: 'Merchant Name'
+      date: 'Date',
+      description: 'Payee',
+      amount: 'Amount'
+    }
+  },
+  {
+    bank: 'CustomLoanCSV',
+    fields: ['date', 'details', 'amount'],
+    map: {
+      date: 'Date',
+      description: 'Details',
+      amount: 'Amount'
     }
   }
 ];
