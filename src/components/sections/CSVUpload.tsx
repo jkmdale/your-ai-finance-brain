@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
 import Papa from 'papaparse';
 
-// Schema detection for NZ banks
+// Schema detection for NZ banks and common formats
 const schemaTemplates = [
   {
     name: 'ANZ Bank',
@@ -27,7 +27,7 @@ const schemaTemplates = [
   },
   {
     name: 'Westpac Bank',
-    fields: ['date', 'amount', 'transaction details'],
+    fields: ['date', 'amount', 'transaction'],
     map: {
       date: 'Date',
       amount: 'Amount',
@@ -44,8 +44,17 @@ const schemaTemplates = [
     }
   },
   {
+    name: 'BNZ Bank',
+    fields: ['date', 'amount', 'reference'],
+    map: {
+      date: 'Date',
+      amount: 'Amount',
+      description: 'Reference'
+    }
+  },
+  {
     name: 'Generic Format',
-    fields: ['date', 'amount', 'description'],
+    fields: ['date', 'amount'],
     map: {
       date: 'Date',
       amount: 'Amount',
@@ -55,14 +64,101 @@ const schemaTemplates = [
 ];
 
 function detectSchema(headers: string[]) {
+  console.log('🔍 CSV Headers found:', headers);
+  
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  console.log('🔍 Normalized headers:', lowerHeaders);
+  
+  // Try exact template matching first
   for (const template of schemaTemplates) {
     const match = template.fields.every((field) =>
-      headers.some((h) => h.toLowerCase().includes(field.toLowerCase()))
+      lowerHeaders.some((h) => h.includes(field.toLowerCase()))
     );
     if (match) {
+      console.log(`✅ Matched template: ${template.name}`);
       return template.map;
     }
   }
+  
+  // If no template matches, try intelligent fallback detection
+  console.log('⚠️ No template matched, trying intelligent detection...');
+  
+  const schema = createFlexibleSchema(headers);
+  if (schema) {
+    console.log('✅ Created flexible schema:', schema);
+    return schema;
+  }
+  
+  console.error('❌ No schema could be detected. Headers:', headers);
+  return null;
+}
+
+function createFlexibleSchema(headers: string[]) {
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  
+  // Find date column
+  const datePatterns = ['date', 'transaction_date', 'posting_date', 'value_date', 'processed_date'];
+  const dateHeader = findBestMatch(lowerHeaders, datePatterns);
+  
+  // Find separate debit/credit columns first
+  const debitPatterns = ['debit', 'debit_amount', 'withdrawal', 'out'];
+  const creditPatterns = ['credit', 'credit_amount', 'deposit', 'in'];
+  const debitHeader = findBestMatch(lowerHeaders, debitPatterns);
+  const creditHeader = findBestMatch(lowerHeaders, creditPatterns);
+  
+  // Find single amount column if no debit/credit
+  const amountPatterns = ['amount', 'value', 'transaction_amount', 'net_amount'];
+  const amountHeader = findBestMatch(lowerHeaders, amountPatterns);
+  
+  // Find description column
+  const descriptionPatterns = ['description', 'particulars', 'payee', 'reference', 'details', 'memo', 'narrative', 'transaction_details'];
+  const descriptionHeader = findBestMatch(lowerHeaders, descriptionPatterns);
+  
+  console.log('🔍 Detected columns:', { dateHeader, amountHeader, debitHeader, creditHeader, descriptionHeader });
+  
+  const originalHeaders = headers; // Keep original case
+  
+  // Check if we have separate debit/credit columns
+  if (dateHeader && debitHeader && creditHeader) {
+    return {
+      date: originalHeaders[lowerHeaders.indexOf(dateHeader)],
+      debit: originalHeaders[lowerHeaders.indexOf(debitHeader)],
+      credit: originalHeaders[lowerHeaders.indexOf(creditHeader)],
+      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : debitHeader // fallback
+    };
+  }
+  
+  // Otherwise we need at least date and amount columns
+  if (dateHeader && amountHeader) {
+    return {
+      date: originalHeaders[lowerHeaders.indexOf(dateHeader)],
+      amount: originalHeaders[lowerHeaders.indexOf(amountHeader)],
+      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : amountHeader // fallback to amount column name
+    };
+  }
+  
+  return null;
+}
+
+function findBestMatch(headers: string[], patterns: string[]): string | null {
+  // First try exact matches
+  for (const pattern of patterns) {
+    const match = headers.find(h => h === pattern);
+    if (match) return match;
+  }
+  
+  // Then try contains matches
+  for (const pattern of patterns) {
+    const match = headers.find(h => h.includes(pattern));
+    if (match) return match;
+  }
+  
+  // Finally try partial matches where header is contained in pattern
+  for (const pattern of patterns) {
+    const match = headers.find(h => pattern.includes(h) && h.length > 2);
+    if (match) return match;
+  }
+  
   return null;
 }
 
@@ -309,7 +405,10 @@ export const CSVUpload = () => {
               console.log('🔍 Detected schema:', detectedSchema);
               
               if (!detectedSchema) {
-                reject(new Error('CSV format not recognized'));
+                const headers = results.meta.fields || [];
+                const errorMsg = `CSV format not recognized. Found headers: [${headers.join(', ')}]. Please ensure your CSV has columns for Date and Amount. Supported formats include ANZ, ASB, Westpac, Kiwibank, BNZ, or any CSV with date/amount columns.`;
+                console.error('❌ Schema detection failed:', errorMsg);
+                reject(new Error(errorMsg));
                 return;
               }
 
@@ -321,10 +420,23 @@ export const CSVUpload = () => {
                     console.warn(`Skipping row with invalid date: ${rawDate}`);
                     return null;
                   }
+                  
+                  // Handle different amount column scenarios
+                  let amount = 0;
+                  if (detectedSchema.debit && detectedSchema.credit) {
+                    // Separate debit/credit columns
+                    const debit = parseFloat(row[detectedSchema.debit] || '0');
+                    const credit = parseFloat(row[detectedSchema.credit] || '0');
+                    amount = credit - debit; // Credit is positive, debit is negative
+                  } else {
+                    // Single amount column
+                    amount = parseFloat(row[detectedSchema.amount] || '0');
+                  }
+                  
                   return {
                     date: parsedDate,
                     description: row[detectedSchema.description] || '',
-                    amount: parseFloat(row[detectedSchema.amount] || '0'),
+                    amount: amount,
                     category: null // to be filled later
                   };
                 })
@@ -465,6 +577,24 @@ export const CSVUpload = () => {
             <div>💰 Zero-based budget generation</div>
             <div>🎯 SMART financial goals creation</div>
             <div>📊 Real-time dashboard updates</div>
+          </div>
+        </div>
+
+        {/* Supported Formats */}
+        <div className="bg-white/5 rounded-lg p-4">
+          <h4 className="text-white font-medium mb-3">Supported CSV Formats</h4>
+          <div className="text-sm text-white/70 space-y-2">
+            <div><strong className="text-white/90">Required columns:</strong> Date + Amount (any name variations)</div>
+            <div><strong className="text-white/90">Optional:</strong> Description, Particulars, Reference, Payee, etc.</div>
+            <div><strong className="text-white/90">Example headers:</strong></div>
+            <div className="ml-4 space-y-1 text-xs">
+              <div>• ANZ: "Date, Amount, Particulars"</div>
+              <div>• ASB: "Date, Amount, Description"</div>
+              <div>• Generic: "Date, Debit Amount, Reference"</div>
+            </div>
+            <div className="text-blue-300 text-xs mt-2">
+              💡 The system will auto-detect your format and show detailed logs in the browser console if issues occur.
+            </div>
           </div>
         </div>
       </div>
