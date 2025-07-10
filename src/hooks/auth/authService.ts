@@ -30,8 +30,10 @@ export const authService = {
   },
 
   async signUp(email: string, password: string, additionalData?: { firstName?: string; lastName?: string; country?: string }) {
-    console.log('Attempting sign up for:', email, additionalData);
+    console.log('🔵 Starting sign up for:', email, additionalData);
     const redirectUrl = `${window.location.origin}/`;
+    
+    console.log('🔵 Using redirect URL:', redirectUrl);
     
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -47,12 +49,16 @@ export const authService = {
     });
     
     if (error) {
-      console.log('Sign up error:', error);
+      console.error('❌ Sign up error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
       return { error };
     }
     
+    console.log('✅ Sign up response:', data);
+    
     // Check if user was created but needs confirmation
     if (data.user && !data.session) {
+      console.log('📧 User created, confirmation email should be sent to:', email);
       return { 
         error: null, 
         needsConfirmation: true,
@@ -64,17 +70,24 @@ export const authService = {
   },
 
   async resendConfirmation(email: string) {
-    console.log('Resending confirmation for:', email);
+    console.log('🔵 Resending confirmation for:', email);
+    
+    const redirectUrl = `${window.location.origin}/`;
+    console.log('🔵 Using redirect URL for resend:', redirectUrl);
+    
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: email,
       options: {
-        emailRedirectTo: `${window.location.origin}/`
+        emailRedirectTo: redirectUrl
       }
     });
     
     if (error) {
-      console.log('Resend confirmation error:', error);
+      console.error('❌ Resend confirmation error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+    } else {
+      console.log('✅ Resend confirmation request completed successfully');
     }
     
     return { error };
