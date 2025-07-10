@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Brain, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { FileUploadZone } from '@/components/csv/FileUploadZone';
 import Papa from 'papaparse';
 
 // Schema detection for NZ banks
@@ -250,8 +251,17 @@ export const CSVUpload = () => {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [processingStage, setProcessingStage] = useState('');
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenFilePicker = () => {
+    setIsPickerOpen(true);
+    fileInputRef.current?.click();
+    // Reset after a brief moment to avoid UI flickering
+    setTimeout(() => setIsPickerOpen(false), 100);
+  };
 
   const handleFileUpload = async (files: FileList) => {
     if (!user) {
@@ -400,27 +410,26 @@ export const CSVUpload = () => {
       )}
 
       <div className="space-y-6">
-        {/* File Upload Area */}
-        <div className="border-2 border-dashed border-white/30 rounded-xl p-8 text-center hover:border-white/50 transition-colors">
-          <input
-            type="file"
-            multiple
-            accept=".csv,text/csv"
-            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-            disabled={uploading || !user}
-            className="hidden"
-            id="csv-upload"
-          />
-          <label htmlFor="csv-upload" className="cursor-pointer">
-            <FileText className="w-12 h-12 text-white/60 mx-auto mb-4" />
-            <p className="text-white font-medium mb-2">
-              {uploading ? 'Processing...' : 'Select Bank CSV Files'}
-            </p>
-            <p className="text-white/60 text-sm">
-              Choose CSV files from NZ banks (ANZ, ASB, Westpac, Kiwibank, BNZ)
-            </p>
-          </label>
-        </div>
+        {/* File Upload Zone */}
+        <FileUploadZone
+          user={user}
+          uploading={uploading}
+          processing={uploadStatus === 'processing'}
+          isPickerOpen={isPickerOpen}
+          onFilesSelected={handleFileUpload}
+          onOpenFilePicker={handleOpenFilePicker}
+        />
+        
+        {/* Hidden file input for click-to-upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".csv,text/csv"
+          onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+          disabled={uploading || !user}
+          className="hidden"
+        />
 
         {/* Processing Stage */}
         {processingStage && (
