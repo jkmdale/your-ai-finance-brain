@@ -3,29 +3,52 @@ import { supabase } from '@/integrations/supabase/client';
 
 export const authService = {
   async signIn(email: string, password: string) {
-    console.log('Attempting sign in for:', email);
+    console.log('🔵 Attempting sign in for:', email);
+    
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     
     if (error) {
-      console.log('Sign in error:', error);
+      console.error('❌ Sign in error:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error code:', error.status);
       
       // Check if it's an email confirmation issue
-      if (error.message.includes('Email not confirmed') || 
-          error.message.includes('Invalid login credentials')) {
-        
+      if (error.message.includes('Email not confirmed')) {
+        console.log('📧 Email not confirmed - user needs to check their email');
         return { 
           error: { 
             ...error, 
-            message: 'Invalid email or password. If you just signed up, please check your email for a confirmation link first.',
+            message: 'Please check your email and click the confirmation link before signing in. If you need a new confirmation email, click "Resend Confirmation" below.',
             needsConfirmation: true
+          } 
+        };
+      }
+      
+      if (error.message.includes('Invalid login credentials')) {
+        console.log('❌ Invalid credentials - could be unconfirmed email or wrong password');
+        return { 
+          error: { 
+            ...error, 
+            message: 'Invalid email or password. If you just signed up, you must confirm your email first. Check your inbox for a confirmation email.',
+            needsConfirmation: true
+          } 
+        };
+      }
+
+      if (error.message.includes('Too many requests')) {
+        return { 
+          error: { 
+            ...error, 
+            message: 'Too many sign-in attempts. Please wait a few minutes before trying again.'
           } 
         };
       }
     }
     
+    console.log('✅ Sign in successful');
     return { error };
   },
 

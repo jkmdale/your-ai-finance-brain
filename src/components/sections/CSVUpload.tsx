@@ -747,6 +747,61 @@ export const CSVUpload = () => {
           </button>
         )}
 
+        {/* Email Test Button - for debugging auth emails */}
+        {user && (
+          <button
+            onClick={async () => {
+              console.log('🧪 Testing email functionality...');
+              try {
+                // Test the email function directly
+                const response = await fetch('https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/send-auth-email', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.access_token || 'test'}`,
+                  },
+                  body: JSON.stringify({
+                    user: { email: user.email },
+                    email_data: {
+                      token_hash: 'test-token',
+                      email_action_type: 'signup',
+                      site_url: window.location.origin,
+                      redirect_to: window.location.origin
+                    }
+                  })
+                });
+                
+                const result = await response.json();
+                console.log('📧 Email function test result:', result);
+                
+                if (response.ok) {
+                  toast({
+                    title: "Email Test Sent! ✅",
+                    description: "Check console for details and your email inbox",
+                  });
+                } else {
+                  toast({
+                    title: "Email Test Failed ❌",
+                    description: `Error: ${result.error || 'Unknown error'}`,
+                    variant: "destructive",
+                  });
+                }
+              } catch (error) {
+                console.error('❌ Email test error:', error);
+                toast({
+                  title: "Email Test Error ❌",
+                  description: "Check console for details",
+                  variant: "destructive",
+                });
+              }
+            }}
+            disabled={uploading}
+            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            📧 Test Email Function (Debug)
+          </button>
+        )}
+
         {/* Processing Stage */}
         {processingStage && (
           <div className="p-4 rounded-lg border bg-blue-500/20 border-blue-500/30 text-blue-300 flex items-center space-x-3">
