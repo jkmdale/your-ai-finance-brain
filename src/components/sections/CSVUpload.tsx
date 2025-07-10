@@ -63,14 +63,21 @@ const schemaTemplates = [
   }
 ];
 
-function detectSchema(headers: string[]) {
-  console.log('🔍 CSV Headers found:', headers);
-  console.log('🔍 Headers type:', typeof headers, 'Length:', headers.length);
-  console.log('🔍 Raw headers:', JSON.stringify(headers));
+function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) {
+  const debug = (message: string) => {
+    console.log(message);
+    if (setDebugInfo) {
+      setDebugInfo(message);
+    }
+  };
+  
+  debug('🔍 CSV Headers found: ' + JSON.stringify(headers));
+  debug('🔍 Headers type: ' + typeof headers + ', Length: ' + headers.length);
+  debug('🔍 Raw headers: ' + JSON.stringify(headers));
   
   // Handle edge cases
   if (!headers || headers.length === 0) {
-    console.error('❌ No headers found in CSV');
+    debug('❌ No headers found in CSV');
     return null;
   }
   
@@ -80,51 +87,58 @@ function detectSchema(headers: string[]) {
     .filter(h => h.length > 0); // Remove empty headers
     
   if (cleanHeaders.length === 0) {
-    console.error('❌ All headers are empty after cleaning');
+    debug('❌ All headers are empty after cleaning');
     return null;
   }
   
   const lowerHeaders = cleanHeaders.map(h => h.toLowerCase().trim());
-  console.log('🔍 Cleaned headers:', cleanHeaders);
-  console.log('🔍 Normalized headers:', lowerHeaders);
+  debug('🔍 Cleaned headers: ' + JSON.stringify(cleanHeaders));
+  debug('🔍 Normalized headers: ' + JSON.stringify(lowerHeaders));
   
   // Try exact template matching first
   for (const template of schemaTemplates) {
-    console.log(`🔍 Testing template: ${template.name} (requires: ${template.fields.join(', ')})`);
+    debug(`🔍 Testing template: ${template.name} (requires: ${template.fields.join(', ')})`);
     const match = template.fields.every((field) => {
       const found = lowerHeaders.some((h) => h.includes(field.toLowerCase()));
-      console.log(`  - Looking for "${field}": ${found ? '✅' : '❌'}`);
+      debug(`  - Looking for "${field}": ${found ? '✅' : '❌'}`);
       return found;
     });
     if (match) {
-      console.log(`✅ Matched template: ${template.name}`);
+      debug(`✅ Matched template: ${template.name}`);
       return template.map;
     }
   }
   
   // If no template matches, try intelligent fallback detection
-  console.log('⚠️ No template matched, trying intelligent detection...');
+  debug('⚠️ No template matched, trying intelligent detection...');
   
-  const schema = createFlexibleSchema(cleanHeaders);
+  const schema = createFlexibleSchema(cleanHeaders, setDebugInfo);
   if (schema) {
-    console.log('✅ Created flexible schema:', schema);
+    debug('✅ Created flexible schema: ' + JSON.stringify(schema));
     return schema;
   }
   
   // Last resort: try super flexible detection
-  console.log('⚠️ Flexible detection failed, trying super flexible detection...');
-  const superFlexibleSchema = createSuperFlexibleSchema(cleanHeaders);
+  debug('⚠️ Flexible detection failed, trying super flexible detection...');
+  const superFlexibleSchema = createSuperFlexibleSchema(cleanHeaders, setDebugInfo);
   if (superFlexibleSchema) {
-    console.log('✅ Created super flexible schema:', superFlexibleSchema);
+    debug('✅ Created super flexible schema: ' + JSON.stringify(superFlexibleSchema));
     return superFlexibleSchema;
   }
   
-  console.error('❌ No schema could be detected. All available headers:', cleanHeaders);
-  console.error('❌ Consider these column names: Date/Amount are minimum required');
+  debug('❌ No schema could be detected. All available headers: ' + JSON.stringify(cleanHeaders));
+  debug('❌ Consider these column names: Date/Amount are minimum required');
   return null;
 }
 
-function createFlexibleSchema(headers: string[]) {
+function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) => void) {
+  const debug = (message: string) => {
+    console.log(message);
+    if (setDebugInfo) {
+      setDebugInfo(message);
+    }
+  };
+  
   const lowerHeaders = headers.map(h => h.toLowerCase().trim());
   
   // Find date column
@@ -145,7 +159,7 @@ function createFlexibleSchema(headers: string[]) {
   const descriptionPatterns = ['description', 'particulars', 'payee', 'reference', 'details', 'memo', 'narrative', 'transaction_details'];
   const descriptionHeader = findBestMatch(lowerHeaders, descriptionPatterns);
   
-  console.log('🔍 Detected columns:', { dateHeader, amountHeader, debitHeader, creditHeader, descriptionHeader });
+  debug('🔍 Detected columns: ' + JSON.stringify({ dateHeader, amountHeader, debitHeader, creditHeader, descriptionHeader }));
   
   const originalHeaders = headers; // Keep original case
   
@@ -171,9 +185,16 @@ function createFlexibleSchema(headers: string[]) {
   return null;
 }
 
-function createSuperFlexibleSchema(headers: string[]) {
+function createSuperFlexibleSchema(headers: string[], setDebugInfo?: (info: string) => void) {
+  const debug = (message: string) => {
+    console.log(message);
+    if (setDebugInfo) {
+      setDebugInfo(message);
+    }
+  };
+  
   const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-  console.log('🔍 Super flexible detection for headers:', lowerHeaders);
+  debug('🔍 Super flexible detection for headers: ' + JSON.stringify(lowerHeaders));
   
   // Very broad patterns - match even partial words
   let dateCol = null;
@@ -186,7 +207,7 @@ function createSuperFlexibleSchema(headers: string[]) {
     if (h.includes('date') || h.includes('time') || h.includes('day') || 
         h.includes('transaction') || h.includes('posting') || h.includes('process')) {
       dateCol = headers[i];
-      console.log(`📅 Found date column: "${dateCol}" (from "${h}")`);
+      debug(`📅 Found date column: "${dateCol}" (from "${h}")`);
       break;
     }
   }
@@ -198,7 +219,7 @@ function createSuperFlexibleSchema(headers: string[]) {
         h.includes('sum') || h.includes('balance') || h.includes('money') ||
         h.includes('debit') || h.includes('credit') || h.includes('$')) {
       amountCol = headers[i];
-      console.log(`💰 Found amount column: "${amountCol}" (from "${h}")`);
+      debug(`💰 Found amount column: "${amountCol}" (from "${h}")`);
       break;
     }
   }
@@ -210,7 +231,7 @@ function createSuperFlexibleSchema(headers: string[]) {
         h.includes('payee') || h.includes('reference') || h.includes('memo') ||
         h.includes('narrative') || h.includes('comment') || h.includes('note')) {
       descCol = headers[i];
-      console.log(`📝 Found description column: "${descCol}" (from "${h}")`);
+      debug(`📝 Found description column: "${descCol}" (from "${h}")`);
       break;
     }
   }
@@ -218,17 +239,17 @@ function createSuperFlexibleSchema(headers: string[]) {
   // If we still don't have essentials, use positional fallback
   if (!dateCol && headers.length > 0) {
     dateCol = headers[0];
-    console.log(`📅 Using first column as date: "${dateCol}"`);
+    debug(`📅 Using first column as date: "${dateCol}"`);
   }
   
   if (!amountCol && headers.length > 1) {
     amountCol = headers[1];
-    console.log(`💰 Using second column as amount: "${amountCol}"`);
+    debug(`💰 Using second column as amount: "${amountCol}"`);
   }
   
   if (!descCol && headers.length > 2) {
     descCol = headers[2];
-    console.log(`📝 Using third column as description: "${descCol}"`);
+    debug(`📝 Using third column as description: "${descCol}"`);
   }
   
   if (dateCol && amountCol) {
@@ -239,7 +260,7 @@ function createSuperFlexibleSchema(headers: string[]) {
     };
   }
   
-  console.error('❌ Super flexible detection failed. Headers:', headers);
+  debug('❌ Super flexible detection failed. Headers: ' + JSON.stringify(headers));
   return null;
 }
 
@@ -451,6 +472,7 @@ export const CSVUpload = () => {
   const [uploadMessage, setUploadMessage] = useState('');
   const [processingStage, setProcessingStage] = useState('');
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -483,6 +505,7 @@ export const CSVUpload = () => {
     setUploading(true);
     setUploadStatus('processing');
     setUploadMessage('Starting CSV processing...');
+    setDebugInfo(''); // Clear previous debug info
 
     try {
       const allTransactions: any[] = [];
@@ -504,13 +527,19 @@ export const CSVUpload = () => {
                 return;
               }
 
-              const detectedSchema = detectSchema(results.meta.fields || []);
+              // Clear previous debug info and start fresh
+              setDebugInfo('📄 Starting CSV analysis...\n');
+              
+              const detectedSchema = detectSchema(results.meta.fields || [], (info) => {
+                setDebugInfo(prev => prev + info + '\n');
+              });
               console.log('🔍 Detected schema:', detectedSchema);
               
               if (!detectedSchema) {
                 const headers = results.meta.fields || [];
                 const errorMsg = `CSV format not recognized. Found headers: [${headers.join(', ')}]. Please ensure your CSV has columns for Date and Amount. Supported formats include ANZ, ASB, Westpac, Kiwibank, BNZ, or any CSV with date/amount columns.`;
                 console.error('❌ Schema detection failed:', errorMsg);
+                setDebugInfo(prev => prev + '❌ ' + errorMsg + '\n');
                 reject(new Error(errorMsg));
                 return;
               }
@@ -667,6 +696,20 @@ export const CSVUpload = () => {
             {uploadStatus === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
             {uploadStatus === 'processing' && <Loader2 className="w-5 h-5 flex-shrink-0 animate-spin" />}
             <p className="text-sm font-medium">{uploadMessage}</p>
+          </div>
+        )}
+
+        {/* Debug Information */}
+        {debugInfo && uploadStatus === 'error' && (
+          <div className="p-4 rounded-lg border bg-gray-500/20 border-gray-500/30 text-gray-300">
+            <h4 className="text-sm font-medium mb-2">🔍 CSV Analysis Debug Info:</h4>
+            <pre className="text-xs whitespace-pre-wrap font-mono bg-black/20 p-3 rounded overflow-x-auto">
+              {debugInfo}
+            </pre>
+            <p className="text-xs text-gray-400 mt-2">
+              💡 This shows exactly what headers were found and how the detection process worked. 
+              Share this info if you need help troubleshooting.
+            </p>
           </div>
         )}
 
