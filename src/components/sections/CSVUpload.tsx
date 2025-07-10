@@ -65,15 +65,37 @@ const schemaTemplates = [
 
 function detectSchema(headers: string[]) {
   console.log('🔍 CSV Headers found:', headers);
+  console.log('🔍 Headers type:', typeof headers, 'Length:', headers.length);
+  console.log('🔍 Raw headers:', JSON.stringify(headers));
   
-  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  // Handle edge cases
+  if (!headers || headers.length === 0) {
+    console.error('❌ No headers found in CSV');
+    return null;
+  }
+  
+  // Clean and normalize headers
+  const cleanHeaders = headers
+    .map(h => String(h || '').trim()) // Convert to string and trim
+    .filter(h => h.length > 0); // Remove empty headers
+    
+  if (cleanHeaders.length === 0) {
+    console.error('❌ All headers are empty after cleaning');
+    return null;
+  }
+  
+  const lowerHeaders = cleanHeaders.map(h => h.toLowerCase().trim());
+  console.log('🔍 Cleaned headers:', cleanHeaders);
   console.log('🔍 Normalized headers:', lowerHeaders);
   
   // Try exact template matching first
   for (const template of schemaTemplates) {
-    const match = template.fields.every((field) =>
-      lowerHeaders.some((h) => h.includes(field.toLowerCase()))
-    );
+    console.log(`🔍 Testing template: ${template.name} (requires: ${template.fields.join(', ')})`);
+    const match = template.fields.every((field) => {
+      const found = lowerHeaders.some((h) => h.includes(field.toLowerCase()));
+      console.log(`  - Looking for "${field}": ${found ? '✅' : '❌'}`);
+      return found;
+    });
     if (match) {
       console.log(`✅ Matched template: ${template.name}`);
       return template.map;
@@ -83,13 +105,22 @@ function detectSchema(headers: string[]) {
   // If no template matches, try intelligent fallback detection
   console.log('⚠️ No template matched, trying intelligent detection...');
   
-  const schema = createFlexibleSchema(headers);
+  const schema = createFlexibleSchema(cleanHeaders);
   if (schema) {
     console.log('✅ Created flexible schema:', schema);
     return schema;
   }
   
-  console.error('❌ No schema could be detected. Headers:', headers);
+  // Last resort: try super flexible detection
+  console.log('⚠️ Flexible detection failed, trying super flexible detection...');
+  const superFlexibleSchema = createSuperFlexibleSchema(cleanHeaders);
+  if (superFlexibleSchema) {
+    console.log('✅ Created super flexible schema:', superFlexibleSchema);
+    return superFlexibleSchema;
+  }
+  
+  console.error('❌ No schema could be detected. All available headers:', cleanHeaders);
+  console.error('❌ Consider these column names: Date/Amount are minimum required');
   return null;
 }
 
@@ -137,6 +168,78 @@ function createFlexibleSchema(headers: string[]) {
     };
   }
   
+  return null;
+}
+
+function createSuperFlexibleSchema(headers: string[]) {
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  console.log('🔍 Super flexible detection for headers:', lowerHeaders);
+  
+  // Very broad patterns - match even partial words
+  let dateCol = null;
+  let amountCol = null;
+  let descCol = null;
+  
+  // Find date column (very flexible)
+  for (let i = 0; i < lowerHeaders.length; i++) {
+    const h = lowerHeaders[i];
+    if (h.includes('date') || h.includes('time') || h.includes('day') || 
+        h.includes('transaction') || h.includes('posting') || h.includes('process')) {
+      dateCol = headers[i];
+      console.log(`📅 Found date column: "${dateCol}" (from "${h}")`);
+      break;
+    }
+  }
+  
+  // Find amount column (very flexible)
+  for (let i = 0; i < lowerHeaders.length; i++) {
+    const h = lowerHeaders[i];
+    if (h.includes('amount') || h.includes('value') || h.includes('total') ||
+        h.includes('sum') || h.includes('balance') || h.includes('money') ||
+        h.includes('debit') || h.includes('credit') || h.includes('$')) {
+      amountCol = headers[i];
+      console.log(`💰 Found amount column: "${amountCol}" (from "${h}")`);
+      break;
+    }
+  }
+  
+  // Find description column (very flexible)
+  for (let i = 0; i < lowerHeaders.length; i++) {
+    const h = lowerHeaders[i];
+    if (h.includes('desc') || h.includes('detail') || h.includes('particular') ||
+        h.includes('payee') || h.includes('reference') || h.includes('memo') ||
+        h.includes('narrative') || h.includes('comment') || h.includes('note')) {
+      descCol = headers[i];
+      console.log(`📝 Found description column: "${descCol}" (from "${h}")`);
+      break;
+    }
+  }
+  
+  // If we still don't have essentials, use positional fallback
+  if (!dateCol && headers.length > 0) {
+    dateCol = headers[0];
+    console.log(`📅 Using first column as date: "${dateCol}"`);
+  }
+  
+  if (!amountCol && headers.length > 1) {
+    amountCol = headers[1];
+    console.log(`💰 Using second column as amount: "${amountCol}"`);
+  }
+  
+  if (!descCol && headers.length > 2) {
+    descCol = headers[2];
+    console.log(`📝 Using third column as description: "${descCol}"`);
+  }
+  
+  if (dateCol && amountCol) {
+    return {
+      date: dateCol,
+      amount: amountCol,
+      description: descCol || amountCol
+    };
+  }
+  
+  console.error('❌ Super flexible detection failed. Headers:', headers);
   return null;
 }
 
@@ -423,12 +526,12 @@ export const CSVUpload = () => {
                   
                   // Handle different amount column scenarios
                   let amount = 0;
-                  if (detectedSchema.debit && detectedSchema.credit) {
+                  if ('debit' in detectedSchema && 'credit' in detectedSchema) {
                     // Separate debit/credit columns
                     const debit = parseFloat(row[detectedSchema.debit] || '0');
                     const credit = parseFloat(row[detectedSchema.credit] || '0');
                     amount = credit - debit; // Credit is positive, debit is negative
-                  } else {
+                  } else if ('amount' in detectedSchema) {
                     // Single amount column
                     amount = parseFloat(row[detectedSchema.amount] || '0');
                   }
