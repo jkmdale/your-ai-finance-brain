@@ -287,67 +287,77 @@ function findBestMatch(headers: string[], patterns: string[]): string | null {
 }
 
 function normalizeDate(dateStr: string): string | null {
-  if (!dateStr) return null;
+  if (!dateStr) {
+    console.log('❌ Date is empty or null:', dateStr);
+    return null;
+  }
   
   const cleanDateStr = String(dateStr).trim();
-  if (!cleanDateStr) return null;
+  if (!cleanDateStr) {
+    console.log('❌ Date is empty after cleaning:', dateStr);
+    return null;
+  }
   
-  // NZ bank date format patterns
-  const patterns = [
-    // DD/MM/YYYY (most common NZ format)
-    { regex: /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/, type: 'dmy' },
-    // DD/MM/YY (2-digit year)
-    { regex: /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/, type: 'dmy2' },
-    // YYYY-MM-DD (ISO format)
-    { regex: /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/, type: 'ymd' },
-    // DD MMM YYYY (like 25 Dec 2023)
-    { regex: /^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i, type: 'dmmy' }
-  ];
-
-  for (const pattern of patterns) {
-    const match = cleanDateStr.match(pattern.regex);
-    if (match) {
+  console.log('🔍 Parsing date:', cleanDateStr);
+  
+  // Try simple DD/MM/YYYY format first (most common for NZ banks)
+  const ddmmyyyyMatch = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const day = parseInt(ddmmyyyyMatch[1]);
+    const month = parseInt(ddmmyyyyMatch[2]);
+    const year = parseInt(ddmmyyyyMatch[3]);
+    
+    console.log(`🔍 Parsed DD/MM/YYYY: ${day}/${month}/${year}`);
+    
+    // Basic validation
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2050) {
       try {
-        let day: number, month: number, year: number;
-        
-        if (pattern.type === 'ymd') {
-          [, year, month, day] = match.slice(1).map(Number);
-        } else if (pattern.type === 'dmy2') {
-          [, day, month, year] = match.slice(1).map(Number);
-          // Convert 2-digit year to 4-digit (assume 50+ = 19xx, otherwise 20xx)
-          year = year > 50 ? 1900 + year : 2000 + year;
-        } else if (pattern.type === 'dmmy') {
-          day = parseInt(match[1]);
-          const monthMap: { [key: string]: number } = {
-            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-          };
-          month = monthMap[match[2].toLowerCase()];
-          year = parseInt(match[3]);
-        } else {
-          [, day, month, year] = match.slice(1).map(Number);
-        }
-        
-        // Validate ranges
-        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-          continue;
-        }
-        
-        // Create date object (month is 0-indexed in JS)
         const date = new Date(year, month - 1, day);
-        
-        // Verify the date is valid (handles leap years, month days, etc.)
-        if (date.getFullYear() === year && 
-            date.getMonth() === month - 1 && 
-            date.getDate() === day) {
-          return date.toISOString().split('T')[0];
-        }
+        const isoDate = date.toISOString().split('T')[0];
+        console.log(`✅ Date accepted: ${cleanDateStr} → ${isoDate}`);
+        return isoDate;
       } catch (error) {
-        continue;
+        console.log(`❌ Date creation failed: ${cleanDateStr}`, error);
+      }
+    } else {
+      console.log(`❌ Date validation failed: day=${day}, month=${month}, year=${year}`);
+    }
+  }
+  
+  // Try YYYY-MM-DD format
+  const yyyymmddMatch = cleanDateStr.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (yyyymmddMatch) {
+    const year = parseInt(yyyymmddMatch[1]);
+    const month = parseInt(yyyymmddMatch[2]);
+    const day = parseInt(yyyymmddMatch[3]);
+    
+    console.log(`🔍 Parsed YYYY-MM-DD: ${year}-${month}-${day}`);
+    
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2050) {
+      try {
+        const date = new Date(year, month - 1, day);
+        const isoDate = date.toISOString().split('T')[0];
+        console.log(`✅ Date accepted: ${cleanDateStr} → ${isoDate}`);
+        return isoDate;
+      } catch (error) {
+        console.log(`❌ Date creation failed: ${cleanDateStr}`, error);
       }
     }
   }
   
+  // Try parsing as a JavaScript Date (fallback)
+  try {
+    const date = new Date(cleanDateStr);
+    if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2050) {
+      const isoDate = date.toISOString().split('T')[0];
+      console.log(`✅ Date accepted via Date constructor: ${cleanDateStr} → ${isoDate}`);
+      return isoDate;
+    }
+  } catch (error) {
+    // Ignore
+  }
+  
+  console.log(`❌ All date parsing failed for: "${cleanDateStr}"`);
   return null;
 }
 
@@ -544,12 +554,19 @@ export const CSVUpload = () => {
                 return;
               }
 
+              console.log(`📊 Processing ${results.data.length} rows from ${file.name}`);
+              
+              let skippedDates = 0;
+              let skippedAmounts = 0;
+              let successfulRows = 0;
+              
               const cleanedData = (results.data as any[])
-                .map((row) => {
+                .map((row, index) => {
                   const rawDate = row[detectedSchema.date];
                   const parsedDate = normalizeDate(rawDate);
                   if (!parsedDate) {
-                    console.warn(`Skipping row with invalid date: ${rawDate}`);
+                    skippedDates++;
+                    console.warn(`Skipping row ${index + 1} with invalid date: ${rawDate}`);
                     return null;
                   }
                   
@@ -562,9 +579,16 @@ export const CSVUpload = () => {
                     amount = credit - debit; // Credit is positive, debit is negative
                   } else if ('amount' in detectedSchema) {
                     // Single amount column
-                    amount = parseFloat(row[detectedSchema.amount] || '0');
+                    const rawAmount = row[detectedSchema.amount];
+                    amount = parseFloat(rawAmount || '0');
+                    if (isNaN(amount)) {
+                      skippedAmounts++;
+                      console.warn(`Skipping row ${index + 1} with invalid amount: ${rawAmount}`);
+                      return null;
+                    }
                   }
                   
+                  successfulRows++;
                   return {
                     date: parsedDate,
                     description: row[detectedSchema.description] || '',
@@ -574,7 +598,15 @@ export const CSVUpload = () => {
                 })
                 .filter(Boolean);
 
+              console.log(`📊 Processing results: ${successfulRows} successful, ${skippedDates} invalid dates, ${skippedAmounts} invalid amounts`);
               console.log(`✅ Cleaned ${cleanedData.length} transactions from ${file.name}`);
+              
+              if (cleanedData.length === 0) {
+                const errorMsg = `No valid transactions found in ${file.name}. ${skippedDates} rows had invalid dates, ${skippedAmounts} rows had invalid amounts. Please check your CSV format.`;
+                reject(new Error(errorMsg));
+                return;
+              }
+              
               resolve(cleanedData);
             },
             error: function(err) {
