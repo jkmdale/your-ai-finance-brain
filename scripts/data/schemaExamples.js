@@ -18,21 +18,48 @@ export const schemaTemplates = [
     }
   },
   {
-    name: 'Wells Fargo',
-    fields: ['posted date', 'amount', 'payee'],
+    name: 'ASB Bank',
+    fields: ['date', 'particulars', 'amount'],
     map: {
-      date: 'Posted Date',
+      date: 'Date',
+      amount: 'Amount', 
+      description: 'Particulars'
+    }
+  },
+  {
+    name: 'Westpac Bank',
+    fields: ['date', 'narrative', 'amount'],
+    map: {
+      date: 'Date',
+      amount: 'Amount',
+      description: 'Narrative'
+    }
+  },
+  {
+    name: 'Kiwibank',
+    fields: ['date', 'payee', 'amount'],
+    map: {
+      date: 'Date',
       amount: 'Amount',
       description: 'Payee'
     }
   },
   {
-    name: 'Monzo',
-    fields: ['created', 'amount', 'merchant name'],
+    name: 'BNZ Bank',
+    fields: ['posting date', 'description', 'amount'],
     map: {
-      date: 'Created',
+      date: 'Posting Date',
       amount: 'Amount',
-      description: 'Merchant Name'
+      description: 'Description'
+    }
+  },
+  {
+    name: 'Common Debit/Credit Format',
+    fields: ['date', 'description', 'debit', 'credit'],
+    map: {
+      date: 'Date',
+      amount: 'Debit', // Will be handled specially in parsing
+      description: 'Description'
     }
   }
 ];
