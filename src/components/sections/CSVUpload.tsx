@@ -300,64 +300,42 @@ function normalizeDate(dateStr: string): string | null {
   
   console.log('🔍 Parsing date:', cleanDateStr);
   
-  // Try simple DD/MM/YYYY format first (most common for NZ banks)
-  const ddmmyyyyMatch = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-  if (ddmmyyyyMatch) {
-    const day = parseInt(ddmmyyyyMatch[1]);
-    const month = parseInt(ddmmyyyyMatch[2]);
-    const year = parseInt(ddmmyyyyMatch[3]);
+  // Try DD/MM/YYYY format (NZ standard)
+  const ddmmyyyy = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = parseInt(ddmmyyyy[1]);
+    const month = parseInt(ddmmyyyy[2]);
+    const year = parseInt(ddmmyyyy[3]);
     
-    console.log(`🔍 Parsed DD/MM/YYYY: ${day}/${month}/${year}`);
+    console.log(`🔍 DD/MM/YYYY matched: ${day}/${month}/${year}`);
     
-    // Basic validation
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2050) {
-      try {
-        const date = new Date(year, month - 1, day);
-        const isoDate = date.toISOString().split('T')[0];
-        console.log(`✅ Date accepted: ${cleanDateStr} → ${isoDate}`);
-        return isoDate;
-      } catch (error) {
-        console.log(`❌ Date creation failed: ${cleanDateStr}`, error);
-      }
+    // Very permissive validation - just check basic ranges
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
+      const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      console.log(`✅ Date converted: ${cleanDateStr} → ${isoDate}`);
+      return isoDate;
     } else {
-      console.log(`❌ Date validation failed: day=${day}, month=${month}, year=${year}`);
+      console.log(`❌ Date out of range: day=${day}, month=${month}, year=${year}`);
     }
   }
   
   // Try YYYY-MM-DD format
-  const yyyymmddMatch = cleanDateStr.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
-  if (yyyymmddMatch) {
-    const year = parseInt(yyyymmddMatch[1]);
-    const month = parseInt(yyyymmddMatch[2]);
-    const day = parseInt(yyyymmddMatch[3]);
+  const yyyymmdd = cleanDateStr.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (yyyymmdd) {
+    const year = parseInt(yyyymmdd[1]);
+    const month = parseInt(yyyymmdd[2]);
+    const day = parseInt(yyyymmdd[3]);
     
-    console.log(`🔍 Parsed YYYY-MM-DD: ${year}-${month}-${day}`);
+    console.log(`🔍 YYYY-MM-DD matched: ${year}-${month}-${day}`);
     
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2050) {
-      try {
-        const date = new Date(year, month - 1, day);
-        const isoDate = date.toISOString().split('T')[0];
-        console.log(`✅ Date accepted: ${cleanDateStr} → ${isoDate}`);
-        return isoDate;
-      } catch (error) {
-        console.log(`❌ Date creation failed: ${cleanDateStr}`, error);
-      }
-    }
-  }
-  
-  // Try parsing as a JavaScript Date (fallback)
-  try {
-    const date = new Date(cleanDateStr);
-    if (!isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2050) {
-      const isoDate = date.toISOString().split('T')[0];
-      console.log(`✅ Date accepted via Date constructor: ${cleanDateStr} → ${isoDate}`);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
+      const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      console.log(`✅ Date converted: ${cleanDateStr} → ${isoDate}`);
       return isoDate;
     }
-  } catch (error) {
-    // Ignore
   }
   
-  console.log(`❌ All date parsing failed for: "${cleanDateStr}"`);
+  console.log(`❌ No date pattern matched for: "${cleanDateStr}"`);
   return null;
 }
 
