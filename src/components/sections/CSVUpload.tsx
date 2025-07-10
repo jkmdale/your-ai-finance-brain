@@ -559,10 +559,28 @@ export const CSVUpload = () => {
               const cleanedData = (results.data as any[])
                 .map((row, index) => {
                   const rawDate = row[detectedSchema.date];
-                  const parsedDate = normalizeDate(rawDate);
+                  console.log(`🔍 Processing date for row ${index + 1}:`, rawDate);
+                  
+                  // Super simple date parsing - just accept anything with numbers and slashes
+                  let parsedDate = null;
+                  if (rawDate && String(rawDate).includes('/')) {
+                    const dateStr = String(rawDate).trim();
+                    const parts = dateStr.split('/');
+                    if (parts.length === 3) {
+                      const day = parseInt(parts[0]);
+                      const month = parseInt(parts[1]);
+                      const year = parseInt(parts[2]);
+                      
+                      if (year >= 2000 && year <= 2030 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                        parsedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                        console.log(`✅ Simple date conversion: ${dateStr} → ${parsedDate}`);
+                      }
+                    }
+                  }
+                  
                   if (!parsedDate) {
                     skippedDates++;
-                    console.warn(`Skipping row ${index + 1} with invalid date: ${rawDate}`);
+                    console.warn(`❌ Skipping row ${index + 1} with invalid date: ${rawDate}`);
                     return null;
                   }
                   
