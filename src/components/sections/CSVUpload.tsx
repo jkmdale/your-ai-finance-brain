@@ -495,7 +495,12 @@ export const CSVUpload = () => {
   };
 
   const handleFileUpload = async (files: FileList) => {
+    console.log('🚀 handleFileUpload called with files:', files);
+    console.log('🚀 Files count:', files.length);
+    console.log('🚀 User logged in:', !!user);
+    
     if (!user) {
+      console.log('❌ User not logged in');
       setUploadStatus('error');
       setUploadMessage('Please log in to upload CSV files');
       return;
@@ -506,12 +511,16 @@ export const CSVUpload = () => {
       file => !file.type.includes('csv') && !file.name.toLowerCase().endsWith('.csv')
     );
     
+    console.log('🚀 Non-CSV files found:', nonCsvFiles);
+    
     if (nonCsvFiles.length > 0) {
+      console.log('❌ Invalid file types detected');
       setUploadStatus('error');
       setUploadMessage(`Please upload only CSV files. Found: ${nonCsvFiles.map(f => f.name).join(', ')}`);
       return;
     }
 
+    console.log('✅ Starting CSV processing...');
     setUploading(true);
     setUploadStatus('processing');
     setUploadMessage('Starting CSV processing...');
@@ -706,6 +715,34 @@ export const CSVUpload = () => {
           disabled={uploading || !user}
           className="hidden"
         />
+
+        {/* Test CSV Button - for debugging */}
+        {user && (
+          <button
+            onClick={() => {
+              console.log('🧪 Testing CSV parsing with sample data...');
+              const csvContent = `Date,Amount,Particulars
+15/05/2025,100.50,Test Transaction 1
+14/05/2025,-25.00,Test Transaction 2
+13/05/2025,75.25,Test Transaction 3`;
+              
+              const blob = new Blob([csvContent], { type: 'text/csv' });
+              const file = new File([blob], 'test.csv', { type: 'text/csv' });
+              const fileList = {
+                0: file,
+                length: 1,
+                item: (index: number) => index === 0 ? file : null,
+                [Symbol.iterator]: function* () { yield file; }
+              } as FileList;
+              
+              handleFileUpload(fileList);
+            }}
+            disabled={uploading}
+            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            🧪 Test with Sample CSV (Debug)
+          </button>
+        )}
 
         {/* Processing Stage */}
         {processingStage && (
