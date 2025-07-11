@@ -37,24 +37,52 @@ export type CategorizationResult = {
 
 class ClaudeAIService {
   private async callClaude(messages: ClaudeMessage[], systemPrompt?: string, model = 'claude-3-haiku-20240307'): Promise<string> {
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session) throw new Error('User is not logged in');
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) throw new Error('User is not logged in');
 
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claude-ai-coach`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
+      const requestBody = {
         input: messages[messages.length - 1].content,
         model,
         system_prompt: systemPrompt || messages[0]?.content || 'You are a helpful financial assistant.',
-      }),
-    });
+      };
 
-    const data = await response.json();
-    return data?.content?.[0]?.text || 'No response';
+      console.log('🤖 Claude API Request:', {
+        url: `https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/claude-ai-coach`,
+        body: requestBody,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer [REDACTED]' }
+      });
+
+      const response = await fetch(`https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/claude-ai-coach`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('🤖 Claude API Response Status:', response.status, response.statusText);
+
+      const data = await response.json();
+      console.log('🤖 Claude API Response Data:', data);
+
+      if (!response.ok) {
+        throw new Error(`Claude API error: ${response.status} - ${JSON.stringify(data)}`);
+      }
+
+      return data?.content?.[0]?.text || data?.response || 'No response';
+    } catch (error) {
+      console.error('❌ Claude API Error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // Return a fallback message instead of throwing
+      return 'Claude AI is temporarily unavailable. Please try again later.';
+    }
   }
 
   async getPersonalizedAdvice(data: FinancialData, question: string): Promise<string> {
