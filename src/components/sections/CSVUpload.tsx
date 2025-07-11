@@ -286,104 +286,36 @@ export const CSVUpload = () => {
     setUploadMessage('Starting CSV processing...');
 
     try {
-      const allTransactions: any[] = [];
+      // Use the unified processor instead of duplicated Papa.parse logic
+      const { UnifiedTransactionProcessor } = await import('@/services/unifiedTransactionProcessor');
+      const processor = new UnifiedTransactionProcessor();
+      const result = await processor.processCSVFiles(files, user.id);
       
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setProcessingStage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
-        
-        const transactions = await new Promise<any[]>((resolve, reject) => {
-          Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: function(results) {
-              console.log('📄 CSV parse results:', results);
-              console.log('📄 CSV headers:', results.meta.fields);
-              console.log('📄 CSV first 3 rows:', results.data.slice(0, 3));
-              
-              if (!results.data || results.data.length === 0) {
-                reject(new Error('CSV appears to be empty'));
-                return;
-              }
-
-              const detectedSchema = detectSchema(results.meta.fields || []);
-              console.log('🔍 Headers being checked:', results.meta.fields);
-              console.log('🔍 Detected schema:', detectedSchema);
-              
-              if (!detectedSchema) {
-                console.error('❌ Schema detection failed for headers:', results.meta.fields);
-                console.error('❌ Available schema templates:', schemaTemplates);
-                reject(new Error('CSV format not recognized'));
-                return;
-              }
-
-              const cleanedData = (results.data as any[])
-                .map((row) => {
-                  const rawDate = row[detectedSchema.date];
-                  const parsedDate = normalizeDate(rawDate);
-                  if (!parsedDate) {
-                    console.warn(`Skipping row with invalid date: ${rawDate}`);
-                    return null;
-                  }
-                  return {
-                    date: parsedDate,
-                    description: row[detectedSchema.description] || '',
-                    amount: parseFloat(row[detectedSchema.amount] || '0'),
-                    category: null // to be filled later
-                  };
-                })
-                .filter(Boolean);
-
-              console.log(`✅ Cleaned ${cleanedData.length} transactions from ${file.name}`);
-              resolve(cleanedData);
-            },
-            error: function(err) {
-              reject(new Error('Error parsing CSV: ' + err.message));
-            }
-          });
-        });
-        
-        allTransactions.push(...transactions);
-      }
+      console.log('✅ Processing completed:', result);
       
-      setProcessingStage(`Categorizing ${allTransactions.length} transactions with Claude AI...`);
-      
-      // Claude categorization
-      const categorizedTransactions = await fetchClaudeResponse(allTransactions);
-      
-      setProcessingStage('Generating budget and goals...');
-      
-      // Generate budget and goals
-      const budget = generateZeroBasedBudget(categorizedTransactions);
-      const goals = generateSmartGoals(categorizedTransactions);
-      
-      console.log('💰 Generated budget:', budget);
-      console.log('🎯 Generated goals:', goals);
-      
+      setProcessingStage('Upload completed successfully!');
       setUploadStatus('success');
-      setUploadMessage(`✅ Complete! Processed ${categorizedTransactions.length} transactions with AI categorization`);
+      setUploadMessage(`Successfully processed ${result.transactions.length} transactions from ${result.summary.totalFiles} files`);
       
       toast({
-        title: "CSV Processing Complete! 🎉",
-        description: `${categorizedTransactions.length} transactions processed with AI categorization`,
+        title: "CSV Processing Complete! 🎉", 
+        description: `${result.transactions.length} transactions processed`,
         duration: 8000,
       });
 
-      // Trigger dashboard refresh with the exact event name you mentioned
+      // Trigger dashboard refresh
       window.dispatchEvent(new CustomEvent('csv-data-ready', { 
         detail: {
-          transactions: categorizedTransactions,
-          budget,
-          goals,
+          transactions: result.transactions,
           success: true
         }
       }));
       
     } catch (error: any) {
-      console.error('❌ CSV processing error:', error);
+      console.error('❌ CSV processing failed:', error);
+      setProcessingStage('Upload failed');
       setUploadStatus('error');
-      setUploadMessage(`Processing failed: ${error.message}`);
+      setUploadMessage(error.message || 'Failed to process CSV files');
       
       toast({
         title: "Processing Failed",
