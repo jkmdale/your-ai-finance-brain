@@ -48,7 +48,7 @@ export const useDashboardData = () => {
           categories(name, color)
         `)
         .eq('user_id', user.id)
-        .not('tags', 'cs', '{transfer}')
+        .not('tags', '@>', '["transfer"]')
         .order('transaction_date', { ascending: false });
 
       if (transactionsError) {
