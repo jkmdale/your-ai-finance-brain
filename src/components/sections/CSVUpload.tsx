@@ -299,6 +299,8 @@ export const CSVUpload = () => {
             skipEmptyLines: true,
             complete: function(results) {
               console.log('📄 CSV parse results:', results);
+              console.log('📄 CSV headers:', results.meta.fields);
+              console.log('📄 CSV first 3 rows:', results.data.slice(0, 3));
               
               if (!results.data || results.data.length === 0) {
                 reject(new Error('CSV appears to be empty'));
@@ -306,9 +308,12 @@ export const CSVUpload = () => {
               }
 
               const detectedSchema = detectSchema(results.meta.fields || []);
+              console.log('🔍 Headers being checked:', results.meta.fields);
               console.log('🔍 Detected schema:', detectedSchema);
               
               if (!detectedSchema) {
+                console.error('❌ Schema detection failed for headers:', results.meta.fields);
+                console.error('❌ Available schema templates:', schemaTemplates);
                 reject(new Error('CSV format not recognized'));
                 return;
               }
