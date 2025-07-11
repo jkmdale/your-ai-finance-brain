@@ -10,16 +10,30 @@ export function CSVUpload() {
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState(null);
 
+  // Auth patch: always get latest user from Supabase
   useEffect(() => {
-    const fetchUser = async () => {
+    async function fetchUser() {
       const { data } = await supabase.auth.getUser();
       setUser(data?.user ?? null);
-    };
+      // Debug log for mobile/PWA
+      console.log('[CSVUpload] user:', data?.user);
+    }
     fetchUser();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      console.log('[CSVUpload] Auth change event:', _event, session);
+    });
+    return () => { listener?.subscription?.unsubscribe(); };
   }, []);
 
   if (!user) {
-    return <div className="text-center py-6">🔒 Please log in to upload your CSV</div>;
+    return (
+      <div className="text-center py-6">
+        🔒 Please log in to upload your CSV<br />
+        <small className="text-xs text-gray-400">Authentication required</small>
+      </div>
+    );
   }
 
   async function handleFiles(files: File[]) {
