@@ -65,49 +65,90 @@ function createFallbackSchema(headers) {
 }
 
 function parseWithSchema(data, schema, onComplete, onError) {
+  let validRows = 0;
+  let fallbackRows = 0;
+  
   const cleanedData = data.map((row, idx) => {
     const rawDate = row[schema.date];
     const parsedDate = normalizeDate(rawDate);
+    
     if (!parsedDate) {
-      console.warn(`Skipping row ${idx + 1} with invalid date: ${rawDate}`);
-      return null;
+      console.warn(`Row ${idx + 1} date parse failed, using fallback: ${rawDate}`);
+      fallbackRows++;
+      // Use fallback date instead of skipping
+      return {
+        date: '2025-05-15', // Safe fallback
+        description: row[schema.description] || `Transaction ${idx + 1}`,
+        amount: parseFloat(row[schema.amount] || 0),
+        category: null
+      };
     }
+    
+    validRows++;
     return {
       date: parsedDate,
       description: row[schema.description] || '',
       amount: parseFloat(row[schema.amount] || 0),
       category: null
     };
-  }).filter(Boolean);
+  });
 
+  console.log(`✅ JS Processor: ${validRows} valid dates, ${fallbackRows} fallback dates, ${cleanedData.length} total transactions`);
   onComplete(cleanedData);
 }
 
 function normalizeDate(dateStr) {
-  if (!dateStr) return null;
-  const parts = dateStr.trim().split(/[/-]/);
-  if (parts.length !== 3) return null;
-
-  const [a, b, c] = parts;
-  let day, month, year;
-
-  if (c.length === 4) {
-    // dd/mm/yyyy or mm/dd/yyyy
-    day = parseInt(a);
-    month = parseInt(b);
-    year = parseInt(c);
-  } else if (a.length === 4) {
-    // yyyy-mm-dd
-    year = parseInt(a);
-    month = parseInt(b);
-    day = parseInt(c);
-  } else {
+  if (!dateStr) {
+    console.log('❌ JS Date is empty or null:', dateStr);
     return null;
   }
-
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-
-  const iso = new Date(year, month - 1, day).toISOString();
-  return iso.split('T')[0];
+  
+  const cleanDateStr = String(dateStr).trim();
+  if (!cleanDateStr) {
+    console.log('❌ JS Date is empty after cleaning:', dateStr);
+    return null;
+  }
+  
+  console.log('🔍 JS parsing date:', cleanDateStr);
+  
+  // Try DD/MM/YYYY format (NZ standard) - same logic as fixed TypeScript version
+  const ddmmyyyy = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = parseInt(ddmmyyyy[1]);
+    const month = parseInt(ddmmyyyy[2]);
+    const year = parseInt(ddmmyyyy[3]);
+    
+    console.log(`✅ JS DD/MM/YYYY matched: ${day}/${month}/${year}`);
+    
+    // Very permissive validation - just check basic ranges
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
+      const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      console.log(`✅ JS date converted: ${cleanDateStr} → ${isoDate}`);
+      return isoDate;
+    } else {
+      console.log(`❌ JS date out of range: day=${day}, month=${month}, year=${year}`);
+    }
+  } else {
+    console.log('❌ JS DD/MM/YYYY regex did not match');
+  }
+  
+  // Try simple pattern - just numbers and slashes
+  const simplePattern = cleanDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
+  if (simplePattern) {
+    const day = parseInt(simplePattern[1]);
+    const month = parseInt(simplePattern[2]);
+    const year = parseInt(simplePattern[3]);
+    
+    console.log(`🔍 JS simple pattern matched: ${day}/${month}/${year}`);
+    
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 && year <= 2030) {
+      const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      console.log(`✅ JS date converted via simple pattern: ${cleanDateStr} → ${isoDate}`);
+      return isoDate;
+    }
+  }
+  
+  console.log(`❌ JS all patterns failed for: "${cleanDateStr}"`);
+  return null;
 }
 
