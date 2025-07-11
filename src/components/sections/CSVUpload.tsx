@@ -85,6 +85,45 @@ function normalizeDate(dateStr: string): string | null {
   return null;
 }
 
+async function getClaudeCategories(transactions: any[]) {
+  try {
+    const response = await fetch('/functions/v1/claude-api-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: `Categorise the following transactions:\n` +
+               transactions.map(t => `${t.date}, ${t.description}, ${t.amount}`).join('\n')
+      })
+    });
+
+    const result = await response.json();
+    console.log("Claude response:", result);
+    return result.categories || [];
+  } catch (err) {
+    console.error("Claude API error:", err);
+    return [];
+  }
+}
+
+async function saveTransactionsToSupabase(userId: string, transactions: any[], toast: any) {
+  const { error } = await supabase.from('transactions').insert(
+    transactions.map(txn => ({
+      user_id: userId,
+      date: txn.date,
+      amount: txn.amount,
+      description: txn.description,
+      category: txn.category
+    }))
+  );
+
+  if (error) {
+    console.error("Supabase insert error:", error);
+    toast({ title: "❌ Failed to save", description: error.message });
+  } else {
+    toast({ title: "✅ Transactions saved to Supabase" });
+  }
+}
+
 export function CSVUpload() {
   const { toast } = useToast();
   const [user, setUser] = useState(null);
@@ -102,23 +141,20 @@ export function CSVUpload() {
     return <div className="text-center py-6">🔒 Please log in to upload your CSV</div>;
   }
 
-  function handleFiles(files: File[]) {
+  async function handleFiles(files: File[]) {
     if (!files || files.length === 0) return;
     const file = files[0];
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const rows = results.data;
         const headers = results.meta.fields || [];
         const map = detectSchema(headers);
 
         if (!map) {
-          toast({
-            title: "CSV format not recognised",
-            description: "Try using ANZ, ASB, Westpac, or Kiwibank exports"
-          });
+          toast({ title: "CSV format not recognised", description: "Try ANZ, ASB, Westpac, or Kiwibank." });
           return;
         }
 
@@ -142,14 +178,21 @@ export function CSVUpload() {
         }
 
         if (transactions.length === 0) {
-          toast({ title: "No valid transactions found", description: "Check date and amount formatting" });
+          toast({ title: "No valid transactions found", description: "Please check format and try again." });
           return;
         }
 
-        setParsed(transactions);
-        toast({ title: "CSV processed!", description: `${transactions.length} transactions imported.` });
+        toast({ title: "🧠 Categorising...", description: "Sending to Claude AI" });
 
-        // TODO: send to Claude or Supabase here
+        const categories = await getClaudeCategories(transactions);
+        const finalData = transactions.map((txn, i) => ({
+          ...txn,
+          category: categories[i] || "Uncategorised"
+        }));
+
+        setParsed(finalData);
+
+        await saveTransactionsToSupabase(user.id, finalData, toast);
       }
     });
   }
