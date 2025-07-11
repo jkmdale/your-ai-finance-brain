@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Papa from 'papaparse';
+import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
 
@@ -86,7 +87,20 @@ function normalizeDate(dateStr: string): string | null {
 
 export function CSVUpload() {
   const { toast } = useToast();
+  const [user, setUser] = useState(null);
   const [parsed, setParsed] = useState([]);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data?.user ?? null);
+    };
+    fetchUser();
+  }, []);
+
+  if (!user) {
+    return <div className="text-center py-6">🔒 Please log in to upload your CSV</div>;
+  }
 
   function handleFiles(files: File[]) {
     if (!files || files.length === 0) return;
@@ -135,8 +149,7 @@ export function CSVUpload() {
         setParsed(transactions);
         toast({ title: "CSV processed!", description: `${transactions.length} transactions imported.` });
 
-        // Optional: Trigger Claude or backend save here
-        // await sendToClaudeOrSupabase(transactions);
+        // TODO: send to Claude or Supabase here
       }
     });
   }
