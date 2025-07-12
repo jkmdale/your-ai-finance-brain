@@ -71,7 +71,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.txt"
+        accept=".csv,.CSV,text/csv,application/csv,.txt"
         multiple
         onChange={handleFileInputChange}
         className="hidden"
