@@ -9,6 +9,9 @@ export function CSVUpload() {
   const [user, setUser] = useState(null);
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   // Auth patch: always get latest user from Supabase
   useEffect(() => {
@@ -36,15 +39,18 @@ export function CSVUpload() {
     );
   }
 
-  async function handleFiles(files: File[]) {
+  async function handleFiles(files: FileList) {
     if (!files || files.length === 0) return;
 
+    setUploading(true);
+    setProcessing(true);
+    
     toast({ title: "📊 Upload started", description: "Processing CSV file..." });
 
     const core = new SmartFinanceCore();
 
     const result = await core.processCompleteWorkflow(
-      files as unknown as FileList,
+      files,
       user.id,
       (stage, pct) => {
         setProgress(`${stage} (${pct}%)`);
@@ -52,6 +58,8 @@ export function CSVUpload() {
     );
 
     setResult(result);
+    setUploading(false);
+    setProcessing(false);
 
     if (result.success) {
       toast({ title: "✅ Upload complete", description: `${result.transactionsProcessed} transactions processed.` });
@@ -60,9 +68,20 @@ export function CSVUpload() {
     }
   }
 
+  const handleOpenFilePicker = () => {
+    setIsPickerOpen(true);
+  };
+
   return (
     <div className="w-full">
-      <FileUploadZone onFilesSelected={handleFiles} />
+      <FileUploadZone 
+        user={user}
+        uploading={uploading}
+        processing={processing}
+        isPickerOpen={isPickerOpen}
+        onFilesSelected={handleFiles} 
+        onOpenFilePicker={handleOpenFilePicker}
+      />
       {progress && <p className="text-xs mt-2 text-gray-500">🔄 {progress}</p>}
       {result && (
         <div className="mt-4 text-sm text-left whitespace-pre-wrap bg-gray-50 p-3 rounded">
