@@ -13,22 +13,88 @@ export function CSVUpload() {
   const [processing, setProcessing] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
-  // Auth patch: always get latest user from Supabase
+  // ✅ FIXED: Proper Supabase auth state subscription for real-time user updates
   useEffect(() => {
-    async function fetchUser() {
-      const { data } = await supabase.auth.getUser();
-      setUser(data?.user ?? null);
-      // Debug log for mobile/PWA
-      console.log('[CSVUpload] user:', data?.user);
-    }
-    fetchUser();
+    let isMounted = true; // Prevent state updates if component unmounts
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      console.log('[CSVUpload] Auth change event:', _event, session);
-    });
-    return () => { listener?.subscription?.unsubscribe(); };
-  }, []);
+    // Get initial user state
+    async function fetchInitialUser() {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        
+        if (!isMounted) return; // Component was unmounted during async operation
+        
+        if (error) {
+          console.error('[CSVUpload] Error fetching user:', error);
+          setUser(null);
+          return;
+        }
+        
+        const currentUser = data?.user ?? null;
+        setUser(currentUser);
+        
+        // Enhanced debugging logs
+        console.log('[CSVUpload] 🔍 Initial user fetch:', {
+          userId: currentUser?.id,
+          email: currentUser?.email,
+          isAuthenticated: !!currentUser,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('[CSVUpload] Exception during user fetch:', err);
+        if (isMounted) setUser(null);
+      }
+    }
+
+    fetchInitialUser();
+
+    // ✅ FIXED: Correct subscription pattern for real-time auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!isMounted) return; // Component was unmounted
+        
+        const newUser = session?.user ?? null;
+        setUser(newUser);
+        
+        // Comprehensive debugging logs for all auth events
+        console.log('[CSVUpload] 🔄 Auth state change detected:', {
+          event,
+          userId: newUser?.id,
+          email: newUser?.email,
+          isAuthenticated: !!newUser,
+          sessionExists: !!session,
+          timestamp: new Date().toISOString(),
+          // Additional context for debugging mobile/PWA scenarios
+          userAgent: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'
+        });
+        
+        // Specific event handling for better debugging
+        switch (event) {
+          case 'SIGNED_IN':
+            console.log('[CSVUpload] ✅ User signed in successfully');
+            break;
+          case 'SIGNED_OUT':
+            console.log('[CSVUpload] 🚪 User signed out');
+            break;
+          case 'TOKEN_REFRESHED':
+            console.log('[CSVUpload] 🔄 Auth token refreshed');
+            break;
+          case 'USER_UPDATED':
+            console.log('[CSVUpload] 👤 User profile updated');
+            break;
+          default:
+            console.log(`[CSVUpload] 📝 Auth event: ${event}`);
+        }
+      }
+    );
+
+    // ✅ FIXED: Proper cleanup function
+    return () => {
+      isMounted = false; // Prevent any pending state updates
+      subscription.unsubscribe();
+      console.log('[CSVUpload] 🧹 Auth subscription cleaned up');
+    };
+  }, []); // Empty dependency array - only run once on mount
 
   if (!user) {
     return (
