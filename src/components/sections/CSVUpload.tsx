@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Brain, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
+import { supabase, validateAuthState } from '@/integrations/supabase/client';
 import Papa from 'papaparse';
 
 // Phase 1: Define proper TypeScript interfaces
@@ -226,6 +227,7 @@ function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) =
   if (dateHeader && debitHeader && creditHeader) {
     return {
       date: originalHeaders[lowerHeaders.indexOf(dateHeader)],
+      amount: originalHeaders[lowerHeaders.indexOf(debitHeader)], // Use debit as amount for compatibility
       debit: originalHeaders[lowerHeaders.indexOf(debitHeader)],
       credit: originalHeaders[lowerHeaders.indexOf(creditHeader)],
       description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : debitHeader
@@ -456,49 +458,114 @@ export const CSVUpload = () => {
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const { user, loading, session } = useAuth();
+  
+  // ✅ FIXED: Direct auth state management with Supabase subscription
+  const [authState, setAuthState] = useState<{
+    user: any;
+    session: any;
+    loading: boolean;
+    isAuthenticated: boolean;
+    error: string | null;
+  }>({
+    user: null,
+    session: null,
+    loading: true,
+    isAuthenticated: false,
+    error: null
+  });
+  
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Better authentication check with multiple fallbacks
-  const isAuthenticated = React.useMemo(() => {
-    // If still loading, don't allow access
-    if (loading) return false;
+  // ✅ FIXED: Direct Supabase auth subscription for real-time updates
+  useEffect(() => {
+    let isMounted = true;
     
-    // Check for user object
-    if (user && user.id) return true;
-    
-    // Check for session user
-    if (session && session.user && session.user.id) return true;
-    
-    // Final fallback - check for any indication of authentication
-    return false;
-  }, [user, session, loading]);
+    const initializeAuth = async () => {
+      try {
+        if (import.meta.env.DEV) {
+          console.log('🔐 CSV Upload: Initializing auth state...');
+        }
+        
+        const authResult = await validateAuthState();
+        
+        if (isMounted) {
+          setAuthState({
+            user: authResult.user,
+            session: authResult.session,
+            loading: false,
+            isAuthenticated: authResult.valid,
+            error: authResult.error?.message || null
+          });
+          
+          if (import.meta.env.DEV) {
+            console.log('🔐 CSV Upload: Auth state initialized:', {
+              hasUser: !!authResult.user,
+              hasSession: !!authResult.session,
+              isValid: authResult.valid,
+              userId: authResult.user?.id,
+              email: authResult.user?.email
+            });
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAuthState({
+            user: null,
+            session: null,
+            loading: false,
+            isAuthenticated: false,
+            error: error instanceof Error ? error.message : 'Auth initialization failed'
+          });
+        }
+      }
+    };
 
-  // Debug authentication state
-  console.log('🔐 CSV Upload Auth State:', {
-    user: !!user,
-    userId: user?.id,
-    session: !!session,
-    sessionUser: !!session?.user,
-    sessionUserId: session?.user?.id,
-    loading,
-    isAuthenticated,
-    userEmail: user?.email || session?.user?.email
-  });
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!isMounted) return;
+        
+        if (import.meta.env.DEV) {
+          console.log('🔐 CSV Upload: Auth state changed:', {
+            event,
+            hasSession: !!session,
+            hasUser: !!session?.user,
+            userId: session?.user?.id,
+            email: session?.user?.email
+          });
+        }
+        
+        // Handle session expiry by redirecting to login
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.log('🔐 Session expired, redirecting to login');
+          window.location.reload(); // Force reload to trigger login
+          return;
+        }
+        
+        const isAuthenticated = !!(session && session.user && session.user.id);
+        
+        setAuthState({
+          user: session?.user || null,
+          session: session,
+          loading: false,
+          isAuthenticated,
+          error: null
+        });
+      }
+    );
 
-  // Additional debug for auth timing
-  React.useEffect(() => {
-    console.log('🔐 Auth state changed in CSV component:', {
-      user: !!user,
-      userId: user?.id,
-      session: !!session,
-      sessionUser: !!session?.user,
-      sessionUserId: session?.user?.id,
-      loading,
-      isAuthenticated
-    });
-  }, [user, session, loading, isAuthenticated]);
+    // Initialize auth state
+    initializeAuth();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ✅ FIXED: Clear, simple authentication check
+  const { user, session, loading, isAuthenticated, error } = authState;
 
   // Phase 2: Clear UI state function
   const clearUIState = () => {
@@ -518,27 +585,31 @@ export const CSVUpload = () => {
   };
 
   const handleFileUpload = async (files: FileList) => {
-    console.log('🚀 handleFileUpload called with files:', files);
-    console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'user:', !!user, 'session:', !!session);
+    if (import.meta.env.DEV) {
+      console.log('🚀 handleFileUpload called with files:', files);
+      console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'user:', !!user, 'session:', !!session);
+    }
     
+    // ✅ FIXED: Strict authentication requirement with clear error messages
     if (!isAuthenticated) {
-      console.log('❌ User not authenticated');
-      console.log('🔧 Debug info:', {
-        user: user?.id,
-        session: session?.user?.id,
-        loading,
-        isAuthenticated
-      });
+      if (import.meta.env.DEV) {
+        console.log('❌ User not authenticated');
+        console.log('🔧 Debug info:', {
+          user: user?.id,
+          session: session?.user?.id,
+          loading,
+          isAuthenticated,
+          error
+        });
+      }
       
-      // Show warning but don't completely block in debug mode
       toast({
-        title: "Authentication Warning",
-        description: "Authentication state unclear - proceeding with caution",
-        variant: "default",
+        title: "Authentication Required",
+        description: "Please log in to upload CSV files",
+        variant: "destructive",
       });
       
-      // Continue with upload but with warnings
-      console.log('🚨 PROCEEDING WITH UPLOAD DESPITE AUTH CONCERNS');
+      return; // Block upload completely
     }
 
     // Phase 2: Clear previous state
@@ -822,37 +893,41 @@ export const CSVUpload = () => {
         </div>
       </div>
 
+      {/* ✅ FIXED: Clear authentication states without debug bypass */}
+      {loading && (
+        <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+          <p className="text-blue-300 text-sm font-medium flex items-center">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Checking authentication...
+          </p>
+        </div>
+      )}
+      
       {!isAuthenticated && !loading && (
         <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
           <p className="text-yellow-300 text-sm font-medium">⚠️ Please log in to upload CSV files</p>
-          <div className="mt-2 text-xs text-yellow-400">
-            Debug: user={user?.id ? 'exists' : 'null'}, session={session?.user?.id ? 'exists' : 'null'}, loading={loading.toString()}
-          </div>
+          {import.meta.env.DEV && (
+            <div className="mt-2 text-xs text-yellow-400">
+              Debug: user={user?.id ? 'exists' : 'null'}, session={session?.user?.id ? 'exists' : 'null'}, loading={loading.toString()}
+            </div>
+          )}
         </div>
       )}
       
-      {loading && (
-        <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-          <p className="text-blue-300 text-sm font-medium">🔄 Checking authentication...</p>
-        </div>
-      )}
-      
-      {/* Temporary debug bypass for testing */}
-      {!isAuthenticated && !loading && (
+      {error && (
         <div className="mb-4 p-4 bg-red-500/20 border border-red-500/30 rounded-lg">
-          <p className="text-red-300 text-sm font-medium">🔧 Debug Mode - Authentication Issue Detected</p>
-          <button
-            onClick={() => {
-              console.log('🚨 BYPASS: Attempting to test CSV upload despite auth state');
-              const fileInput = fileInputRef.current;
-              if (fileInput) {
-                fileInput.click();
-              }
-            }}
-            className="mt-2 px-3 py-1 bg-red-500/50 hover:bg-red-500/70 text-white text-xs rounded border border-red-400/50 transition-colors"
-          >
-            🚨 Debug: Try Upload Anyway
-          </button>
+          <p className="text-red-300 text-sm font-medium">❌ Authentication Error: {error}</p>
+        </div>
+      )}
+      
+      {isAuthenticated && (
+        <div className="mb-4 p-4 bg-green-500/20 border border-green-500/30 rounded-lg">
+          <p className="text-green-300 text-sm font-medium">✅ Ready to upload CSV files</p>
+          {import.meta.env.DEV && (
+            <div className="mt-2 text-xs text-green-400">
+              User: {user?.email} | Session: {session?.access_token ? 'Valid' : 'Invalid'}
+            </div>
+          )}
         </div>
       )}
 

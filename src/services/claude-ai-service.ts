@@ -1,11 +1,6 @@
 
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/integrations/supabase/types';
-
-const supabase = createClient<Database>(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!
-);
+// ✅ FIXED: Use the same Supabase client instance to avoid auth inconsistencies
+import { supabase } from '@/integrations/supabase/client';
 
 export type ClaudeMessage = {
   role: 'user' | 'assistant' | 'system';

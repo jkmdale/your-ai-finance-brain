@@ -1,7 +1,7 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, validateAuthState } from '@/integrations/supabase/client';
 import { AuthContextType } from './auth/types';
 import { authService } from './auth/authService';
 import { pinAuthService } from './auth/pinAuthService';
@@ -12,26 +12,101 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as loading
   const [hasPin, setHasPin] = useState(false);
   const [hasBiometric, setHasBiometric] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Always start loading to avoid race conditions
-    setLoading(true);
+    let isMounted = true;
+    
+    // ✅ FIXED: Single source of truth for auth state with proper initialization
+    const initializeAuth = async () => {
+      try {
+        console.log('🔵 Initializing auth state...');
+        
+        // Validate current auth state first
+        const authResult = await validateAuthState();
+        
+        if (isMounted) {
+          if (authResult.valid) {
+            console.log('✅ Valid auth state found:', authResult.user?.email);
+            setSession(authResult.session);
+            setUser(authResult.user);
+            
+            // Check additional auth methods
+            if (authResult.user?.id) {
+              await checkAdditionalAuthMethods(authResult.user.id);
+            }
+          } else {
+            console.log('❌ No valid auth state found');
+            setSession(null);
+            setUser(null);
+            setHasPin(false);
+            setHasBiometric(false);
+          }
+          
+          setLoading(false);
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error('❌ Auth initialization error:', error);
+        if (isMounted) {
+          setSession(null);
+          setUser(null);
+          setHasPin(false);
+          setHasBiometric(false);
+          setLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
 
+    // ✅ FIXED: Enhanced auth state change listener for PWA/mobile scenarios
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔵 Auth state changed:', event, session?.user?.email);
+        if (import.meta.env.DEV) {
+          console.log('🔵 Auth state changed:', event, session?.user?.email);
+        }
+        
+        if (!isMounted) return;
+
+        // Handle specific auth events for PWA/mobile scenarios
+        if (event === 'TOKEN_REFRESHED' && session) {
+          if (import.meta.env.DEV) {
+            console.log('🔄 Token refreshed successfully');
+          }
+        }
+        
+        if (event === 'SIGNED_OUT') {
+          if (import.meta.env.DEV) {
+            console.log('🚪 User signed out');
+          }
+          // Clear all local state
+          setSession(null);
+          setUser(null);
+          setHasPin(false);
+          setHasBiometric(false);
+          setLoading(false);
+          return;
+        }
+
+        // Update state based on auth change
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        
+        // Only set loading to false if we were loading
+        if (loading) {
+          setLoading(false);
+        }
 
         // Check for additional auth methods when user is authenticated
         if (session?.user) {
-          setTimeout(() => {
-            checkAdditionalAuthMethods(session.user.id);
-          }, 0);
+          try {
+            await checkAdditionalAuthMethods(session.user.id);
+          } catch (error) {
+            console.error('❌ Error checking additional auth methods:', error);
+          }
         } else {
           setHasPin(false);
           setHasBiometric(false);
@@ -39,20 +114,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔵 Initial session:', session?.user?.email);
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      
-      if (session?.user) {
-        checkAdditionalAuthMethods(session.user.id);
-      }
-    });
+    // Initialize auth state
+    initializeAuth();
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // Empty dependency array to run once
 
   const checkAdditionalAuthMethods = async (userId: string) => {
     try {
