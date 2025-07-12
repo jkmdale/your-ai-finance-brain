@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug Tool</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #2d5a2d; }
+        .error { background: #5a2d2d; }
+        .info { background: #2d4a5a; }
+        button { padding: 10px; margin: 5px; cursor: pointer; }
+        pre { background: #2a2a2a; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🔧 SmartFinanceAI Authentication Debug Tool</h1>
+    
+    <div id="status">Loading...</div>
+    
+    <button onclick="checkAuth()">🔍 Check Auth State</button>
+    <button onclick="checkSession()">📋 Check Session</button>
+    <button onclick="checkUser()">👤 Check User</button>
+    <button onclick="clearCache()">🗑️ Clear Cache</button>
+    
+    <div id="output"></div>
+
+    <script>
+        // Debug authentication state
+        async function checkAuth() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<div class="info">🔍 Checking authentication state...</div>';
+            
+            try {
+                // Check localStorage for auth tokens
+                const authToken = localStorage.getItem('sb-gzznuwtxyyaqlbbrxsuz-auth-token');
+                const sessionData = authToken ? JSON.parse(authToken) : null;
+                
+                output.innerHTML += `
+                    <h3>📱 Local Storage Auth Data:</h3>
+                    <pre>${JSON.stringify({
+                        hasAuthToken: !!authToken,
+                        tokenLength: authToken ? authToken.length : 0,
+                        sessionUser: sessionData?.user?.email || 'None',
+                        sessionExpiry: sessionData?.expires_at ? new Date(sessionData.expires_at * 1000).toISOString() : 'None'
+                    }, null, 2)}</pre>
+                `;
+                
+                // Check if user appears to be logged in based on localStorage
+                const isLoggedIn = sessionData && sessionData.user && sessionData.access_token;
+                
+                if (isLoggedIn) {
+                    output.innerHTML += '<div class="success">✅ User appears to be logged in based on localStorage</div>';
+                } else {
+                    output.innerHTML += '<div class="error">❌ No valid session found in localStorage</div>';
+                }
+                
+            } catch (error) {
+                output.innerHTML += `<div class="error">❌ Error checking auth: ${error.message}</div>`;
+            }
+        }
+        
+        async function checkSession() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<div class="info">📋 Checking Supabase session...</div>';
+            
+            // This would need the actual Supabase client, but we can check what should be there
+            output.innerHTML += `
+                <h3>📋 Expected Session Check:</h3>
+                <pre>
+// What should happen:
+const { data: { session }, error } = await supabase.auth.getSession();
+console.log('Session:', session);
+console.log('User:', session?.user);
+console.log('Error:', error);
+
+// Check your browser console for these logs!
+                </pre>
+            `;
+        }
+        
+        async function checkUser() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<div class="info">👤 Checking user state...</div>';
+            
+            // Check cookies that might indicate auth state
+            const cookies = document.cookie.split(';').map(c => c.trim());
+            const authCookies = cookies.filter(c => c.includes('auth') || c.includes('session'));
+            
+            output.innerHTML += `
+                <h3>🍪 Browser Cookies:</h3>
+                <pre>${JSON.stringify(authCookies, null, 2)}</pre>
+                
+                <h3>🌐 Page URL:</h3>
+                <pre>${window.location.href}</pre>
+                
+                <h3>📱 User Agent:</h3>
+                <pre>${navigator.userAgent}</pre>
+            `;
+        }
+        
+        function clearCache() {
+            const output = document.getElementById('output');
+            
+            // Clear localStorage
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('sb-') || key.includes('supabase'))) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            output.innerHTML = `
+                <div class="info">🗑️ Cleared cache items:</div>
+                <pre>${JSON.stringify(keysToRemove, null, 2)}</pre>
+                <div class="info">Please refresh the page and try logging in again.</div>
+            `;
+        }
+        
+        // Initial check
+        window.onload = () => {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>
