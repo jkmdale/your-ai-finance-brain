@@ -456,9 +456,21 @@ export const CSVUpload = () => {
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const { user } = useAuth();
+  const { user, loading, session } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Better authentication check
+  const isAuthenticated = !loading && (user || session?.user);
+  
+  // Debug authentication state
+  console.log('🔐 CSV Upload Auth State:', {
+    user: !!user,
+    session: !!session,
+    loading,
+    isAuthenticated,
+    userEmail: user?.email || session?.user?.email
+  });
 
   // Phase 2: Clear UI state function
   const clearUIState = () => {
@@ -470,7 +482,7 @@ export const CSVUpload = () => {
   };
 
   const handleOpenFilePicker = () => {
-    if (uploading) return; // Phase 2: Prevent interaction during processing
+    if (uploading || !isAuthenticated) return; // Phase 2: Prevent interaction during processing or if not authenticated
     
     setIsPickerOpen(true);
     fileInputRef.current?.click();
@@ -479,9 +491,10 @@ export const CSVUpload = () => {
 
   const handleFileUpload = async (files: FileList) => {
     console.log('🚀 handleFileUpload called with files:', files);
+    console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'user:', !!user, 'session:', !!session);
     
-    if (!user) {
-      console.log('❌ User not logged in');
+    if (!isAuthenticated) {
+      console.log('❌ User not authenticated');
       toast({
         title: "Authentication Required",
         description: "Please log in to upload CSV files",
@@ -692,7 +705,8 @@ export const CSVUpload = () => {
           transactions: categorizedTransactions,
           budget,
           goals,
-          success: true
+          success: true,
+          userId: user?.id || session?.user?.id // Include user ID for dashboard
         }
       }));
       
@@ -770,33 +784,39 @@ export const CSVUpload = () => {
         </div>
       </div>
 
-      {!user && (
+      {!isAuthenticated && !loading && (
         <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
           <p className="text-yellow-300 text-sm font-medium">⚠️ Please log in to upload CSV files</p>
         </div>
       )}
+      
+      {loading && (
+        <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+          <p className="text-blue-300 text-sm font-medium">🔄 Checking authentication...</p>
+        </div>
+      )}
 
-      <div className="space-y-6">
-        {/* File Upload Zone */}
-        <FileUploadZone
-          user={user}
-          uploading={uploading}
-          processing={uploadStatus === 'processing'}
-          isPickerOpen={isPickerOpen}
-          onFilesSelected={handleFileUpload}
-          onOpenFilePicker={handleOpenFilePicker}
-        />
-        
-        {/* Hidden file input for click-to-upload */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".csv,text/csv"
-          onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-          disabled={uploading || !user}
-          className="hidden"
-        />
+              <div className="space-y-6">
+          {/* File Upload Zone */}
+          <FileUploadZone
+            user={user}
+            uploading={uploading}
+            processing={uploadStatus === 'processing'}
+            isPickerOpen={isPickerOpen}
+            onFilesSelected={handleFileUpload}
+            onOpenFilePicker={handleOpenFilePicker}
+          />
+          
+          {/* Hidden file input for click-to-upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,text/csv"
+            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            disabled={uploading || !isAuthenticated}
+            className="hidden"
+          />
 
         {/* Phase 5: Progress Indicator */}
         {renderProgressIndicator()}
