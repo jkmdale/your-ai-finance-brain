@@ -10,12 +10,15 @@ import { StatsCards } from '@/components/dashboard/StatsCards';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { BudgetBreakdown } from '@/components/dashboard/BudgetBreakdown';
 import { SmartBudgetGoals } from '@/components/dashboard/SmartBudgetGoals';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 
 export const Dashboard = () => {
   const {
     stats,
     recentTransactions,
     loading,
+    error,
     lastDataRefresh,
     triggerRefresh,
     refreshKey
@@ -26,7 +29,7 @@ export const Dashboard = () => {
     processingInsights,
     generateAIInsights,
     resetInsights,
-    error
+    error: aiError
   } = useAIInsights();
 
   // Generate AI insights when we have new data
@@ -40,8 +43,33 @@ export const Dashboard = () => {
     return <LoadingState lastDataRefresh={lastDataRefresh} />;
   }
 
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <section className="min-h-screen w-full flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Unable to Load Financial Data</h2>
+          <p className="text-white/70 mb-6">{error}</p>
+          <Button 
+            onClick={triggerRefresh}
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+          {lastDataRefresh && (
+            <p className="text-white/50 text-sm mt-4">
+              Last successful refresh: {lastDataRefresh.toLocaleTimeString()}
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   if (!stats) {
-    return <EmptyState lastDataRefresh={lastDataRefresh} />;
+    return <EmptyState lastDataRefresh={lastDataRefresh} onRetry={triggerRefresh} />;
   }
 
   return (
@@ -69,7 +97,7 @@ export const Dashboard = () => {
         <AIInsightsCard 
           aiInsights={aiInsights} 
           processingInsights={processingInsights}
-          error={error}
+          error={aiError}
         />
 
         <StatsCards stats={stats} />

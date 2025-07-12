@@ -11,6 +11,7 @@ export const useDashboardData = () => {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const { activeMonth, setActiveMonth, setTotalTransactions } = useAppState();
 
@@ -32,16 +33,32 @@ export const useDashboardData = () => {
       return;
     }
 
+    const TIMEOUT_MS = 10000; // 10 second timeout
+    const startTime = Date.now();
+    
     try {
       console.log(`🔄 Loading dashboard data from Supabase ${forceRefresh ? '(forced refresh)' : ''}`);
+      setError(null);
+
+      // Check network connectivity first
+      if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      }
 
       // Add a small delay if this is a forced refresh to ensure DB operations are complete
       if (forceRefresh) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Fetch ALL transactions from Supabase
-      const { data: allTransactions, error: transactionsError } = await supabase
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Dashboard data loading timed out after 10 seconds. This might be due to a slow internet connection or server issues.'));
+        }, TIMEOUT_MS);
+      });
+
+      // Fetch ALL transactions from Supabase with timeout
+      const dataPromise = supabase
         .from('transactions')
         .select(`
           *,
@@ -51,15 +68,30 @@ export const useDashboardData = () => {
         .not('tags', 'cs', '{transfer}')
         .order('transaction_date', { ascending: false });
 
+      const { data: allTransactions, error: transactionsError } = await Promise.race([
+        dataPromise,
+        timeoutPromise
+      ]) as any;
+
       if (transactionsError) {
         console.error('❌ Error fetching transactions:', transactionsError);
-        throw transactionsError;
+        
+        // Categorize different types of errors
+        if (transactionsError.message?.includes('JWT')) {
+          throw new Error('Session expired. Please refresh the page and sign in again.');
+        } else if (transactionsError.message?.includes('network')) {
+          throw new Error('Network error. Please check your internet connection and try again.');
+        } else if (transactionsError.message?.includes('timeout')) {
+          throw new Error('Request timed out. Please try again.');
+        } else {
+          throw new Error(`Database error: ${transactionsError.message}`);
+        }
       }
 
-      console.log(`📊 Fetched ${allTransactions?.length || 0} transactions from Supabase`);
+      console.log(`📊 Fetched ${allTransactions?.length || 0} transactions from Supabase in ${Date.now() - startTime}ms`);
 
       // Fetch current active budgets for more accurate balance calculation
-      const { data: budgets } = await supabase
+      const budgetPromise = supabase
         .from('budgets')
         .select('*')
         .eq('user_id', user.id)
@@ -67,14 +99,24 @@ export const useDashboardData = () => {
         .order('created_at', { ascending: false })
         .limit(1);
 
+      const { data: budgets } = await Promise.race([
+        budgetPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Budget fetch timeout')), 5000))
+      ]) as any;
+
       console.log('📋 Active budget found:', budgets?.length > 0);
 
       // Fetch bank accounts for balance
-      const { data: accounts } = await supabase
+      const accountPromise = supabase
         .from('bank_accounts')
         .select('balance')
         .eq('user_id', user.id)
         .eq('is_active', true);
+
+      const { data: accounts } = await Promise.race([
+        accountPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Account fetch timeout')), 5000))
+      ]) as any;
 
       console.log('🏦 Bank accounts:', accounts?.length || 0);
 
@@ -134,12 +176,44 @@ export const useDashboardData = () => {
       }
     } catch (error) {
       console.error('❌ Error loading dashboard data from Supabase:', error);
+      let errorMessage = 'An unexpected error occurred while loading your financial data.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Add additional context for common issues
+      if (!navigator.onLine) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage += ' This might be due to a slow internet connection or server issues.';
+      }
+      
+      setError(errorMessage);
+      
+      // Set empty data but still mark as "loaded" to prevent infinite loading
       setStats(null);
       setRecentTransactions([]);
+      setLastDataRefresh(new Date());
     } finally {
       setLoading(false);
     }
   };
+
+  // Add a safety timeout to prevent infinite loading
+  useEffect(() => {
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ Dashboard loading safety timeout reached - forcing loading to false');
+        setLoading(false);
+        setError('Loading timed out. Please try refreshing the page.');
+      }
+    }, 15000); // 15 second safety timeout
+
+    return () => clearTimeout(safetyTimeout);
+  }, [loading]);
 
   const triggerRefresh = () => {
     setRefreshKey(prev => prev + 1);
@@ -176,6 +250,7 @@ export const useDashboardData = () => {
     stats,
     recentTransactions,
     loading,
+    error,
     lastDataRefresh,
     triggerRefresh,
     refreshKey
