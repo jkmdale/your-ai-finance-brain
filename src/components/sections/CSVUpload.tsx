@@ -78,12 +78,17 @@ export function CSVUpload() {
   };
 
   return (
-    <div className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-6">
-      {/* DEBUG: Clear visual indicator */}
+    <div className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4 md:p-6">
+      {/* DEBUG: Clear visual indicator with improved mobile visibility */}
       <div className="mb-4 text-center">
-        <h3 className="text-xl font-bold text-white mb-2">
-          📊 DEBUG: CSV Upload Here
+        <h3 className="text-lg md:text-xl font-bold text-white mb-2">
+          📊 Upload CSV Here
         </h3>
+        <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-2 mb-2">
+          <p className="text-green-200 text-sm font-medium">
+            ✅ DEBUG: Upload box should be visible now
+          </p>
+        </div>
         <p className="text-white/70 text-sm">
           Component is loaded and ready • User authenticated ✓
         </p>
