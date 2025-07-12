@@ -5,8 +5,55 @@ import { useToast } from '@/hooks/use-toast';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
 import Papa from 'papaparse';
 
+// Phase 1: Define proper TypeScript interfaces
+interface Transaction {
+  date: string;
+  description: string;
+  amount: number;
+  category: string | null;
+}
+
+interface ProcessingResult {
+  success: boolean;
+  transactions: Transaction[];
+  totalProcessed: number;
+  errors: string[];
+  warnings: string[];
+}
+
+interface BudgetSummary {
+  categories: { [key: string]: { budgeted: number; actual: number } };
+  totalIncome: number;
+  totalExpenses: number;
+  savings: number;
+}
+
+interface SmartGoal {
+  name: string;
+  target_amount: number;
+  deadline: string;
+  rationale: string;
+}
+
+interface SchemaTemplate {
+  name: string;
+  fields: string[];
+  map: {
+    date: string;
+    amount: string;
+    description: string;
+    debit?: string;
+    credit?: string;
+  };
+}
+
+// Phase 2: File validation constants
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const ALLOWED_EXTENSIONS = ['.csv'];
+const ALLOWED_MIME_TYPES = ['text/csv', 'application/csv', 'text/plain'];
+
 // Schema detection for NZ banks and common formats
-const schemaTemplates = [
+const schemaTemplates: SchemaTemplate[] = [
   {
     name: 'ANZ Bank',
     fields: ['date', 'amount', 'particulars'],
@@ -63,7 +110,39 @@ const schemaTemplates = [
   }
 ];
 
-function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) {
+// Phase 2: File validation function
+function validateFiles(files: FileList): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (files.length === 0) {
+    errors.push('No files selected');
+    return { isValid: false, errors };
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      errors.push(`File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+    }
+    
+    // Check file extension
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      errors.push(`File "${file.name}" has invalid extension. Only CSV files are allowed`);
+    }
+    
+    // Check MIME type
+    if (!ALLOWED_MIME_TYPES.includes(file.type) && !file.name.toLowerCase().endsWith('.csv')) {
+      errors.push(`File "${file.name}" is not a valid CSV file`);
+    }
+  }
+  
+  return { isValid: errors.length === 0, errors };
+}
+
+function detectSchema(headers: string[], setDebugInfo?: (info: string) => void): SchemaTemplate['map'] | null {
   const debug = (message: string) => {
     console.log(message);
     if (setDebugInfo) {
@@ -72,8 +151,6 @@ function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) 
   };
   
   debug('🔍 CSV Headers found: ' + JSON.stringify(headers));
-  debug('🔍 Headers type: ' + typeof headers + ', Length: ' + headers.length);
-  debug('🔍 Raw headers: ' + JSON.stringify(headers));
   
   // Handle edge cases
   if (!headers || headers.length === 0) {
@@ -83,8 +160,8 @@ function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) 
   
   // Clean and normalize headers
   const cleanHeaders = headers
-    .map(h => String(h || '').trim()) // Convert to string and trim
-    .filter(h => h.length > 0); // Remove empty headers
+    .map(h => String(h || '').trim())
+    .filter(h => h.length > 0);
     
   if (cleanHeaders.length === 0) {
     debug('❌ All headers are empty after cleaning');
@@ -92,7 +169,6 @@ function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) 
   }
   
   const lowerHeaders = cleanHeaders.map(h => h.toLowerCase().trim());
-  debug('🔍 Cleaned headers: ' + JSON.stringify(cleanHeaders));
   debug('🔍 Normalized headers: ' + JSON.stringify(lowerHeaders));
   
   // Try exact template matching first
@@ -111,27 +187,10 @@ function detectSchema(headers: string[], setDebugInfo?: (info: string) => void) 
   
   // If no template matches, try intelligent fallback detection
   debug('⚠️ No template matched, trying intelligent detection...');
-  
-  const schema = createFlexibleSchema(cleanHeaders, setDebugInfo);
-  if (schema) {
-    debug('✅ Created flexible schema: ' + JSON.stringify(schema));
-    return schema;
-  }
-  
-  // Last resort: try super flexible detection
-  debug('⚠️ Flexible detection failed, trying super flexible detection...');
-  const superFlexibleSchema = createSuperFlexibleSchema(cleanHeaders, setDebugInfo);
-  if (superFlexibleSchema) {
-    debug('✅ Created super flexible schema: ' + JSON.stringify(superFlexibleSchema));
-    return superFlexibleSchema;
-  }
-  
-  debug('❌ No schema could be detected. All available headers: ' + JSON.stringify(cleanHeaders));
-  debug('❌ Consider these column names: Date/Amount are minimum required');
-  return null;
+  return createFlexibleSchema(cleanHeaders, setDebugInfo);
 }
 
-function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) => void) {
+function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) => void): SchemaTemplate['map'] | null {
   const debug = (message: string) => {
     console.log(message);
     if (setDebugInfo) {
@@ -169,7 +228,7 @@ function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) =
       date: originalHeaders[lowerHeaders.indexOf(dateHeader)],
       debit: originalHeaders[lowerHeaders.indexOf(debitHeader)],
       credit: originalHeaders[lowerHeaders.indexOf(creditHeader)],
-      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : debitHeader // fallback
+      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : debitHeader
     };
   }
   
@@ -178,89 +237,10 @@ function createFlexibleSchema(headers: string[], setDebugInfo?: (info: string) =
     return {
       date: originalHeaders[lowerHeaders.indexOf(dateHeader)],
       amount: originalHeaders[lowerHeaders.indexOf(amountHeader)],
-      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : amountHeader // fallback to amount column name
+      description: descriptionHeader ? originalHeaders[lowerHeaders.indexOf(descriptionHeader)] : amountHeader
     };
   }
   
-  return null;
-}
-
-function createSuperFlexibleSchema(headers: string[], setDebugInfo?: (info: string) => void) {
-  const debug = (message: string) => {
-    console.log(message);
-    if (setDebugInfo) {
-      setDebugInfo(message);
-    }
-  };
-  
-  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-  debug('🔍 Super flexible detection for headers: ' + JSON.stringify(lowerHeaders));
-  
-  // Very broad patterns - match even partial words
-  let dateCol = null;
-  let amountCol = null;
-  let descCol = null;
-  
-  // Find date column (very flexible)
-  for (let i = 0; i < lowerHeaders.length; i++) {
-    const h = lowerHeaders[i];
-    if (h.includes('date') || h.includes('time') || h.includes('day') || 
-        h.includes('transaction') || h.includes('posting') || h.includes('process')) {
-      dateCol = headers[i];
-      debug(`📅 Found date column: "${dateCol}" (from "${h}")`);
-      break;
-    }
-  }
-  
-  // Find amount column (very flexible)
-  for (let i = 0; i < lowerHeaders.length; i++) {
-    const h = lowerHeaders[i];
-    if (h.includes('amount') || h.includes('value') || h.includes('total') ||
-        h.includes('sum') || h.includes('balance') || h.includes('money') ||
-        h.includes('debit') || h.includes('credit') || h.includes('$')) {
-      amountCol = headers[i];
-      debug(`💰 Found amount column: "${amountCol}" (from "${h}")`);
-      break;
-    }
-  }
-  
-  // Find description column (very flexible)
-  for (let i = 0; i < lowerHeaders.length; i++) {
-    const h = lowerHeaders[i];
-    if (h.includes('desc') || h.includes('detail') || h.includes('particular') ||
-        h.includes('payee') || h.includes('reference') || h.includes('memo') ||
-        h.includes('narrative') || h.includes('comment') || h.includes('note')) {
-      descCol = headers[i];
-      debug(`📝 Found description column: "${descCol}" (from "${h}")`);
-      break;
-    }
-  }
-  
-  // If we still don't have essentials, use positional fallback
-  if (!dateCol && headers.length > 0) {
-    dateCol = headers[0];
-    debug(`📅 Using first column as date: "${dateCol}"`);
-  }
-  
-  if (!amountCol && headers.length > 1) {
-    amountCol = headers[1];
-    debug(`💰 Using second column as amount: "${amountCol}"`);
-  }
-  
-  if (!descCol && headers.length > 2) {
-    descCol = headers[2];
-    debug(`📝 Using third column as description: "${descCol}"`);
-  }
-  
-  if (dateCol && amountCol) {
-    return {
-      date: dateCol,
-      amount: amountCol,
-      description: descCol || amountCol
-    };
-  }
-  
-  debug('❌ Super flexible detection failed. Headers: ' + JSON.stringify(headers));
   return null;
 }
 
@@ -299,13 +279,6 @@ function normalizeDate(dateStr: string): string | null {
   }
   
   console.log('🔍 Parsing date:', cleanDateStr);
-  console.log('🔍 Date length:', cleanDateStr.length);
-  console.log('🔍 Date char codes:', Array.from(cleanDateStr).map(c => c.charCodeAt(0)));
-  console.log('🔍 Date raw value:', JSON.stringify(cleanDateStr));
-  
-  // Test the exact regex pattern
-  const testRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/;
-  console.log('🔍 Regex test result:', testRegex.test(cleanDateStr));
   
   // Try DD/MM/YYYY format (NZ standard)
   const ddmmyyyy = cleanDateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
@@ -328,7 +301,7 @@ function normalizeDate(dateStr: string): string | null {
     console.log('❌ DD/MM/YYYY regex did not match');
   }
   
-  // Try a much simpler pattern - just numbers and slashes
+  // Try simple pattern - just numbers and slashes
   const simplePattern = cleanDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
   if (simplePattern) {
     const day = parseInt(simplePattern[1]);
@@ -348,10 +321,10 @@ function normalizeDate(dateStr: string): string | null {
   return null;
 }
 
-async function fetchClaudeResponse(transactions: any[]): Promise<any[]> {
+async function fetchClaudeResponse(transactions: Transaction[]): Promise<Transaction[]> {
   const CLAUDE_PROXY_URL = 'https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/ai-coach';
   
-  const categorizedTransactions = [];
+  const categorizedTransactions: Transaction[] = [];
   
   for (const transaction of transactions) {
     try {
@@ -392,7 +365,7 @@ Transaction: "${transaction.description}"`;
   return categorizedTransactions;
 }
 
-function generateZeroBasedBudget(transactions: any[]) {
+function generateZeroBasedBudget(transactions: Transaction[]): BudgetSummary {
   const categories: { [key: string]: { budgeted: number; actual: number } } = {};
   let totalIncome = 0;
   let totalExpenses = 0;
@@ -429,7 +402,7 @@ function generateZeroBasedBudget(transactions: any[]) {
   };
 }
 
-function generateSmartGoals(transactions: any[]) {
+function generateSmartGoals(transactions: Transaction[]): SmartGoal[] {
   const totalIncome = transactions
     .filter(t => t.amount > 0)
     .reduce((sum, t) => sum + t.amount, 0);
@@ -440,7 +413,7 @@ function generateSmartGoals(transactions: any[]) {
   
   const disposableIncome = Math.max(0, totalIncome - totalExpenses);
   
-  const goals = [];
+  const goals: SmartGoal[] = [];
   
   if (disposableIncome > 0) {
     goals.push({
@@ -463,232 +436,257 @@ function generateSmartGoals(transactions: any[]) {
   return goals;
 }
 
+// Phase 5: Processing stages for progress indicator
+enum ProcessingStage {
+  IDLE = 'idle',
+  VALIDATING = 'validating',
+  PARSING = 'parsing',
+  CATEGORIZING = 'categorizing',
+  GENERATING_BUDGET = 'generating_budget',
+  GENERATING_GOALS = 'generating_goals',
+  COMPLETED = 'completed',
+  ERROR = 'error'
+}
+
 export const CSVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error' | 'processing'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
-  const [processingStage, setProcessingStage] = useState('');
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>(ProcessingStage.IDLE);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Phase 2: Clear UI state function
+  const clearUIState = () => {
+    setUploadStatus('idle');
+    setUploadMessage('');
+    setProcessingStage(ProcessingStage.IDLE);
+    setProcessingProgress(0);
+    setDebugInfo('');
+  };
+
   const handleOpenFilePicker = () => {
+    if (uploading) return; // Phase 2: Prevent interaction during processing
+    
     setIsPickerOpen(true);
     fileInputRef.current?.click();
-    // Reset after a brief moment to avoid UI flickering
     setTimeout(() => setIsPickerOpen(false), 100);
   };
 
   const handleFileUpload = async (files: FileList) => {
     console.log('🚀 handleFileUpload called with files:', files);
-    console.log('🚀 Files count:', files.length);
-    console.log('🚀 User logged in:', !!user);
     
     if (!user) {
       console.log('❌ User not logged in');
-      setUploadStatus('error');
-      setUploadMessage('Please log in to upload CSV files');
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to upload CSV files",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Validate file types
-    const nonCsvFiles = Array.from(files).filter(
-      file => !file.type.includes('csv') && !file.name.toLowerCase().endsWith('.csv')
-    );
+    // Phase 2: Clear previous state
+    clearUIState();
+
+    // Phase 2: File validation
+    setProcessingStage(ProcessingStage.VALIDATING);
+    setProcessingProgress(5);
     
-    console.log('🚀 Non-CSV files found:', nonCsvFiles);
-    
-    if (nonCsvFiles.length > 0) {
-      console.log('❌ Invalid file types detected');
+    const validation = validateFiles(files);
+    if (!validation.isValid) {
+      console.log('❌ File validation failed:', validation.errors);
       setUploadStatus('error');
-      setUploadMessage(`Please upload only CSV files. Found: ${nonCsvFiles.map(f => f.name).join(', ')}`);
+      setUploadMessage(validation.errors.join('. '));
+      setProcessingStage(ProcessingStage.ERROR);
+      
+      toast({
+        title: "Invalid Files",
+        description: validation.errors.join('. '),
+        variant: "destructive",
+      });
       return;
     }
 
-    console.log('✅ Starting CSV processing...');
+    // Phase 2: Disable upload during processing
     setUploading(true);
     setUploadStatus('processing');
     setUploadMessage('Starting CSV processing...');
-    setDebugInfo(''); // Clear previous debug info
 
     try {
-      const allTransactions: any[] = [];
+      const allTransactions: Transaction[] = [];
+      
+      // Phase 2 & 3: Wrap in try/catch with proper error handling
+      setProcessingStage(ProcessingStage.PARSING);
+      setProcessingProgress(20);
       
       // Process each file
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        setProcessingStage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
+        setUploadMessage(`Processing file ${i + 1}/${files.length}: ${file.name}`);
         
-        const transactions = await new Promise<any[]>((resolve, reject) => {
+        const transactions = await new Promise<Transaction[]>((resolve, reject) => {
           Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
             complete: function(results) {
-              console.log('📄 CSV parse results:', results);
-              
-              if (!results.data || results.data.length === 0) {
-                reject(new Error('CSV appears to be empty'));
-                return;
-              }
+              try {
+                console.log('📄 CSV parse results:', results);
+                
+                if (!results.data || results.data.length === 0) {
+                  reject(new Error(`CSV file "${file.name}" appears to be empty`));
+                  return;
+                }
 
-              // Clear previous debug info and start fresh
-              setDebugInfo('📄 Starting CSV analysis...\n');
-              
-              const detectedSchema = detectSchema(results.meta.fields || [], (info) => {
-                setDebugInfo(prev => prev + info + '\n');
-              });
-              console.log('🔍 Detected schema:', detectedSchema);
-              
-              if (!detectedSchema) {
-                const headers = results.meta.fields || [];
-                console.log('⚠️ Schema detection failed, using FORCE MODE');
+                const detectedSchema = detectSchema(results.meta.fields || [], (info) => {
+                  setDebugInfo(prev => prev + info + '\n');
+                });
+                console.log('🔍 Detected schema:', detectedSchema);
                 
-                // FORCE MODE: Create a schema from the first 3 columns
-                const forceSchema = {
-                  date: headers[0] || 'Date',
-                  amount: headers[1] || 'Amount', 
-                  description: headers[2] || headers[1] || 'Description'
-                };
+                if (!detectedSchema) {
+                  reject(new Error(`CSV format not recognized in "${file.name}". Please ensure your CSV has Date, Amount, and Description columns.`));
+                  return;
+                }
+
+                console.log(`📊 Processing ${results.data.length} rows from ${file.name}`);
                 
-                console.log('🔧 FORCE SCHEMA:', forceSchema);
+                let validTransactions = 0;
+                let skippedRows = 0;
                 
-                // Use the force schema instead of rejecting
                 const cleanedData = (results.data as any[])
-                  .slice(0, 10) // Limit to first 10 rows for testing
                   .map((row, index) => {
-                    console.log(`🔧 FORCE ROW ${index + 1}:`, row);
+                    const rawDate = row[detectedSchema.date];
+                    const normalizedDate = normalizeDate(rawDate);
                     
-                    return {
-                      date: '2025-05-15', // Fixed date
-                      description: `Transaction ${index + 1}`,
-                      amount: Math.random() * 100, // Random amount
-                      category: 'other'
-                    };
-                  });
-
-                console.log(`✅ FORCE MODE: Created ${cleanedData.length} transactions`);
-                resolve(cleanedData);
-                return;
-              }
-
-              console.log(`📊 Processing ${results.data.length} rows from ${file.name}`);
-              
-              let skippedDates = 0;
-              let skippedAmounts = 0;
-              let successfulRows = 0;
-              
-              const cleanedData = (results.data as any[])
-                .map((row, index) => {
-                  const rawDate = row[detectedSchema.date];
-                  console.log(`🔍 PROCESSING ROW ${index + 1} - Raw date:`, rawDate);
-                  
-                  // ULTRA SIMPLE: Just accept any date and convert to valid format
-                  let parsedDate = '2025-05-15'; // Safe fallback
-                  
-                  if (rawDate) {
-                    const dateStr = String(rawDate).trim();
-                    console.log(`🔍 Date string: "${dateStr}"`);
-                    
-                    // Super simple DD/MM/YYYY parser
-                    if (dateStr.includes('/')) {
-                      try {
-                        const [day, month, year] = dateStr.split('/');
-                        const d = parseInt(day);
-                        const m = parseInt(month);
-                        const y = parseInt(year);
-                        
-                        if (d && m && y) {
-                          // Force valid ranges
-                          const validDay = Math.max(1, Math.min(31, d));
-                          const validMonth = Math.max(1, Math.min(12, m));
-                          const validYear = y > 1000 ? y : 2025;
-                          
-                          parsedDate = `${validYear}-${validMonth.toString().padStart(2, '0')}-${validDay.toString().padStart(2, '0')}`;
-                          console.log(`✅ CONVERTED: ${dateStr} → ${parsedDate}`);
-                        }
-                      } catch (e) {
-                        console.log(`⚠️ Date parse failed, using fallback`);
-                      }
-                    }
-                  }
-                  
-                  // NEVER skip rows due to dates
-                  console.log(`✅ FINAL DATE: ${parsedDate}`);
-                  
-                  // Handle different amount column scenarios
-                  let amount = 0;
-                  if ('debit' in detectedSchema && 'credit' in detectedSchema) {
-                    // Separate debit/credit columns
-                    const debit = parseFloat(row[detectedSchema.debit] || '0');
-                    const credit = parseFloat(row[detectedSchema.credit] || '0');
-                    amount = credit - debit; // Credit is positive, debit is negative
-                  } else if ('amount' in detectedSchema) {
-                    // Single amount column
-                    const rawAmount = row[detectedSchema.amount];
-                    amount = parseFloat(rawAmount || '0');
-                    if (isNaN(amount)) {
-                      skippedAmounts++;
-                      console.warn(`Skipping row ${index + 1} with invalid amount: ${rawAmount}`);
+                    if (!normalizedDate) {
+                      console.log(`⚠️ Skipping row ${index + 1} with invalid date: ${rawDate}`);
+                      skippedRows++;
                       return null;
                     }
-                  }
-                  
-                  successfulRows++;
-                  return {
-                    date: parsedDate,
-                    description: row[detectedSchema.description] || '',
-                    amount: amount,
-                    category: null // to be filled later
-                  };
-                })
-                .filter(Boolean);
 
-              console.log(`📊 Processing results: ${successfulRows} successful, ${skippedDates} invalid dates, ${skippedAmounts} invalid amounts`);
-              console.log(`✅ Cleaned ${cleanedData.length} transactions from ${file.name}`);
-              
-              if (cleanedData.length === 0) {
-                const errorMsg = `No valid transactions found in ${file.name}. ${skippedDates} rows had invalid dates, ${skippedAmounts} rows had invalid amounts. Please check your CSV format.`;
-                reject(new Error(errorMsg));
-                return;
+                    // Handle different amount column scenarios
+                    let amount = 0;
+                    if ('debit' in detectedSchema && 'credit' in detectedSchema) {
+                      // Separate debit/credit columns
+                      const debit = parseFloat(row[detectedSchema.debit!] || '0');
+                      const credit = parseFloat(row[detectedSchema.credit!] || '0');
+                      amount = credit - debit; // Credit is positive, debit is negative
+                    } else if ('amount' in detectedSchema) {
+                      // Single amount column
+                      const rawAmount = row[detectedSchema.amount];
+                      amount = parseFloat(rawAmount || '0');
+                      if (isNaN(amount)) {
+                        console.warn(`Skipping row ${index + 1} with invalid amount: ${rawAmount}`);
+                        skippedRows++;
+                        return null;
+                      }
+                    }
+                    
+                    validTransactions++;
+                    return {
+                      date: normalizedDate,
+                      description: row[detectedSchema.description] || '',
+                      amount: amount,
+                      category: null // to be filled later
+                    };
+                  })
+                  .filter((tx): tx is Transaction => tx !== null);
+
+                console.log(`📊 Processing results: ${validTransactions} successful, ${skippedRows} skipped`);
+                console.log(`✅ Cleaned ${cleanedData.length} transactions from ${file.name}`);
+                
+                if (cleanedData.length === 0) {
+                  reject(new Error(`No valid transactions found in ${file.name}. ${skippedRows} rows had invalid data. Please check your CSV format.`));
+                  return;
+                }
+                
+                resolve(cleanedData);
+              } catch (error: any) {
+                reject(new Error(`Error processing ${file.name}: ${error.message}`));
               }
-              
-              resolve(cleanedData);
             },
             error: function(err) {
-              reject(new Error('Error parsing CSV: ' + err.message));
+              reject(new Error(`CSV parsing error in ${file.name}: ${err.message}`));
             }
           });
         });
         
         allTransactions.push(...transactions);
+        setProcessingProgress(20 + (i + 1) / files.length * 30);
       }
       
-      setProcessingStage(`Categorizing ${allTransactions.length} transactions with Claude AI...`);
+      if (allTransactions.length === 0) {
+        throw new Error('No transactions found in any of the uploaded files');
+      }
       
-      // Claude categorization
-      const categorizedTransactions = await fetchClaudeResponse(allTransactions);
+      // Phase 3: Validate transaction data
+      const validTransactions = allTransactions.filter(tx => 
+        tx.date && tx.description && !isNaN(tx.amount)
+      );
       
-      setProcessingStage('Generating budget and goals...');
+      if (validTransactions.length === 0) {
+        throw new Error('No valid transactions found after validation');
+      }
       
-      // Generate budget and goals
-      const budget = generateZeroBasedBudget(categorizedTransactions);
-      const goals = generateSmartGoals(categorizedTransactions);
+      if (validTransactions.length < allTransactions.length) {
+        const skipped = allTransactions.length - validTransactions.length;
+        console.warn(`Filtered out ${skipped} invalid transactions`);
+      }
+      
+      setProcessingStage(ProcessingStage.CATEGORIZING);
+      setProcessingProgress(60);
+      setUploadMessage(`Categorizing ${validTransactions.length} transactions with Claude AI...`);
+      
+      // Claude categorization with error handling
+      let categorizedTransactions: Transaction[];
+      try {
+        categorizedTransactions = await fetchClaudeResponse(validTransactions);
+      } catch (error: any) {
+        console.warn('Claude categorization failed, using uncategorized transactions:', error);
+        categorizedTransactions = validTransactions.map(tx => ({ ...tx, category: 'other' }));
+        
+        toast({
+          title: "AI Categorization Warning",
+          description: "Transaction categorization failed, but processing will continue",
+          variant: "default",
+        });
+      }
+      
+      setProcessingStage(ProcessingStage.GENERATING_BUDGET);
+      setProcessingProgress(80);
+      setUploadMessage('Generating budget and goals...');
+      
+      // Generate budget and goals with error handling
+      let budget: BudgetSummary;
+      let goals: SmartGoal[];
+      
+      try {
+        budget = generateZeroBasedBudget(categorizedTransactions);
+        goals = generateSmartGoals(categorizedTransactions);
+      } catch (error: any) {
+        console.error('Budget/goals generation failed:', error);
+        throw new Error(`Failed to generate budget and goals: ${error.message}`);
+      }
+      
+      setProcessingStage(ProcessingStage.COMPLETED);
+      setProcessingProgress(100);
+      setUploadStatus('success');
+      setUploadMessage(`✅ Complete! Processed ${categorizedTransactions.length} transactions with AI categorization`);
       
       console.log('💰 Generated budget:', budget);
       console.log('🎯 Generated goals:', goals);
       
-      setUploadStatus('success');
-      setUploadMessage(`✅ Complete! Processed ${categorizedTransactions.length} transactions with AI categorization`);
-      
       toast({
         title: "CSV Processing Complete! 🎉",
-        description: `${categorizedTransactions.length} transactions processed with AI categorization`,
+        description: `${categorizedTransactions.length} transactions processed successfully`,
         duration: 8000,
       });
 
-      // Trigger dashboard refresh with the exact event name you mentioned
+      // Trigger dashboard refresh
       window.dispatchEvent(new CustomEvent('csv-data-ready', { 
         detail: {
           transactions: categorizedTransactions,
@@ -701,6 +699,7 @@ export const CSVUpload = () => {
     } catch (error: any) {
       console.error('❌ CSV processing error:', error);
       setUploadStatus('error');
+      setProcessingStage(ProcessingStage.ERROR);
       setUploadMessage(`Processing failed: ${error.message}`);
       
       toast({
@@ -709,9 +708,54 @@ export const CSVUpload = () => {
         variant: "destructive",
       });
     } finally {
+      // Phase 2: Re-enable upload after processing
       setUploading(false);
-      setProcessingStage('');
     }
+  };
+
+  // Phase 5: Progress indicator component
+  const renderProgressIndicator = () => {
+    if (processingStage === ProcessingStage.IDLE) return null;
+    
+    const stageMessages = {
+      [ProcessingStage.VALIDATING]: 'Validating files...',
+      [ProcessingStage.PARSING]: 'Parsing CSV data...',
+      [ProcessingStage.CATEGORIZING]: 'AI categorization in progress...',
+      [ProcessingStage.GENERATING_BUDGET]: 'Generating budget and goals...',
+      [ProcessingStage.COMPLETED]: 'Processing complete!',
+      [ProcessingStage.ERROR]: 'Processing failed',
+      [ProcessingStage.IDLE]: ''
+    };
+    
+    return (
+      <div className="mt-4 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+        <div className="flex items-center space-x-3 mb-2">
+          {processingStage === ProcessingStage.ERROR ? (
+            <AlertCircle className="w-5 h-5 text-red-400" />
+          ) : processingStage === ProcessingStage.COMPLETED ? (
+            <CheckCircle className="w-5 h-5 text-green-400" />
+          ) : (
+            <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+          )}
+          <span className="text-white font-medium">
+            {stageMessages[processingStage]}
+          </span>
+        </div>
+        
+        {processingStage !== ProcessingStage.COMPLETED && processingStage !== ProcessingStage.ERROR && (
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${processingProgress}%` }}
+            />
+          </div>
+        )}
+        
+        {uploadMessage && (
+          <p className="text-white/70 text-sm mt-2">{uploadMessage}</p>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -754,220 +798,41 @@ export const CSVUpload = () => {
           className="hidden"
         />
 
-        {/* Test CSV Button - for debugging */}
-        {user && (
-          <div className="space-y-2">
-            <button
-              onClick={() => {
-                console.log('🧪 Testing CSV parsing with sample data...');
-                const csvContent = `Date,Amount,Particulars
-15/05/2025,100.50,Test Transaction 1
-14/05/2025,-25.00,Test Transaction 2
-13/05/2025,75.25,Test Transaction 3`;
-                
-                const blob = new Blob([csvContent], { type: 'text/csv' });
-                const file = new File([blob], 'test.csv', { type: 'text/csv' });
-                const fileList = {
-                  0: file,
-                  length: 1,
-                  item: (index: number) => index === 0 ? file : null,
-                  [Symbol.iterator]: function* () { yield file; }
-                } as FileList;
-                
-                handleFileUpload(fileList);
-              }}
-              disabled={uploading}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              🧪 Test with Sample CSV (Debug)
-            </button>
-            
-            <button
-              onClick={() => {
-                console.log('🔄 Force refreshing page to clear cache...');
-                window.location.reload();
-              }}
-              className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              🔄 Force Refresh (Clear Cache)
-            </button>
-            
-            <button
-              onClick={async () => {
-                console.log('🚀 BYPASS MODE: Creating fake transactions...');
-                setUploading(true);
-                setUploadStatus('processing');
-                setUploadMessage('Bypass mode - creating test data...');
-                
-                try {
-                  // Create fake transactions
-                  const fakeTransactions = [
-                    { date: '2025-05-15', description: 'Grocery Store', amount: -125.50, category: 'groceries' },
-                    { date: '2025-05-14', description: 'Salary Payment', amount: 3500.00, category: 'salary' },
-                    { date: '2025-05-13', description: 'Restaurant Dinner', amount: -85.75, category: 'dining' },
-                    { date: '2025-05-12', description: 'Gas Station', amount: -65.20, category: 'transport' },
-                    { date: '2025-05-11', description: 'Online Shopping', amount: -199.99, category: 'shopping' }
-                  ];
-                  
-                  // Simulate processing delay
-                  await new Promise(resolve => setTimeout(resolve, 1000));
-                  
-                  setUploadStatus('success');
-                  setUploadMessage(`✅ BYPASS COMPLETE! Created ${fakeTransactions.length} test transactions`);
-                  
-                  toast({
-                    title: "Bypass Mode Complete! 🎉",
-                    description: `${fakeTransactions.length} test transactions created`,
-                    duration: 8000,
-                  });
+        {/* Phase 5: Progress Indicator */}
+        {renderProgressIndicator()}
 
-                  // Trigger dashboard refresh
-                  window.dispatchEvent(new CustomEvent('csv-data-ready', { 
-                    detail: {
-                      transactions: fakeTransactions,
-                      budget: { categories: {}, totalIncome: 3500, totalExpenses: 476.44, savings: 3023.56 },
-                      goals: [],
-                      success: true
-                    }
-                  }));
-                  
-                } catch (error) {
-                  console.error('❌ Bypass mode error:', error);
-                  setUploadStatus('error');
-                  setUploadMessage('Bypass mode failed');
-                } finally {
-                  setUploading(false);
-                }
-              }}
-              disabled={uploading}
-              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              🚀 BYPASS MODE (Create Test Data)
-            </button>
-          </div>
-        )}
+        {/* Phase 2: File validation info */}
+        <div className="p-4 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+          <h4 className="text-white font-medium mb-2">📋 File Requirements</h4>
+          <ul className="text-white/70 text-sm space-y-1">
+            <li>• File format: CSV only (.csv extension)</li>
+            <li>• Maximum size: {MAX_FILE_SIZE / (1024 * 1024)}MB per file</li>
+            <li>• Required columns: Date, Amount, Description</li>
+            <li>• Date format: DD/MM/YYYY (New Zealand standard)</li>
+            <li>• Supported banks: ANZ, ASB, Westpac, Kiwibank, BNZ</li>
+          </ul>
+        </div>
 
-        {/* Email Test Button - for debugging auth emails */}
-        {user && (
-          <button
-            onClick={async () => {
-              console.log('🧪 Testing email functionality...');
-              try {
-                // Test the email function directly
-                const response = await fetch('https://gzznuwtxyyaqlbbrxsuz.supabase.co/functions/v1/send-auth-email', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.access_token || 'test'}`,
-                  },
-                  body: JSON.stringify({
-                    user: { email: user.email },
-                    email_data: {
-                      token_hash: 'test-token',
-                      email_action_type: 'signup',
-                      site_url: window.location.origin,
-                      redirect_to: window.location.origin
-                    }
-                  })
-                });
-                
-                const result = await response.json();
-                console.log('📧 Email function test result:', result);
-                
-                if (response.ok) {
-                  toast({
-                    title: "Email Test Sent! ✅",
-                    description: "Check console for details and your email inbox",
-                  });
-                } else {
-                  toast({
-                    title: "Email Test Failed ❌",
-                    description: `Error: ${result.error || 'Unknown error'}`,
-                    variant: "destructive",
-                  });
-                }
-              } catch (error) {
-                console.error('❌ Email test error:', error);
-                toast({
-                  title: "Email Test Error ❌",
-                  description: "Check console for details",
-                  variant: "destructive",
-                });
-              }
-            }}
-            disabled={uploading}
-            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            📧 Test Email Function (Debug)
-          </button>
-        )}
-
-        {/* Processing Stage */}
-        {processingStage && (
-          <div className="p-4 rounded-lg border bg-blue-500/20 border-blue-500/30 text-blue-300 flex items-center space-x-3">
-            <Brain className="w-5 h-5 flex-shrink-0 animate-pulse" />
-            <p className="text-sm font-medium">{processingStage}</p>
-          </div>
-        )}
-
-        {/* Status Message */}
-        {uploadMessage && (
-          <div className={`p-4 rounded-lg border flex items-center space-x-3 ${
-            uploadStatus === 'success' 
-              ? 'bg-green-500/20 border-green-500/30 text-green-300'
-              : uploadStatus === 'error'
-              ? 'bg-red-500/20 border-red-500/30 text-red-300'
-              : 'bg-blue-500/20 border-blue-500/30 text-blue-300'
-          }`}>
-            {uploadStatus === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0" />}
-            {uploadStatus === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-            {uploadStatus === 'processing' && <Loader2 className="w-5 h-5 flex-shrink-0 animate-spin" />}
-            <p className="text-sm font-medium">{uploadMessage}</p>
-          </div>
-        )}
-
-        {/* Debug Information */}
-        {debugInfo && uploadStatus === 'error' && (
-          <div className="p-4 rounded-lg border bg-gray-500/20 border-gray-500/30 text-gray-300">
-            <h4 className="text-sm font-medium mb-2">🔍 CSV Analysis Debug Info:</h4>
-            <pre className="text-xs whitespace-pre-wrap font-mono bg-black/20 p-3 rounded overflow-x-auto">
+        {/* Debug info display */}
+        {debugInfo && (
+          <div className="p-4 bg-gray-900/50 border border-gray-600/50 rounded-lg">
+            <h4 className="text-white font-medium mb-2">🔧 Processing Details</h4>
+            <pre className="text-xs text-white/70 whitespace-pre-wrap max-h-40 overflow-y-auto">
               {debugInfo}
             </pre>
-            <p className="text-xs text-gray-400 mt-2">
-              💡 This shows exactly what headers were found and how the detection process worked. 
-              Share this info if you need help troubleshooting.
-            </p>
           </div>
         )}
 
-        {/* Feature Info */}
-        <div className="bg-white/5 rounded-lg p-4">
-          <h4 className="text-white font-medium mb-3">Complete AI-Powered Workflow</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-white/70">
-            <div>🏦 NZ bank format detection (ANZ, ASB, Westpac, Kiwibank, BNZ)</div>
+        {/* Features list with updated content */}
+        <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
+          <h4 className="text-white font-medium mb-3">✨ What happens after upload:</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div>🔄 Automatic date normalization (DD/MM/YYYY, YYYY-MM-DD, etc.)</div>
             <div>🧠 Claude AI transaction categorization</div>
-            <div>🔄 Automatic date normalization (dd/MM/yyyy, yyyy-MM-dd, etc.)</div>
             <div>💰 Zero-based budget generation</div>
             <div>🎯 SMART financial goals creation</div>
             <div>📊 Real-time dashboard updates</div>
-          </div>
-        </div>
-
-        {/* Supported Formats */}
-        <div className="bg-white/5 rounded-lg p-4">
-          <h4 className="text-white font-medium mb-3">Supported CSV Formats</h4>
-          <div className="text-sm text-white/70 space-y-2">
-            <div><strong className="text-white/90">Required columns:</strong> Date + Amount (any name variations)</div>
-            <div><strong className="text-white/90">Optional:</strong> Description, Particulars, Reference, Payee, etc.</div>
-            <div><strong className="text-white/90">Example headers:</strong></div>
-            <div className="ml-4 space-y-1 text-xs">
-              <div>• ANZ: "Date, Amount, Particulars"</div>
-              <div>• ASB: "Date, Amount, Description"</div>
-              <div>• Generic: "Date, Debit Amount, Reference"</div>
-            </div>
-            <div className="text-blue-300 text-xs mt-2">
-              💡 The system will auto-detect your format and show detailed logs in the browser console if issues occur.
-            </div>
+            <div>🔒 Secure processing with validation</div>
           </div>
         </div>
       </div>
