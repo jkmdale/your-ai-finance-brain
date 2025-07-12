@@ -33,7 +33,8 @@ export const biometricSetup = {
         .eq('user_email', user.email);
 
       if (existingCredentials && existingCredentials.length > 0) {
-        return { error: 'Biometric credentials already exist for this account' };
+        console.log('⚠️ User already has biometric credentials set up');
+        return { error: 'Biometric authentication is already set up for this account. Please use the biometric sign-in option instead.' };
       }
 
       const challenge = crypto.getRandomValues(new Uint8Array(32));

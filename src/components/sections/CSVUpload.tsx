@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { FileUploadZone } from '@/components/csv/FileUploadZone';
 import { SmartFinanceCore } from '@/services/smartFinanceCore';

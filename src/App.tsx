@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AppSecurityProvider } from "@/hooks/useAppSecurity";
 import { PWAInstall } from "@/components/PWAInstall";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
@@ -47,8 +48,58 @@ function useNetworkToasts() {
   return online
 }
 
+// ✅ FIXED: PWA visibility handling for mobile tab resumption and auth state recovery
+function usePWAVisibilityHandling() {
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden) {
+        // App became visible - check auth state
+        if (import.meta.env.DEV) {
+          console.log('📱 App became visible - checking auth state');
+        }
+        
+        try {
+          // Refresh auth state when app becomes visible
+          await supabase.auth.getSession();
+          
+          // Check if user was authenticated but session expired
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            // Try to refresh session
+            await supabase.auth.refreshSession();
+          }
+        } catch (error) {
+          console.error('❌ Error refreshing auth state on visibility change:', error);
+        }
+      }
+    };
+
+    // Handle PWA app state changes
+    const handleAppStateChange = () => {
+      if (import.meta.env.DEV) {
+        console.log('📱 PWA app state changed');
+      }
+      handleVisibilityChange();
+    };
+
+    // Listen for visibility changes (mobile tab switches)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Listen for PWA app state changes
+    window.addEventListener('focus', handleAppStateChange);
+    window.addEventListener('pageshow', handleAppStateChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleAppStateChange);
+      window.removeEventListener('pageshow', handleAppStateChange);
+    };
+  }, []);
+}
+
 const App = () => {
   useNetworkToasts()
+  usePWAVisibilityHandling() // ✅ FIXED: Handle PWA/mobile scenarios
 
   return (
     <>
