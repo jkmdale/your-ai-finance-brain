@@ -472,6 +472,16 @@ export const CSVUpload = () => {
     userEmail: user?.email || session?.user?.email
   });
 
+  // Additional debug for auth timing
+  React.useEffect(() => {
+    console.log('🔐 Auth state changed in CSV component:', {
+      user: !!user,
+      session: !!session,
+      loading,
+      isAuthenticated
+    });
+  }, [user, session, loading, isAuthenticated]);
+
   // Phase 2: Clear UI state function
   const clearUIState = () => {
     setUploadStatus('idle');
