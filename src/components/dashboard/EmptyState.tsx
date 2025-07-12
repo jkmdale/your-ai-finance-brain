@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Upload, TrendingUp } from 'lucide-react';
+import { CSVUpload } from '@/components/sections/CSVUpload';
 
 interface EmptyStateProps {
   lastDataRefresh: Date | null;
@@ -9,7 +10,8 @@ interface EmptyStateProps {
 
 export const EmptyState = ({ lastDataRefresh, onRetry }: EmptyStateProps) => {
   return (
-    <section className="min-h-screen w-full flex items-center justify-center p-4">
+    <section className="min-h-screen w-full flex flex-col items-center justify-center p-4 space-y-8">
+      {/* Empty State Message */}
       <div className="text-center max-w-md">
         <TrendingUp className="h-24 w-24 text-purple-400 mx-auto mb-6" />
         <h2 className="text-2xl font-bold text-white mb-4">
@@ -42,6 +44,19 @@ export const EmptyState = ({ lastDataRefresh, onRetry }: EmptyStateProps) => {
             Last checked: {lastDataRefresh.toLocaleTimeString()}
           </p>
         )}
+      </div>
+
+      {/* CSV Upload Section - ALWAYS VISIBLE when no data */}
+      <div className="w-full max-w-2xl">
+        <div className="text-center mb-4">
+          <h3 className="text-xl font-bold text-white mb-2">
+            📊 Upload CSV Here
+          </h3>
+          <p className="text-white/70 text-sm">
+            DEBUG: Upload box should be visible now - EmptyState component
+          </p>
+        </div>
+        <CSVUpload />
       </div>
     </section>
   );
