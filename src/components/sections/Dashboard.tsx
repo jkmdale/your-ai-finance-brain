@@ -102,7 +102,23 @@ export const Dashboard = () => {
 
         <StatsCards stats={stats} />
 
-        <CSVUpload />
+        {/* CSV Upload Section - Always visible when user has data too */}
+        <div className="space-y-2">
+          <div className="text-center">
+            <h3 className="text-xl font-bold text-white mb-2">
+              📊 Add More Data
+            </h3>
+            <p className="text-white/70 text-sm mb-2">
+              Upload additional CSV files to expand your financial analysis
+            </p>
+            <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-2 mb-4">
+              <p className="text-blue-200 text-sm font-medium">
+                ✅ DEBUG: Upload box should be visible now (Dashboard with data)
+              </p>
+            </div>
+          </div>
+          <CSVUpload />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BudgetBreakdown />
