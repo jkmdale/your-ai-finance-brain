@@ -17,12 +17,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [hasBiometric, setHasBiometric] = useState(false);
 
   useEffect(() => {
-    // First check if there's likely a session to avoid unnecessary loading
-    const hasStoredSession = localStorage.getItem('sb-gzznuwtxyyaqlbbrxsuz-auth-token');
-    
-    if (hasStoredSession) {
-      setLoading(true);
-    }
+    // Always start loading to avoid race conditions
+    setLoading(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -43,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔵 Initial session:', session?.user?.email);
       setSession(session);
