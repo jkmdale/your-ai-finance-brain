@@ -278,7 +278,7 @@ export class UnifiedTransactionProcessor {
     const dateValue = this.findColumnValue(row, bankFormat.columnMappings.date);
     const normalizedDate = this.normalizeDate(dateValue);
     if (!normalizedDate) {
-      throw new Error(`Invalid or missing date: ${dateValue}`);
+      throw new Error(`Invalid time value: Unable to parse date "${dateValue}". Expected formats: DD/MM/YYYY, MM/DD/YYYY, or ISO format (YYYY-MM-DD)`);
     }
 
     // Extract description
@@ -385,20 +385,28 @@ export class UnifiedTransactionProcessor {
     // Try DD/MM/YYYY format (common in NZ)
     const ddmmyyyy = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (ddmmyyyy) {
-      const [, day, month, year] = ddmmyyyy;
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
+      try {
+        const [, day, month, year] = ddmmyyyy;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        // Continue to other formats
       }
     }
 
     // Try MM/DD/YYYY format
     const mmddyyyy = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (mmddyyyy) {
-      const [, month, day, year] = mmddyyyy;
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
+      try {
+        const [, month, day, year] = mmddyyyy;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        // Continue to other formats
       }
     }
 
@@ -409,11 +417,10 @@ export class UnifiedTransactionProcessor {
         return fallbackDate.toISOString().split('T')[0];
       }
     } catch (error) {
-      // Fallback parsing failed
+      // If all parsing attempts fail, return null
     }
 
-    console.warn(`⚠️ Could not parse date: ${cleaned}`);
-    return null;
+    return null; // Could not parse date
   }
 
   /**
