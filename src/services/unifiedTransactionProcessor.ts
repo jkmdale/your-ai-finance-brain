@@ -5,6 +5,7 @@
  */
 
 import Papa from 'papaparse';
+import { parse, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
 // Core transaction interface - unified schema
@@ -18,18 +19,6 @@ export interface NormalizedTransaction {
   confidence?: number;
   source_bank: string;
   raw_data: any; // Original CSV row for debugging
-}
-
-// Interface for tracking skipped rows
-export interface SkippedRow {
-  rowNumber: number;
-  rowData: any;
-  error: string;
-  details?: {
-    dateValue?: string;
-    amountValue?: string;
-    descriptionValue?: string;
-  };
 }
 
 // Claude categorization result
@@ -66,11 +55,11 @@ export class UnifiedTransactionProcessor {
         headers: ['Date', 'Details', 'Amount']
       },
       columnMappings: {
-        date: ['Date', 'Transaction Date', 'Trans Date', 'Trans. Date', 'Processing Date', 'Posted Date'],
-        description: ['Details', 'Description', 'Transaction Details', 'Narrative', 'Memo', 'Reference', 'Particulars'],
-        amount: ['Amount', 'Total Amount', 'Transaction Amount'],
-        debit: ['Debit', 'Debit Amount', 'Withdrawal', 'Money Out'],
-        credit: ['Credit', 'Credit Amount', 'Deposit', 'Money In']
+        date: ['Date', 'Transaction Date'],
+        description: ['Details', 'Description', 'Transaction Details'],
+        amount: ['Amount'],
+        debit: ['Debit'],
+        credit: ['Credit']
       }
     },
     {
@@ -80,11 +69,11 @@ export class UnifiedTransactionProcessor {
         headers: ['Date', 'Particulars', 'Amount']
       },
       columnMappings: {
-        date: ['Date', 'Transaction Date', 'Trans Date', 'Trans. Date', 'Processed Date', 'Posted Date', 'Value Date'],
-        description: ['Particulars', 'Description', 'Details', 'Narrative', 'Transaction', 'Reference', 'Memo'],
-        amount: ['Amount', 'Total', 'Transaction Amount'],
-        debit: ['Debit', 'Debit Amount', 'Withdrawals', 'Money Out', 'Outgoing'],
-        credit: ['Credit', 'Credit Amount', 'Deposits', 'Money In', 'Incoming']
+        date: ['Date', 'Transaction Date'],
+        description: ['Particulars', 'Description'],
+        amount: ['Amount'],
+        debit: ['Debit'],
+        credit: ['Credit']
       }
     },
     {
@@ -94,25 +83,25 @@ export class UnifiedTransactionProcessor {
         headers: ['Date', 'Transaction Details', 'Amount']
       },
       columnMappings: {
-        date: ['Date', 'Processing Date', 'Transaction Date', 'Trans Date', 'Posted Date', 'Value Date'],
-        description: ['Transaction Details', 'Description', 'Details', 'Narrative', 'Particulars', 'Reference', 'Payee'],
-        amount: ['Amount', 'Total Amount', 'Transaction Amount'],
-        debit: ['Debit Amount', 'Debit', 'Withdrawal', 'Money Out', 'Outgoing Amount'],
-        credit: ['Credit Amount', 'Credit', 'Deposit', 'Money In', 'Incoming Amount']
+        date: ['Date', 'Processing Date'],
+        description: ['Transaction Details', 'Description'],
+        amount: ['Amount'],
+        debit: ['Debit Amount'],
+        credit: ['Credit Amount']
       }
     },
     {
       name: 'Kiwibank',
       patterns: {
-        filename: [/kiwibank/i, /kiwi/i],
+        filename: [/kiwibank/i, /kiwibank/i],
         headers: ['Date', 'Payee', 'Amount']
       },
       columnMappings: {
-        date: ['Date', 'Transaction Date', 'Trans Date', 'Posted Date', 'Processing Date', 'Value Date'],
-        description: ['Payee', 'Description', 'Details', 'Narrative', 'Particulars', 'Reference', 'Merchant', 'Transaction Description'],
-        amount: ['Amount', 'Total', 'Transaction Amount', 'Value'],
-        debit: ['Debit', 'Debit Amount', 'Withdrawals', 'Money Out', 'Paid Out'],
-        credit: ['Credit', 'Credit Amount', 'Deposits', 'Money In', 'Paid In']
+        date: ['Date', 'Transaction Date'],
+        description: ['Payee', 'Description', 'Details'],
+        amount: ['Amount'],
+        debit: ['Debit'],
+        credit: ['Credit']
       }
     },
     {
@@ -122,11 +111,11 @@ export class UnifiedTransactionProcessor {
         headers: ['Date', 'Description', 'Amount']
       },
       columnMappings: {
-        date: ['Date', 'Transaction Date', 'Trans Date', 'Process Date', 'Posted Date', 'Value Date'],
-        description: ['Description', 'Details', 'Transaction Details', 'Narrative', 'Particulars', 'Reference', 'Comment'],
-        amount: ['Amount', 'Total Amount', 'Transaction Amount', 'Value'],
-        debit: ['Debit Amount', 'Debit', 'Withdrawals', 'Money Out', 'DR'],
-        credit: ['Credit Amount', 'Credit', 'Deposits', 'Money In', 'CR']
+        date: ['Date', 'Transaction Date'],
+        description: ['Description', 'Details'],
+        amount: ['Amount'],
+        debit: ['Debit Amount'],
+        credit: ['Credit Amount']
       }
     }
   ];
@@ -142,16 +131,12 @@ export class UnifiedTransactionProcessor {
       duplicatesSkipped: number;
       errors: string[];
       warnings: string[];
-      skippedRows: SkippedRow[];
-      totalRowsProcessed: number;
     };
   }> {
     const allTransactions: NormalizedTransaction[] = [];
-    const allSkippedRows: SkippedRow[] = [];
     const errors: string[] = [];
     const warnings: string[] = [];
     let totalTransactions = 0;
-    let totalRowsProcessed = 0;
 
     console.log(`🏦 Processing ${files.length} CSV files...`);
 
@@ -161,27 +146,9 @@ export class UnifiedTransactionProcessor {
       console.log(`📄 Processing file ${i + 1}/${files.length}: ${file.name}`);
 
       try {
-        const result = await this.processSingleCSV(file);
-        allTransactions.push(...result.transactions);
-        allSkippedRows.push(...result.skippedRows);
-        totalTransactions += result.transactions.length;
-        totalRowsProcessed += result.totalRows;
-        
-        // Log first few rows for debugging
-        if (result.headers && result.firstRows) {
-          console.log(`📋 CSV Headers:`, result.headers);
-          console.log(`📋 First 2 rows:`, result.firstRows);
-        }
-        
-        if (result.skippedRows.length > 0) {
-          warnings.push(`${file.name}: ${result.skippedRows.length} rows skipped`);
-          // Log details of first few skipped rows
-          console.log(`⚠️ Sample skipped rows from ${file.name}:`);
-          result.skippedRows.slice(0, 3).forEach(skipped => {
-            console.log(`  Row ${skipped.rowNumber}: ${skipped.error}`);
-            console.log(`    Date: "${skipped.details?.dateValue}", Amount: "${skipped.details?.amountValue}"`);
-          });
-        }
+        const fileTransactions = await this.processSingleCSV(file);
+        allTransactions.push(...fileTransactions);
+        totalTransactions += fileTransactions.length;
       } catch (error: any) {
         console.error(`❌ Error processing ${file.name}:`, error);
         errors.push(`${file.name}: ${error.message}`);
@@ -192,7 +159,7 @@ export class UnifiedTransactionProcessor {
     const uniqueTransactions = await this.removeDuplicates(allTransactions, userId);
     const duplicatesSkipped = allTransactions.length - uniqueTransactions.length;
 
-    console.log(`✅ Processed ${files.length} files: ${totalTransactions} transactions imported, ${allSkippedRows.length} rows skipped, ${duplicatesSkipped} duplicates removed`);
+    console.log(`✅ Processed ${files.length} files: ${totalTransactions} total, ${duplicatesSkipped} duplicates skipped`);
 
     return {
       transactions: uniqueTransactions,
@@ -201,9 +168,7 @@ export class UnifiedTransactionProcessor {
         totalTransactions,
         duplicatesSkipped,
         errors,
-        warnings,
-        skippedRows: allSkippedRows,
-        totalRowsProcessed
+        warnings
       }
     };
   }
@@ -211,13 +176,7 @@ export class UnifiedTransactionProcessor {
   /**
    * Process a single CSV file
    */
-  private async processSingleCSV(file: File): Promise<{
-    transactions: NormalizedTransaction[];
-    skippedRows: SkippedRow[];
-    totalRows: number;
-    headers?: string[];
-    firstRows?: any[];
-  }> {
+  private async processSingleCSV(file: File): Promise<NormalizedTransaction[]> {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
         header: true,
@@ -235,25 +194,19 @@ export class UnifiedTransactionProcessor {
             console.log(`🏛️ Detected ${bankFormat.name} format for ${file.name}`);
 
             // Process rows
-            const result = this.normalizeTransactions(
+            const transactions = this.normalizeTransactions(
               results.data as any[], 
               bankFormat, 
               file.name
             );
 
-            resolve({
-              transactions: result.transactions,
-              skippedRows: result.skippedRows,
-              totalRows: results.data.length,
-              headers: results.meta.fields,
-              firstRows: (results.data as any[]).slice(0, 2)
-            });
+            resolve(transactions);
           } catch (error: any) {
-            reject(error);
+            reject(new Error(`Error processing ${file.name}: ${error.message}`));
           }
         },
         error: (error) => {
-          reject(new Error(`CSV parsing error: ${error.message}`));
+          reject(new Error(`CSV parsing error in ${file.name}: ${error.message}`));
         }
       });
     });
@@ -266,105 +219,22 @@ export class UnifiedTransactionProcessor {
     const lowerFilename = filename.toLowerCase();
     const lowerHeaders = headers.map(h => h.toLowerCase());
 
-    // First try to match by filename or header patterns
     for (const format of this.bankFormats) {
       // Check filename patterns
       const filenameMatch = format.patterns.filename.some(pattern => pattern.test(lowerFilename));
       
-      // Check header patterns - more flexible matching
+      // Check header patterns
       const requiredHeaders = format.patterns.headers;
-      const headerMatch = requiredHeaders.some(reqHeader => 
+      const headerMatch = requiredHeaders.every(reqHeader => 
         lowerHeaders.some(h => h.includes(reqHeader.toLowerCase()))
       );
 
       if (filenameMatch || headerMatch) {
-        console.log(`🏛️ Detected ${format.name} format based on ${filenameMatch ? 'filename' : 'headers'}`);
         return format;
       }
     }
 
-    // If no specific bank format matched, try to create a generic format
-    // by detecting common column names
-    console.log('🔍 No specific bank format detected, attempting generic column detection...');
-    
-    const genericFormat = this.createGenericBankFormat(headers);
-    if (genericFormat) {
-      console.log('✅ Successfully created generic format from detected columns');
-      return genericFormat;
-    }
-
     return null;
-  }
-
-  /**
-   * Create a generic bank format by detecting common column patterns
-   */
-  private createGenericBankFormat(headers: string[]): BankFormat | null {
-    const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-    
-    // Common date column patterns
-    const datePatterns = ['date', 'transaction date', 'trans date', 'posted', 'processed', 'value date', 'posting date'];
-    const dateColumn = headers.find((h, i) => 
-      datePatterns.some(pattern => lowerHeaders[i].includes(pattern))
-    );
-
-    // Common description column patterns
-    const descPatterns = ['description', 'details', 'particulars', 'narrative', 'payee', 'merchant', 'reference', 'memo', 'comment'];
-    const descColumn = headers.find((h, i) => 
-      descPatterns.some(pattern => lowerHeaders[i].includes(pattern))
-    );
-
-    // Common amount column patterns
-    const amountPatterns = ['amount', 'total', 'value', 'transaction amount', 'payment'];
-    const amountColumn = headers.find((h, i) => 
-      amountPatterns.some(pattern => lowerHeaders[i].includes(pattern))
-    );
-
-    // Common debit/credit patterns
-    const debitPatterns = ['debit', 'withdrawal', 'money out', 'outgoing', 'paid out', 'dr'];
-    const debitColumn = headers.find((h, i) => 
-      debitPatterns.some(pattern => lowerHeaders[i].includes(pattern))
-    );
-
-    const creditPatterns = ['credit', 'deposit', 'money in', 'incoming', 'paid in', 'cr'];
-    const creditColumn = headers.find((h, i) => 
-      creditPatterns.some(pattern => lowerHeaders[i].includes(pattern))
-    );
-
-    // We need at least a date and either (amount) or (debit+credit)
-    const hasRequiredColumns = dateColumn && (amountColumn || (debitColumn && creditColumn));
-    
-    if (!hasRequiredColumns) {
-      console.log('❌ Could not detect required columns (date + amount/debit+credit)');
-      console.log('   Available headers:', headers);
-      return null;
-    }
-
-    // Build the generic format
-    const genericFormat: BankFormat = {
-      name: 'Generic',
-      patterns: {
-        filename: [],
-        headers: []
-      },
-      columnMappings: {
-        date: dateColumn ? [dateColumn] : [],
-        description: descColumn ? [descColumn] : ['Transaction'],
-        amount: amountColumn ? [amountColumn] : [],
-        debit: debitColumn ? [debitColumn] : [],
-        credit: creditColumn ? [creditColumn] : []
-      }
-    };
-
-    console.log('📋 Generic format detected with columns:', {
-      date: dateColumn,
-      description: descColumn || 'Transaction',
-      amount: amountColumn,
-      debit: debitColumn,
-      credit: creditColumn
-    });
-
-    return genericFormat;
   }
 
   /**
@@ -374,49 +244,27 @@ export class UnifiedTransactionProcessor {
     csvData: any[], 
     bankFormat: BankFormat, 
     filename: string
-  ): { transactions: NormalizedTransaction[], skippedRows: SkippedRow[] } {
+  ): NormalizedTransaction[] {
     const transactions: NormalizedTransaction[] = [];
-    const skippedRows: SkippedRow[] = [];
 
-    for (let i = 0; i < csvData.length; i++) {
-      const row = csvData[i];
+    for (const row of csvData) {
+      // Skip completely empty rows
+      if (!row || Object.values(row).every(val => !val || val.toString().trim() === '')) {
+        continue;
+      }
+
       try {
-        const transaction = this.normalizeTransaction(row, bankFormat, filename, i + 1);
+        const transaction = this.normalizeTransaction(row, bankFormat, filename);
         if (transaction) {
           transactions.push(transaction);
         }
       } catch (error: any) {
-        console.warn(`⚠️ Skipping row in ${filename} (Row ${i + 1}):`, error.message, row);
-        
-        // Safely extract column values for error details
-        const dateValue = bankFormat.columnMappings.date?.[0] 
-          ? row[bankFormat.columnMappings.date[0]] 
-          : this.findColumnValue(row, bankFormat.columnMappings.date || []);
-        
-        const amountValue = bankFormat.columnMappings.amount?.[0]
-          ? row[bankFormat.columnMappings.amount[0]]
-          : this.findColumnValue(row, bankFormat.columnMappings.amount || []);
-        
-        const descriptionValue = bankFormat.columnMappings.description?.[0]
-          ? row[bankFormat.columnMappings.description[0]]
-          : this.findColumnValue(row, bankFormat.columnMappings.description || []);
-        
-        skippedRows.push({
-          rowNumber: i + 1,
-          rowData: row,
-          error: error.message,
-          details: {
-            dateValue: dateValue || undefined,
-            amountValue: amountValue || undefined,
-            descriptionValue: descriptionValue || undefined
-          }
-        });
+        console.warn(`⚠️ Skipping row in ${filename}:`, error.message, row);
       }
     }
 
     console.log(`📊 Normalized ${transactions.length} transactions from ${filename}`);
-    console.log(`⚠️ Skipped ${skippedRows.length} rows due to errors.`);
-    return { transactions, skippedRows };
+    return transactions;
   }
 
   /**
@@ -425,26 +273,19 @@ export class UnifiedTransactionProcessor {
   private normalizeTransaction(
     row: any, 
     bankFormat: BankFormat, 
-    filename: string,
-    rowNumber: number
+    filename: string
   ): NormalizedTransaction | null {
-    // Skip completely empty rows
-    if (!row || Object.values(row).every(val => !val || val.toString().trim() === '')) {
-      return null; // Silently skip empty rows
-    }
-
     // Extract date
     const dateValue = this.findColumnValue(row, bankFormat.columnMappings.date);
     const normalizedDate = this.normalizeDate(dateValue);
     if (!normalizedDate) {
-      const dateStr = dateValue || '[empty]';
-      throw new Error(`Invalid date format: "${dateStr}". Expected formats: DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD, DD-MM-YYYY, or DD MMM YYYY`);
+      throw new Error(`Invalid or missing date: ${dateValue}`);
     }
 
     // Extract description
     const description = this.findColumnValue(row, bankFormat.columnMappings.description);
     if (!description || description.trim() === '') {
-      throw new Error('Missing or empty description/details field');
+      throw new Error('Missing description');
     }
 
     // Extract amount - handle both single amount column and separate debit/credit
@@ -460,7 +301,7 @@ export class UnifiedTransactionProcessor {
       const creditAmount = this.parseAmount(creditValue);
 
       if (debitAmount > 0 && creditAmount > 0) {
-        throw new Error(`Both debit (${debitValue}) and credit (${creditValue}) have values - ambiguous transaction`);
+        throw new Error('Both debit and credit have values - ambiguous transaction');
       }
 
       if (debitAmount > 0) {
@@ -470,26 +311,22 @@ export class UnifiedTransactionProcessor {
         amount = creditAmount;
         isIncome = true;
       } else {
-        throw new Error('No valid amount found in debit or credit columns (both are empty or zero)');
+        throw new Error('No amount found in debit or credit columns');
       }
     } else {
       // Single amount column
       const amountValue = this.findColumnValue(row, bankFormat.columnMappings.amount);
       if (!amountValue) {
-        throw new Error('Missing amount value');
+        throw new Error('Missing amount');
       }
 
-      try {
-        const parsedAmount = this.parseAmount(amountValue);
-        if (parsedAmount === 0) {
-          return null; // Skip zero-amount transactions
-        }
-
-        amount = Math.abs(parsedAmount);
-        isIncome = parsedAmount > 0;
-      } catch (error) {
-        throw new Error(`Invalid amount format: "${amountValue}". Expected a numeric value (e.g., 123.45, -123.45, $123.45)`);
+      const parsedAmount = this.parseAmount(amountValue);
+      if (parsedAmount === 0) {
+        return null; // Skip zero-amount transactions
       }
+
+      amount = Math.abs(parsedAmount);
+      isIncome = parsedAmount > 0;
     }
 
     // Extract merchant from description
@@ -527,198 +364,98 @@ export class UnifiedTransactionProcessor {
   }
 
   /**
-   * Normalize date string to YYYY-MM-DD format
-   * Supports multiple date formats common in NZ banking
+   * Robust date parser using date-fns for NZ bank CSV formats
+   * Handles: dd/MM/yyyy (ANZ), yyyy-MM-dd (ASB), dd MMM yyyy (Kiwibank), dd-MM-yy (Westpac)
    */
-  private normalizeDate(dateStr: string | null): string | null {
-    if (!dateStr) return null;
+  private tryParseDate(dateStr: string | null): string | null {
+    if (!dateStr?.trim()) {
+      console.warn('❌ Empty date string provided');
+      return null;
+    }
 
-    // Clean the date string
-    const cleaned = dateStr.trim();
-    if (!cleaned) return null;
-
-    // Define all possible date formats to try
-    const dateFormats = [
-      // ISO formats
-      { regex: /^\d{4}-\d{1,2}-\d{1,2}$/, parser: (str: string) => {
-        const [year, month, day] = str.split('-').map(Number);
-        return new Date(year, month - 1, day);
-      }},
-      
-      // DD/MM/YYYY or DD-MM-YYYY (most common in NZ)
-      { regex: /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/, parser: (str: string) => {
-        const matches = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-        if (!matches) return null;
-        const [, day, month, year] = matches;
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      }},
-      
-      // DD/MM/YY or DD-MM-YY
-      { regex: /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/, parser: (str: string) => {
-        const matches = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
-        if (!matches) return null;
-        const [, day, month, yearShort] = matches;
-        // Assume 20xx for years 00-50, 19xx for years 51-99
-        const year = parseInt(yearShort) <= 50 ? 2000 + parseInt(yearShort) : 1900 + parseInt(yearShort);
-        return new Date(year, parseInt(month) - 1, parseInt(day));
-      }},
-      
-      // YYYY/MM/DD or YYYY-MM-DD with various separators
-      { regex: /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/, parser: (str: string) => {
-        const matches = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
-        if (!matches) return null;
-        const [, year, month, day] = matches;
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      }},
-      
-      // MM/DD/YYYY or MM-DD-YYYY (US format, less common but possible)
-      { regex: /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/, parser: (str: string, tryUSFormat: boolean = true) => {
-        if (!tryUSFormat) return null;
-        const matches = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-        if (!matches) return null;
-        const [, month, day, year] = matches;
-        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        // Validate that month is 1-12
-        if (parseInt(month) > 12) return null;
-        return date;
-      }},
-      
-      // DD MMM YYYY or DD-MMM-YYYY (e.g., 25 Dec 2023)
-      { regex: /^(\d{1,2})[\s\-]([A-Za-z]{3})[\s\-](\d{4})$/i, parser: (str: string) => {
-        const matches = str.match(/^(\d{1,2})[\s\-]([A-Za-z]{3})[\s\-](\d{4})$/i);
-        if (!matches) return null;
-        const [, day, monthStr, year] = matches;
-        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        const monthIndex = months.indexOf(monthStr.toLowerCase().substring(0, 3));
-        if (monthIndex === -1) return null;
-        return new Date(parseInt(year), monthIndex, parseInt(day));
-      }},
-      
-      // YYYYMMDD (compact format)
-      { regex: /^(\d{4})(\d{2})(\d{2})$/, parser: (str: string) => {
-        const matches = str.match(/^(\d{4})(\d{2})(\d{2})$/);
-        if (!matches) return null;
-        const [, year, month, day] = matches;
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      }}
+    const cleanDateStr = String(dateStr).trim();
+    console.log(`🗓️ Parsing date: "${cleanDateStr}"`);
+    
+    // NZ bank date formats in order of preference
+    const formats = [
+      'dd/MM/yyyy',    // ANZ: 12/05/2024
+      'yyyy-MM-dd',    // ASB: 2024-05-12  
+      'dd MMM yyyy',   // Kiwibank: 12 May 2024
+      'dd-MM-yy',      // Westpac: 12-05-24
+      'dd-MM-yyyy',    // Alternative format
+      'dd.MM.yyyy',    // Dot separator
+      'MM/dd/yyyy',    // US format fallback
+      'yyyy/MM/dd'     // Alternative ISO
     ];
 
-    // Try each format
-    for (const format of dateFormats) {
-      if (format.regex.test(cleaned)) {
-        try {
-          const date = format.parser(cleaned);
-          if (date && !isNaN(date.getTime())) {
-            // Validate the date is reasonable (not in future, not too old)
-            const now = new Date();
-            const tenYearsAgo = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
-            const oneYearFuture = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-            
-            if (date >= tenYearsAgo && date <= oneYearFuture) {
-              return date.toISOString().split('T')[0];
-            }
-          }
-        } catch (error) {
-          // Continue to next format
-        }
-      }
-    }
-
-    // If the date has slashes or dashes, it might be ambiguous DD/MM vs MM/DD
-    // Try to parse it as DD/MM first (NZ standard), then MM/DD if that fails
-    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(cleaned)) {
-      const parts = cleaned.split(/[\/\-]/);
-      const [first, second, year] = parts.map(Number);
-      
-      // Try DD/MM/YYYY first (NZ standard)
-      if (first <= 31 && second <= 12) {
-        const dateNZ = new Date(year, second - 1, first);
-        if (!isNaN(dateNZ.getTime())) {
-          return dateNZ.toISOString().split('T')[0];
-        }
-      }
-      
-      // Try MM/DD/YYYY if DD/MM didn't work
-      if (first <= 12 && second <= 31) {
-        const dateUS = new Date(year, first - 1, second);
-        if (!isNaN(dateUS.getTime())) {
-          return dateUS.toISOString().split('T')[0];
-        }
-      }
-    }
-
-    // Last resort: try JavaScript's built-in Date parsing
-    try {
-      const fallbackDate = new Date(cleaned);
-      if (!isNaN(fallbackDate.getTime())) {
-        // Validate the date is reasonable
-        const now = new Date();
-        const tenYearsAgo = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
-        const oneYearFuture = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    // Try each format using date-fns
+    for (const format of formats) {
+      try {
+        const parsedDate = parse(cleanDateStr, format, new Date());
         
-        if (fallbackDate >= tenYearsAgo && fallbackDate <= oneYearFuture) {
-          return fallbackDate.toISOString().split('T')[0];
+        // Validate the parsed date
+        if (isValid(parsedDate) && 
+            parsedDate.getFullYear() >= 1900 && 
+            parsedDate.getFullYear() <= 2100) {
+          
+          const isoDate = parsedDate.toISOString().split('T')[0];
+          console.log(`✅ Date parsed successfully with format "${format}": ${isoDate}`);
+          return isoDate;
         }
+      } catch (error) {
+        // Continue to next format
+        continue;
+      }
+    }
+    
+    // Fallback: try native Date parsing for edge cases
+    try {
+      const fallbackDate = new Date(cleanDateStr);
+      if (isValid(fallbackDate) && 
+          fallbackDate.getFullYear() >= 1900 && 
+          fallbackDate.getFullYear() <= 2100) {
+        
+        const isoDate = fallbackDate.toISOString().split('T')[0];
+        console.log(`✅ Date parsed with fallback: ${isoDate}`);
+        return isoDate;
       }
     } catch (error) {
-      // Date parsing failed
+      // Fallback failed
     }
+    
+    console.error(`❌ Could not parse date: "${cleanDateStr}" - Skipping row`);
+    return null;
+  }
 
-    return null; // Could not parse date
+  /**
+   * Legacy method - redirects to tryParseDate for compatibility
+   */
+  private normalizeDate(dateStr: string | null): string | null {
+    return this.tryParseDate(dateStr);
   }
 
   /**
    * Parse amount string to number
-   * Supports various formats: $123.45, -123.45, (123.45), 123,456.78, etc.
    */
   private parseAmount(amountStr: string): number {
-    if (!amountStr || amountStr.toString().trim() === '') {
-      throw new Error('Empty amount value');
-    }
+    if (!amountStr) return 0;
 
-    // Remove currency symbols, spaces, and normalize separators
-    let cleaned = amountStr.toString()
-      .replace(/[$£€¥]/g, '')    // Remove common currency symbols
-      .replace(/\s/g, '')         // Remove spaces
-      .trim();
+    // Remove currency symbols, commas, and extra spaces
+    let cleaned = amountStr.toString().replace(/[$,\s]/g, '');
 
-    // Handle different decimal separators (some banks use comma as decimal)
-    // If we have both comma and dot, assume comma is thousands separator
-    if (cleaned.includes(',') && cleaned.includes('.')) {
-      cleaned = cleaned.replace(/,/g, ''); // Remove thousand separators
-    } else if (cleaned.includes(',') && !cleaned.includes('.')) {
-      // Check if comma might be decimal separator (e.g., "123,45")
-      const parts = cleaned.split(',');
-      if (parts.length === 2 && parts[1].length <= 2) {
-        cleaned = cleaned.replace(',', '.'); // Convert comma to dot for decimal
-      } else {
-        cleaned = cleaned.replace(/,/g, ''); // Remove thousand separators
-      }
-    }
-
-    // Handle negative amounts in parentheses (e.g., "(123.45)")
+    // Handle negative amounts in parentheses
     if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
       cleaned = '-' + cleaned.slice(1, -1);
     }
 
-    // Handle CR/DR notations
-    const hasCR = cleaned.toUpperCase().endsWith('CR');
-    const hasDR = cleaned.toUpperCase().endsWith('DR');
-    if (hasCR || hasDR) {
-      cleaned = cleaned.slice(0, -2).trim();
-      if (hasDR) {
-        cleaned = '-' + cleaned;
-      }
+    // Handle negative amounts with minus sign
+    const isNegative = cleaned.startsWith('-');
+    if (isNegative) {
+      cleaned = cleaned.substring(1);
     }
 
-    // Final parse
-    const parsed = parseFloat(cleaned);
-    
-    if (isNaN(parsed)) {
-      throw new Error(`Cannot parse amount: "${amountStr}"`);
-    }
-
-    return parsed;
+    const parsed = parseFloat(cleaned) || 0;
+    return isNegative ? -parsed : parsed;
   }
 
   /**
