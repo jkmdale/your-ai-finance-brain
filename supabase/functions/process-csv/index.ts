@@ -2,6 +2,32 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { parseDate } from './dateParser.ts';
+import { parseCSV } from './csvParser.ts';
+
+// Type definitions for better error handling
+interface SkippedRow {
+  rowNumber: number;
+  error: string;
+  rawDate?: string;
+  delimiter?: string;
+  headers?: string;
+  rowData?: any[];
+}
+
+interface Transaction {
+  user_id: string;
+  account_id: string;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  is_income: boolean;
+  category_id: null;
+  merchant: string | null;
+  imported_from: string;
+  external_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,25 +78,40 @@ serve(async (req) => {
     }
 
     console.log(`🚀 Processing CSV for user ${user.id}: ${fileName} (${csvData.length} chars)`);
-    console.log('📊 CSV preview:', csvData.substring(0, 200));
+    console.log('📊 CSV preview (first 200 chars):', csvData.substring(0, 200));
 
-    // Enhanced CSV processing
-    const lines = csvData.trim().split('\n').filter(line => line.trim());
-    if (lines.length < 2) {
+    // ✅ ENHANCEMENT 1: Use enhanced CSV parser with auto-delimiter detection
+    let parsedCSV;
+    try {
+      parsedCSV = parseCSV(csvData);
+      console.log('✅ CSV parsing completed successfully');
+      console.log(`📋 Detected delimiter: "${parsedCSV.validation.separator === '\t' ? '\\t' : parsedCSV.validation.separator}"`);
+      console.log(`📋 Headers (${parsedCSV.headers.length}):`, parsedCSV.headers);
+      console.log(`📊 Data rows: ${parsedCSV.rows.length}`);
+    } catch (parseError) {
+      console.error('❌ CSV parsing failed:', parseError);
       return new Response(
-        JSON.stringify({ error: 'CSV must have at least header and one data row' }),
+        JSON.stringify({ 
+          error: 'Failed to parse CSV file', 
+          details: parseError.message,
+          delimiter: 'auto-detection failed'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    // Parse headers with better CSV handling
-    const headers = parseCSVLine(lines[0]);
-    const transactions = [];
-    const errors = [];
-    const warnings = [];
-    
-    console.log('CSV Headers:', headers);
-    console.log('Total data rows:', lines.length - 1);
+
+    const { headers, rows, validation } = parsedCSV;
+    const transactions: Transaction[] = [];
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const skippedRows: SkippedRow[] = [];
+
+    // ✅ ENHANCEMENT 2: Enhanced logging for debugging
+    console.log('🔍 CSV Analysis:');
+    console.log(`   • Delimiter: "${validation.separator === '\t' ? '\\t (tab)' : validation.separator}"`);
+    console.log(`   • Headers: ${headers.join(' | ')}`);
+    console.log(`   • Total rows: ${rows.length}`);
+    console.log(`   • Header row index: ${validation.headerIndex}`);
 
     // Ensure user has a default bank account
     let { data: existingAccount, error: accountError } = await supabaseClient
@@ -109,75 +150,118 @@ serve(async (req) => {
       console.log('Created new account:', accountId);
     }
 
-    // Process each data row
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    // ✅ ENHANCEMENT 3: Enhanced row processing with better error handling
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 1;
       
       try {
-        const values = parseCSVLine(line);
-        
-        if (values.length >= 3) {
-          // Enhanced date parsing with proper error handling
+        // ✅ ENHANCEMENT 4: Trim and clean all field values
+        const cleanedRow = row.map(value => {
+          if (typeof value === 'string') {
+            return value.replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim(); // Remove zero-width characters
+          }
+          return value;
+        });
+
+        if (cleanedRow.length >= 3) {
+          // ✅ ENHANCEMENT 5: Enhanced date parsing with detailed error reporting
           let transactionDate: string;
           let dateWarning: string | undefined;
           
           try {
-            const dateResult = parseDate(values[0], i);
+            const rawDateValue = cleanedRow[0];
+            console.log(`🗓️ Row ${rowNumber}: Processing date "${rawDateValue}"`);
+            
+            const dateResult = parseDate(rawDateValue, rowNumber);
             transactionDate = dateResult.date;
             if (dateResult.warning) {
               dateWarning = dateResult.warning;
               warnings.push(dateResult.warning);
             }
           } catch (dateError) {
-            console.error(`❌ Row ${i}: Date parsing failed:`, dateError);
-            transactionDate = new Date().toISOString().split('T')[0];
-            const fallbackWarning = `Row ${i}: Date parsing failed, used today as fallback`;
-            warnings.push(fallbackWarning);
+            console.error(`❌ Row ${rowNumber}: Date parsing failed for "${cleanedRow[0]}":`, dateError);
+            
+            // ✅ ENHANCEMENT 6: Enhanced error messages with raw values
+            const errorMessage = `Row ${rowNumber}: Invalid date "${cleanedRow[0]}" - ${dateError.message}`;
+            errors.push(errorMessage);
+            
+            skippedRows.push({
+              rowNumber,
+              error: errorMessage,
+              rawDate: cleanedRow[0],
+              delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
+              headers: headers.join(' | '),
+              rowData: cleanedRow.slice(0, 5) // First 5 fields for debugging
+            });
+            
+            continue; // Skip this row
           }
           
-          // Enhanced amount parsing
-          const amountStr = values[2].replace(/[$,\s]/g, '');
-          const amount = parseFloat(amountStr) || 0;
+          // ✅ ENHANCEMENT 7: Enhanced amount parsing with cleaning
+          const rawAmountValue = cleanedRow[2];
+          const cleanedAmount = rawAmountValue.replace(/[$,\s]/g, '');
+          const amount = parseFloat(cleanedAmount) || 0;
           
           if (amount === 0) {
-            warnings.push(`Row ${i}: Amount is 0 or invalid: "${values[2]}"`);
+            const warningMessage = `Row ${rowNumber}: Amount is 0 or invalid: "${rawAmountValue}" (cleaned: "${cleanedAmount}")`;
+            warnings.push(warningMessage);
+            console.warn(`⚠️ ${warningMessage}`);
           }
 
           // Create transaction with enhanced data
-          const transaction = {
+          const transaction: Transaction = {
             user_id: user.id,
             account_id: accountId,
             transaction_date: transactionDate,
-            description: (values[1] || `Transaction ${i}`).substring(0, 255),
+            description: (cleanedRow[1] || `Transaction ${rowNumber}`).substring(0, 255),
             amount: Math.abs(amount),
             is_income: amount > 0,
             category_id: null, // Will be set by categorization
-            merchant: extractMerchant(values[1] || ''),
+            merchant: extractMerchant(cleanedRow[1] || ''),
             imported_from: fileName,
-            external_id: `${fileName}_${i}_${Date.now()}`,
+            external_id: `${fileName}_${rowNumber}_${Date.now()}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
           
           transactions.push(transaction);
-          console.log(`Row ${i}: Parsed transaction - ${transaction.description} - $${transaction.amount}`);
+          console.log(`✅ Row ${rowNumber}: Parsed transaction - ${transaction.description} - $${transaction.amount}`);
           
         } else {
-          warnings.push(`Row ${i}: Insufficient columns (${values.length}), requires at least 3`);
+          const errorMessage = `Row ${rowNumber}: Insufficient columns (${cleanedRow.length}), requires at least 3`;
+          warnings.push(errorMessage);
+          console.warn(`⚠️ ${errorMessage}`);
+          
+          skippedRows.push({
+            rowNumber,
+            error: errorMessage,
+            delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
+            headers: headers.join(' | '),
+            rowData: cleanedRow
+          });
         }
       } catch (rowError) {
-        console.error(`Error parsing row ${i}:`, rowError);
-        errors.push(`Row ${i}: ${rowError.message}`);
+        console.error(`❌ Error parsing row ${rowNumber}:`, rowError);
+        const errorMessage = `Row ${rowNumber}: ${rowError.message}`;
+        errors.push(errorMessage);
+        
+        skippedRows.push({
+          rowNumber,
+          error: errorMessage,
+          delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
+          headers: headers.join(' | '),
+          rowData: row
+        });
       }
     }
 
-    console.log(`Parsed ${transactions.length} transactions from ${lines.length - 1} data rows`);
+    console.log(`📊 Processing summary: ${transactions.length} transactions parsed, ${errors.length} errors, ${warnings.length} warnings`);
 
     // Batch insert transactions
     let processedCount = 0;
     let failedCount = 0;
-    const insertedTransactions = [];
+    const insertedTransactions: any[] = [];
 
     if (transactions.length > 0) {
       // Insert in batches of 100
@@ -191,7 +275,7 @@ serve(async (req) => {
           .select();
 
         if (insertError) {
-          console.error('Batch insert error:', insertError);
+          console.error('❌ Batch insert error:', insertError);
           failedCount += batch.length;
           errors.push(`Batch insert failed: ${insertError.message}`);
         } else {
@@ -203,19 +287,34 @@ serve(async (req) => {
       }
     }
 
+    // ✅ ENHANCEMENT 8: Enhanced response with detailed debugging info
     const response = {
       success: processedCount > 0,
       processed: processedCount,
       failed: failedCount,
-      skipped: 0,
+      skipped: skippedRows.length,
       warnings,
       errors,
       transactions: insertedTransactions.slice(0, 10), // Return first 10 for preview
-      totalRows: lines.length - 1,
-      fileName
+      totalRows: rows.length,
+      fileName,
+      // Enhanced debugging information
+      csvAnalysis: {
+        delimiter: validation.separator === '\t' ? 'tab' : validation.separator,
+        headers: headers,
+        totalDataRows: rows.length,
+        headerRowIndex: validation.headerIndex
+      },
+      skippedRowDetails: skippedRows.slice(0, 10) // First 10 skipped rows for debugging
     };
 
-    console.log('Processing complete:', response);
+    console.log('✅ Processing complete:', {
+      success: response.success,
+      processed: response.processed,
+      failed: response.failed,
+      skipped: response.skipped,
+      delimiter: response.csvAnalysis.delimiter
+    });
 
     return new Response(
       JSON.stringify(response),
@@ -223,7 +322,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('❌ Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error', 
@@ -236,28 +335,6 @@ serve(async (req) => {
 });
 
 // Helper functions
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result.map(val => val.replace(/^"|"$/g, ''));
-}
-
 function extractMerchant(description: string): string | null {
   if (!description) return null;
   
