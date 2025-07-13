@@ -255,9 +255,16 @@ export function CSVUpload() {
       
       if (result.success) {
         console.log('[CSVUpload] ✅ Upload successful:', result);
+        
+        // Create detailed success message
+        let successMessage = `${result.transactionsProcessed} transactions processed successfully`;
+        if (result.skippedRows && result.skippedRows > 0) {
+          successMessage += ` (${result.skippedRows} rows skipped)`;
+        }
+        
         toast({ 
           title: "✅ Upload Complete", 
-          description: `${result.transactionsProcessed} transactions processed successfully` 
+          description: successMessage 
         });
       } else {
         console.error('[CSVUpload] ❌ Upload failed:', result.errors);
@@ -329,21 +336,81 @@ export function CSVUpload() {
       
       {/* ✅ FIXED: Enhanced results display */}
       {result && (
-        <div className="mt-4 text-sm text-left bg-green-500/20 border border-green-500/30 p-4 rounded-lg">
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="text-green-400 text-lg">✅</span>
-            <strong className="text-green-200">Upload Complete!</strong>
-          </div>
-          
-          <div className="space-y-1 text-white/80">
-            <p>📊 {result.transactionsProcessed} transactions processed</p>
-            {result.budgetGenerated && <p>� Budget generated successfully</p>}
-            {result.smartGoals?.length > 0 && <p>🎯 {result.smartGoals.length} SMART goals created</p>}
-          </div>
-          
-          {result.errors.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-red-500/30">
-              <p className="text-red-300 font-medium mb-1">⚠️ Warnings:</p>
+        <div className="mt-4 space-y-3">
+          {/* Success Summary */}
+          {result.success && (
+            <div className="text-sm text-left bg-green-500/20 border border-green-500/30 p-4 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-green-400 text-lg">✅</span>
+                <strong className="text-green-200">Upload Complete!</strong>
+              </div>
+              
+              <div className="space-y-1 text-white/80">
+                <p>📊 {result.transactionsProcessed} transactions imported successfully</p>
+                {result.totalRowsProcessed && (
+                  <p className="text-sm text-white/60">
+                    Total rows processed: {result.totalRowsProcessed}
+                  </p>
+                )}
+                {result.duplicatesSkipped > 0 && (
+                  <p>🔁 {result.duplicatesSkipped} duplicate transactions removed</p>
+                )}
+                {result.budgetGenerated && <p>💰 Budget generated successfully</p>}
+                {result.smartGoals?.length > 0 && <p>🎯 {result.smartGoals.length} SMART goals created</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Skipped Rows Warning */}
+          {result.skippedRows > 0 && (
+            <div className="text-sm text-left bg-yellow-500/20 border border-yellow-500/30 p-4 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-yellow-400">⚠️</span>
+                <strong className="text-yellow-200">
+                  {result.skippedRows} rows skipped due to errors
+                </strong>
+              </div>
+              
+              {result.skippedRowDetails && result.skippedRowDetails.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-yellow-100 text-xs font-medium">Sample errors:</p>
+                  {result.skippedRowDetails.map((row, index) => (
+                    <div key={index} className="bg-black/20 p-2 rounded text-xs space-y-1">
+                      <p className="text-yellow-200">
+                        Row {row.rowNumber}: {row.error}
+                      </p>
+                      <p className="text-white/50">
+                        Date: "{row.dateValue || '[empty]'}" | 
+                        Amount: "{row.amountValue || '[empty]'}"
+                      </p>
+                    </div>
+                  ))}
+                  {result.skippedRows > result.skippedRowDetails.length && (
+                    <p className="text-yellow-100/70 text-xs italic">
+                      ... and {result.skippedRows - result.skippedRowDetails.length} more rows
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              <div className="mt-3 text-xs text-white/60">
+                <p>💡 Common issues:</p>
+                <ul className="list-disc list-inside ml-2 space-y-1">
+                  <li>Date formats: Use DD/MM/YYYY, DD/MM/YY, or YYYY-MM-DD</li>
+                  <li>Amount formats: Use numeric values like 123.45 or -123.45</li>
+                  <li>Required fields: Date, Description, and Amount</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Error Summary */}
+          {!result.success && result.errors.length > 0 && (
+            <div className="text-sm text-left bg-red-500/20 border border-red-500/30 p-4 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-red-400">❌</span>
+                <strong className="text-red-200">Upload Failed</strong>
+              </div>
               <div className="text-red-200 text-xs space-y-1">
                 {result.errors.map((error, index) => (
                   <p key={index}>• {error}</p>
