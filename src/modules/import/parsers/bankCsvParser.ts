@@ -1,12 +1,13 @@
-/* File: src/modules/import/parsers/bankCsvParser.ts Description: Normalizes bank-specific CSV formats (ANZ, ASB, Westpac, Kiwibank, BNZ) into a unified transaction schema. */
+/* File: src/modules/import/parsers/bankCsvParser.ts Description: Normalizes bank-specific CSV formats into a unified transaction schema with support for all major NZ banks and unknown formats. */
 
+import { parseUnifiedBankCSV } from './unifiedBankParser';
+// Legacy parsers kept for backwards compatibility
 import { parseANZ as parseANZFile } from './anz';
 import { parseASB as parseASBFile } from './asb';
 import { parseWestpac as parseWestpacFile } from './westpac';
 import { parseKiwibank as parseKiwibankFile } from './kiwibank';
 import { parseBNZ as parseBNZFile } from './bnz';
 import { parseFloatSafe, normalizeDate } from '../../utils/format';
-// Goals integration removed from parser - handled in the upload flow
 
 export interface Transaction {
   date: string;
@@ -19,6 +20,23 @@ export interface Transaction {
 }
 
 export function parseBankCSV(filename: string, data: any[], headers?: string[]): Transaction[] {
+  // Use the new unified parser that handles all banks including unknown formats
+  const parseResult = parseUnifiedBankCSV(filename, data, headers);
+  
+  // Log parsing results
+  console.log(`✅ Parsed ${parseResult.transactions.length} transactions`);
+  console.log(`🏦 Detected bank: ${parseResult.detectedBank || 'Unknown'}`);
+  console.log(`📊 Confidence: ${parseResult.confidence}`);
+  
+  if (parseResult.warnings && parseResult.warnings.length > 0) {
+    console.warn('⚠️ Parser warnings:', parseResult.warnings);
+  }
+  
+  return parseResult.transactions;
+}
+
+// Legacy function kept for backwards compatibility
+export function parseBankCSVLegacy(filename: string, data: any[], headers?: string[]): Transaction[] {
   const lower = filename.toLowerCase();
   
   // Try filename-based detection first
