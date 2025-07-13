@@ -21,6 +21,15 @@ export interface ProcessingResult {
     deadline: string;
     rationale: string;
   }>;
+  // New fields for detailed feedback
+  skippedRows?: number;
+  totalRowsProcessed?: number;
+  skippedRowDetails?: Array<{
+    rowNumber: number;
+    error: string;
+    dateValue?: string;
+    amountValue?: string;
+  }>;
 }
 
 export class SmartFinanceCore {
@@ -38,7 +47,10 @@ export class SmartFinanceCore {
       duplicatesSkipped: 0,
       budgetGenerated: false,
       monthlyBudgets: [],
-      errors: []
+      errors: [],
+      skippedRows: 0,
+      totalRowsProcessed: 0,
+      skippedRowDetails: []
     };
 
     try {
@@ -49,6 +61,23 @@ export class SmartFinanceCore {
       result.transactionsProcessed = processingResult.transactions.length;
       result.duplicatesSkipped = processingResult.summary.duplicatesSkipped;
       result.errors.push(...processingResult.summary.errors);
+      result.skippedRows = processingResult.summary.skippedRows.length;
+      result.totalRowsProcessed = processingResult.summary.totalRowsProcessed;
+      
+      // Include sample of skipped rows for user feedback (max 5)
+      result.skippedRowDetails = processingResult.summary.skippedRows.slice(0, 5).map(row => ({
+        rowNumber: row.rowNumber,
+        error: row.error,
+        dateValue: row.details?.dateValue,
+        amountValue: row.details?.amountValue
+      }));
+
+      if (processingResult.transactions.length === 0 && processingResult.summary.skippedRows.length > 0) {
+        // All rows were skipped
+        result.errors.push(`All ${processingResult.summary.skippedRows.length} rows were skipped due to errors. Please check your CSV format.`);
+        result.success = false;
+        return result;
+      }
 
       if (processingResult.transactions.length === 0) {
         result.success = true;
