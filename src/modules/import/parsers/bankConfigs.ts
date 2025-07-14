@@ -19,6 +19,7 @@ export interface BankConfig {
     credit?: string[];
     balance?: string[];
     reference?: string[];
+    merchant?: string[]; // Add merchant field
   };
   dateFormat?: string; // e.g., 'DD/MM/YYYY', 'YYYY-MM-DD'
   amountFormat?: {
@@ -30,20 +31,24 @@ export interface BankConfig {
 
 // Configuration for all major NZ banks
 export const BANK_CONFIGS: BankConfig[] = [
+  // ANZ Bank
   {
     name: 'ANZ',
     identifiers: {
       filePatterns: ['anz', 'anzbank'],
-      headerPatterns: ['anz', 'account', 'balance'],
-      contentPatterns: ['anz bank', 'anz new zealand']
+      headerPatterns: ['anz', 'transaction', 'date'],
+      contentPatterns: ['anz bank', 'australia and new zealand banking group']
     },
     columns: {
-      date: ['Date', 'Transaction Date', 'Trans Date'],
-      description: ['Details', 'Transaction Details', 'Description'],
-      amount: ['Amount', 'Transaction Amount'],
-      balance: ['Balance', 'Account Balance']
+      date: ['Date', 'Transaction Date', 'Value Date'],
+      description: ['Description', 'Transaction Details', 'Details'],
+      amount: ['Amount', 'Value'],
+      debit: ['Debit Amount', 'Debit'],
+      credit: ['Credit Amount', 'Credit'],
+      merchant: ['Particulars', 'Code', 'Merchant', 'Other Party', 'Payee'] // Add merchant mappings
     }
   },
+  // ASB Bank
   {
     name: 'ASB',
     identifiers: {
@@ -52,41 +57,48 @@ export const BANK_CONFIGS: BankConfig[] = [
       contentPatterns: ['asb bank', 'auckland savings bank']
     },
     columns: {
-      date: ['Date', 'Transaction Date', 'Processed Date'],
-      description: ['Particulars', 'Details', 'Other Party'],
-      amount: ['Amount'],
-      reference: ['Reference', 'Analysis Code', 'Code']
+      date: ['Date', 'Transaction Date', 'Process Date'],
+      description: ['Description', 'Transaction Details'],
+      amount: ['Amount', 'Value'],
+      reference: ['Reference', 'Analysis Code'],
+      merchant: ['Particulars', 'Code', 'Merchant', 'Other Party', 'Payee', 'Narrative'] // Add merchant mappings
     }
   },
+  // Westpac Bank
   {
     name: 'Westpac',
     identifiers: {
       filePatterns: ['westpac', 'westpacbank'],
-      headerPatterns: ['westpac', 'transaction details'],
-      contentPatterns: ['westpac', 'westpac new zealand']
+      headerPatterns: ['westpac', 'narrative', 'reference'],
+      contentPatterns: ['westpac', 'westpac banking corporation']
     },
     columns: {
-      date: ['Date', 'Transaction Date'],
-      description: ['Transaction Details', 'Description', 'Narrative'],
-      amount: ['Amount', 'Credit/Debit Amount'],
-      balance: ['Balance', 'Running Balance']
+      date: ['Date', 'Transaction Date', 'Value Date'],
+      description: ['Description', 'Narrative', 'Transaction Details'],
+      amount: ['Amount', 'Value'],
+      debit: ['Debit Amount', 'DR'],
+      credit: ['Credit Amount', 'CR'],
+      merchant: ['Particulars', 'Code', 'Merchant', 'Other Party', 'Payee', 'Narrative'] // Add merchant mappings
     }
   },
+  // Kiwibank
   {
     name: 'Kiwibank',
     identifiers: {
       filePatterns: ['kiwibank', 'kiwi'],
-      headerPatterns: ['kiwibank', 'payee', 'memo'],
-      contentPatterns: ['kiwibank', 'kiwibank limited']
+      headerPatterns: ['kiwibank', 'memo', 'description'],
+      contentPatterns: ['kiwibank']
     },
     columns: {
-      date: ['Date', 'Transaction Date', 'Date Processed'],
-      description: ['Payee', 'Description', 'Memo', 'Transaction Type'],
-      amount: ['Amount'],
-      debit: ['Debit', 'Money Out'],
-      credit: ['Credit', 'Money In']
+      date: ['Date', 'Transaction Date', 'Value Date'],
+      description: ['Description', 'Memo', 'Transaction Details'],
+      amount: ['Amount', 'Value'],
+      debit: ['Debit Amount', 'Withdrawals'],
+      credit: ['Credit Amount', 'Deposits'],
+      merchant: ['Particulars', 'Code', 'Merchant', 'Other Party', 'Payee', 'Memo'] // Add merchant mappings
     }
   },
+  // BNZ
   {
     name: 'BNZ',
     identifiers: {
@@ -98,7 +110,8 @@ export const BANK_CONFIGS: BankConfig[] = [
       date: ['Date', 'Transaction Date', 'Process Date'],
       description: ['Particulars', 'Transaction Type', 'Description'],
       amount: ['Amount', 'Value'],
-      reference: ['Reference', 'Other Party', 'Code']
+      reference: ['Reference', 'Other Party', 'Code'],
+      merchant: ['Particulars', 'Code', 'Merchant', 'Other Party', 'Payee'] // Add merchant mappings - Particulars is the key field for BNZ
     }
   },
   // TSB Bank

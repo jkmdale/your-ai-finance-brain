@@ -98,32 +98,42 @@ export class SmartFinanceCore {
 
       for (const month of months) {
         const budget = await zeroBudgetGenerator.generateMonthlyBudget(userId, month);
-        const recommendations = await zeroBudgetGenerator.generateBudgetRecommendations(userId, [budget]);
-        await zeroBudgetGenerator.saveBudgetToSupabase(userId, budget, recommendations);
-        monthlyBudgets.push(month);
+        if (budget) {
+          monthlyBudgets.push(month);
+        }
       }
-
-      result.monthlyBudgets = monthlyBudgets;
-      result.budgetGenerated = true;
 
       // Stage 5: Generate SMART goals
       onProgress?.('Generating SMART goals...', 95);
-      result.smartGoals = await this.generateSmartGoals(userId, monthlyBudgets);
+      const smartGoals = await this.generateSmartGoals(userId, months);
+
+      // Final stage: Trigger dashboard updates
+      onProgress?.('Updating dashboard...', 98);
       
-      // Save SMART goals to database
-      if (result.smartGoals && result.smartGoals.length > 0) {
-        await smartGoalsService.saveSmartGoals(userId, result.smartGoals);
-      }
-
+      // Import and trigger dashboard updates
+      const { updateDashboardState } = await import('@/modules/dashboard/update');
+      updateDashboardState(categorizedTransactions);
+      
       onProgress?.('Complete!', 100);
+
       result.success = true;
+      result.budgetGenerated = monthlyBudgets.length > 0;
+      result.monthlyBudgets = monthlyBudgets;
+      result.smartGoals = smartGoals;
 
-    } catch (error: any) {
-      console.error('SmartFinance workflow error:', error);
-      result.errors.push(error.message);
+      console.log('✅ Complete workflow finished successfully:', {
+        transactions: result.transactionsProcessed,
+        budgets: monthlyBudgets.length,
+        goals: smartGoals?.length || 0
+      });
+
+      return result;
+    } catch (error) {
+      console.error('❌ SmartFinanceCore workflow error:', error);
+      result.errors.push(`Workflow error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      result.success = false;
+      return result;
     }
-
-    return result;
   }
 
   /**

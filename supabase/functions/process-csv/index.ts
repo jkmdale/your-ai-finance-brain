@@ -54,7 +54,7 @@ serve(async (req) => {
     console.log(`🚀 Processing CSV for user ${user.id}: ${fileName} (${csvData.length} chars)`);
     console.log('📊 CSV preview:', csvData.substring(0, 200));
 
-    // Enhanced CSV processing
+    // Enhanced CSV processing with better column detection
     const lines = csvData.trim().split('\n').filter(line => line.trim());
     if (lines.length < 2) {
       return new Response(
@@ -71,6 +71,10 @@ serve(async (req) => {
     
     console.log('CSV Headers:', headers);
     console.log('Total data rows:', lines.length - 1);
+
+    // Detect column indices for NZ banks
+    const columnMapping = detectColumnMapping(headers);
+    console.log('Detected column mapping:', columnMapping);
 
     // Ensure user has a default bank account
     let { data: existingAccount, error: accountError } = await supabaseClient
@@ -122,8 +126,10 @@ serve(async (req) => {
           let transactionDate: string;
           let dateWarning: string | undefined;
           
+          const dateValue = getColumnValue(values, headers, columnMapping.date);
+          
           try {
-            const dateResult = parseDate(values[0], i);
+            const dateResult = parseDate(dateValue, i);
             transactionDate = dateResult.date;
             if (dateResult.warning) {
               dateWarning = dateResult.warning;
@@ -137,23 +143,31 @@ serve(async (req) => {
           }
           
           // Enhanced amount parsing
-          const amountStr = values[2].replace(/[$,\s]/g, '');
+          const amountValue = getColumnValue(values, headers, columnMapping.amount);
+          const amountStr = amountValue.replace(/[$,\s]/g, '');
           const amount = parseFloat(amountStr) || 0;
           
           if (amount === 0) {
-            warnings.push(`Row ${i}: Amount is 0 or invalid: "${values[2]}"`);
+            warnings.push(`Row ${i}: Amount is 0 or invalid: "${amountValue}"`);
           }
+
+          // Extract description and merchant properly
+          const description = getColumnValue(values, headers, columnMapping.description);
+          const merchant = getColumnValue(values, headers, columnMapping.merchant);
+          
+          // Determine best display text (prioritize merchant over card numbers)
+          const displayText = getBestDisplayText(merchant, description);
 
           // Create transaction with enhanced data
           const transaction = {
             user_id: user.id,
             account_id: accountId,
             transaction_date: transactionDate,
-            description: (values[1] || `Transaction ${i}`).substring(0, 255),
+            description: displayText.substring(0, 255),
             amount: Math.abs(amount),
             is_income: amount > 0,
             category_id: null, // Will be set by categorization
-            merchant: extractMerchant(values[1] || ''),
+            merchant: merchant && merchant.trim() ? merchant.trim() : null,
             imported_from: fileName,
             external_id: `${fileName}_${i}_${Date.now()}`,
             created_at: new Date().toISOString(),
@@ -288,4 +302,80 @@ function detectBankFromFileName(fileName: string): string {
   if (lower.includes('bnz')) return 'BNZ';
   
   return 'Unknown';
+}
+
+function detectColumnMapping(headers: string[]): {
+  date: number;
+  description: number;
+  amount: number;
+  merchant: number;
+} {
+  const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+  
+  // Find date column
+  const dateIndex = lowerHeaders.findIndex(h => 
+    h.includes('date') || h.includes('transaction date') || h.includes('value date')
+  );
+  
+  // Find amount column
+  const amountIndex = lowerHeaders.findIndex(h => 
+    h.includes('amount') || h.includes('value') || h.includes('debit') || h.includes('credit')
+  );
+  
+  // Find description column (usually second column or contains 'description')
+  let descriptionIndex = lowerHeaders.findIndex(h => 
+    h.includes('description') || h.includes('details') || h.includes('transaction details')
+  );
+  if (descriptionIndex === -1 && headers.length > 1) {
+    descriptionIndex = 1; // Default to second column
+  }
+  
+  // Find merchant column (prioritize particulars, code, merchant for NZ banks)
+  const merchantIndex = lowerHeaders.findIndex(h => 
+    h.includes('particulars') || h.includes('code') || h.includes('merchant') || 
+    h.includes('other party') || h.includes('payee') || h.includes('narrative')
+  );
+  
+  return {
+    date: dateIndex >= 0 ? dateIndex : 0,
+    description: descriptionIndex >= 0 ? descriptionIndex : 1,
+    amount: amountIndex >= 0 ? amountIndex : 2,
+    merchant: merchantIndex >= 0 ? merchantIndex : -1
+  };
+}
+
+function getColumnValue(values: string[], headers: string[], columnIndex: number): string {
+  if (columnIndex >= 0 && columnIndex < values.length) {
+    return values[columnIndex] || '';
+  }
+  return '';
+}
+
+function getBestDisplayText(merchant: string, description: string): string {
+  // If we have a merchant that's not a card number, use it
+  if (merchant && merchant.trim() && !isCardNumber(merchant)) {
+    return merchant.trim();
+  }
+  
+  // If description is not a card number, use it
+  if (description && description.trim() && !isCardNumber(description)) {
+    return description.trim();
+  }
+  
+  // If both are card numbers or empty, prefer merchant, then description
+  return (merchant && merchant.trim()) || (description && description.trim()) || 'Unknown Transaction';
+}
+
+function isCardNumber(text: string): boolean {
+  if (!text) return false;
+  
+  // Check for card number patterns (e.g., "4835-****-4301 Df", "**** 1234", etc.)
+  const cardPatterns = [
+    /\d{4}[\s\-\*]*\*{4}[\s\-\*]*\d{4}/,  // 4835-****-4301
+    /\*{4}[\s\-]*\d{4}/,                   // **** 1234
+    /\d{4}[\s\-]*\*{4}/,                   // 1234 ****
+    /\d{4}[\s\-\*]{1,3}\d{4}[\s\-\*]{1,3}\d{4}[\s\-\*]{1,3}\d{4}/, // Full card numbers
+  ];
+  
+  return cardPatterns.some(pattern => pattern.test(text.trim()));
 }

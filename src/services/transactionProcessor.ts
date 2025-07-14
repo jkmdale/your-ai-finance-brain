@@ -221,18 +221,25 @@ export class TransactionProcessor {
 
   public processTransactions(transactions: any[]): ProcessedTransaction[] {
     return transactions.map(transaction => {
+      // Prioritize merchant field over description for display
+      const merchantName = transaction.merchant && transaction.merchant.trim() ? transaction.merchant.trim() : null;
+      const description = transaction.description && transaction.description.trim() ? transaction.description.trim() : '';
+      
+      // Use merchant name if available and not a card number
+      const displayDescription = this.getDisplayDescription(merchantName, description);
+      
       const categorization = this.categorizeTransaction(
-        transaction.description,
+        displayDescription,
         transaction.amount,
-        transaction.merchant
+        merchantName
       );
 
       return {
         id: transaction.id,
         date: transaction.transaction_date,
         amount: Math.abs(transaction.amount),
-        description: transaction.description,
-        merchant: transaction.merchant,
+        description: displayDescription,
+        merchant: merchantName,
         category: categorization.subcategory || categorization.category,
         isIncome: categorization.isIncome,
         isTransfer: categorization.isTransfer,
@@ -241,9 +248,38 @@ export class TransactionProcessor {
         confidence: categorization.confidence,
         subcategory: categorization.subcategory,
         isRecurring: categorization.isRecurring,
-        accountType: this.detectAccountType(transaction.description)
+        accountType: this.detectAccountType(displayDescription)
       };
     });
+  }
+
+  private getDisplayDescription(merchant: string | null, description: string): string {
+    // If we have a merchant that's not a card number, use it
+    if (merchant && !this.isCardNumber(merchant)) {
+      return merchant;
+    }
+    
+    // If description is not a card number, use it
+    if (description && !this.isCardNumber(description)) {
+      return description;
+    }
+    
+    // If both are card numbers or empty, prefer merchant, then description
+    return merchant || description || 'Unknown Transaction';
+  }
+
+  private isCardNumber(text: string): boolean {
+    if (!text) return false;
+    
+    // Check for card number patterns (e.g., "4835-****-4301 Df", "**** 1234", etc.)
+    const cardPatterns = [
+      /\d{4}[\s\-\*]*\*{4}[\s\-\*]*\d{4}/,  // 4835-****-4301
+      /\*{4}[\s\-]*\d{4}/,                   // **** 1234
+      /\d{4}[\s\-]*\*{4}/,                   // 1234 ****
+      /\d{4}[\s\-\*]{1,3}\d{4}[\s\-\*]{1,3}\d{4}[\s\-\*]{1,3}\d{4}/, // Full card numbers
+    ];
+    
+    return cardPatterns.some(pattern => pattern.test(text.trim()));
   }
 
   private detectAccountType(description: string): string {

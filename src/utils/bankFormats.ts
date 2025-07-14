@@ -11,6 +11,7 @@ export interface BankFormat {
     amount: string[];
     balance?: string[];
     reference?: string[];
+    merchant?: string[]; // Add merchant field
   };
   patterns: {
     datePattern: RegExp;
@@ -33,7 +34,8 @@ export const BANK_FORMATS: BankFormat[] = [
       description: ['description', 'details', 'transaction details'],
       amount: ['amount', 'debit', 'credit', 'value'],
       balance: ['balance', 'running balance'],
-      reference: ['reference', 'ref', 'transaction id']
+      reference: ['reference', 'ref', 'transaction id'],
+      merchant: ['particulars', 'code', 'merchant', 'other party', 'payee'] // Add merchant mappings
     },
     patterns: {
       datePattern: /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/,
@@ -53,7 +55,8 @@ export const BANK_FORMATS: BankFormat[] = [
       description: ['description', 'particulars'],
       amount: ['amount', 'debit amount', 'credit amount'],
       balance: ['balance'],
-      reference: ['reference', 'analysis code']
+      reference: ['reference', 'analysis code'],
+      merchant: ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative'] // Add merchant mappings
     },
     patterns: {
       datePattern: /^\d{1,2}\/\d{1,2}\/\d{4}$/,
@@ -73,10 +76,53 @@ export const BANK_FORMATS: BankFormat[] = [
       description: ['description', 'transaction type', 'details'],
       amount: ['amount', 'debit', 'credit'],
       balance: ['balance', 'account balance'],
-      reference: ['reference', 'transaction reference']
+      reference: ['reference', 'transaction reference'],
+      merchant: ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative'] // Add merchant mappings
     },
     patterns: {
       datePattern: /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})$/,
+      amountPattern: /^-?[\d,]+\.?\d*$/,
+      negativePattern: /^-/
+    },
+    confidence: 0
+  },
+  {
+    id: 'nz-westpac',
+    name: 'Westpac New Zealand',
+    country: 'NZ',
+    dateFormats: ['DD/MM/YYYY'],
+    amountFormats: ['0.00', '-0.00'],
+    headers: {
+      date: ['date', 'transaction date', 'value date'],
+      description: ['description', 'transaction type', 'details'],
+      amount: ['amount', 'debit', 'credit'],
+      balance: ['balance', 'account balance'],
+      reference: ['reference', 'transaction reference'],
+      merchant: ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative'] // Add merchant mappings
+    },
+    patterns: {
+      datePattern: /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+      amountPattern: /^-?[\d,]+\.?\d*$/,
+      negativePattern: /^-/
+    },
+    confidence: 0
+  },
+  {
+    id: 'nz-kiwibank',
+    name: 'Kiwibank',
+    country: 'NZ',
+    dateFormats: ['DD/MM/YYYY'],
+    amountFormats: ['0.00', '-0.00'],
+    headers: {
+      date: ['date', 'transaction date', 'value date'],
+      description: ['description', 'transaction type', 'details'],
+      amount: ['amount', 'debit', 'credit'],
+      balance: ['balance', 'account balance'],
+      reference: ['reference', 'transaction reference'],
+      merchant: ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative'] // Add merchant mappings
+    },
+    patterns: {
+      datePattern: /^\d{1,2}\/\d{1,2}\/\d{4}$/,
       amountPattern: /^-?[\d,]+\.?\d*$/,
       negativePattern: /^-/
     },
