@@ -55,148 +55,106 @@ export function CSVUpload() {
           return;
         }
 
-        const authenticatedUser = user;
-        
         if (isMounted) {
-          setUser(authenticatedUser);
-          setAuthLoading(false);
+          setUser(user);
           setAuthError(null);
+          setAuthLoading(false);
         }
-
-        // Enhanced debugging for initial auth state
+        
         console.log('[CSVUpload] 🔍 Initial auth state:', {
           hasSession: !!session,
-          hasUser: !!authenticatedUser,
-          userId: authenticatedUser?.id,
-          email: authenticatedUser?.email,
-          isAuthenticated: !!authenticatedUser,
-          sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-          authMethod: authenticatedUser?.app_metadata?.provider || 'unknown',
-          timestamp: new Date().toISOString()
+          hasUser: !!user,
+          userId: user?.id,
+          email: user?.email
         });
+        
+        // Subscribe to auth changes
+        authSubscription = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (!isMounted) return;
+            
+            console.log('[CSVUpload] 🔄 Auth state change:', {
+              event,
+              hasSession: !!session,
+              hasUser: !!session?.user,
+              userId: session?.user?.id
+            });
 
+            switch (event) {
+              case 'SIGNED_IN':
+                setUser(session?.user || null);
+                setAuthError(null);
+                setAuthLoading(false);
+                console.log('[CSVUpload] ✅ User signed in successfully');
+                toast({
+                  title: "🔐 Authentication Success",
+                  description: "You can now upload CSV files",
+                  variant: "default"
+                });
+                break;
+              case 'SIGNED_OUT':
+                setUser(null);
+                setAuthError(null);
+                setAuthLoading(false);
+                console.log('[CSVUpload] 🚪 User signed out');
+                toast({
+                  title: "👋 Signed Out",
+                  description: "Please sign in to upload CSV files",
+                  variant: "default"
+                });
+                break;
+              case 'TOKEN_REFRESHED':
+                console.log('[CSVUpload] 🔄 Auth token refreshed');
+                break;
+              default:
+                setAuthLoading(false);
+                break;
+            }
+          }
+        );
+        
       } catch (error) {
         console.error('[CSVUpload] ❌ Auth initialization error:', error);
-        setAuthError(`Initialization error: ${error.message}`);
         if (isMounted) {
-          setUser(null);
+          setAuthError(`Authentication failed: ${error.message}`);
           setAuthLoading(false);
         }
       }
     }
 
-    // Initialize auth state
     initializeAuth();
 
-    // ✅ FIXED: Improved auth state change subscription with better error handling
-    authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-
-      console.log('[CSVUpload] 🔄 Auth state change:', {
-        event,
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        userId: session?.user?.id,
-        email: session?.user?.email,
-        timestamp: new Date().toISOString()
-      });
-
-      const newUser = session?.user ?? null;
-      
-      // Clear any previous auth errors when state changes
-      setAuthError(null);
-      
-      // Update user state immediately
-      setUser(newUser);
-      
-      // Set loading to false after any auth state change
-      setAuthLoading(false);
-
-      // Detailed event handling with user feedback
-      switch (event) {
-        case 'SIGNED_IN':
-          console.log('[CSVUpload] ✅ User signed in successfully');
-          toast({
-            title: "🔓 Authentication Successful",
-            description: "You can now upload CSV files",
-          });
-          break;
-          
-        case 'SIGNED_OUT':
-          console.log('[CSVUpload] 🚪 User signed out');
-          toast({
-            title: "🔒 Signed Out",
-            description: "Please sign in to upload CSV files",
-          });
-          break;
-          
-        case 'TOKEN_REFRESHED':
-          console.log('[CSVUpload] 🔄 Auth token refreshed');
-          break;
-          
-        case 'USER_UPDATED':
-          console.log('[CSVUpload] 👤 User profile updated');
-          break;
-          
-        case 'INITIAL_SESSION':
-          console.log('[CSVUpload] 🎯 Initial session loaded');
-          break;
-          
-        default:
-          console.log(`[CSVUpload] 📝 Auth event: ${event}`);
-      }
-    });
-
-    // ✅ FIXED: Enhanced cleanup function
     return () => {
-      console.log('[CSVUpload] 🧹 Cleaning up auth subscription...');
       isMounted = false;
-      
-      if (authSubscription && typeof authSubscription.unsubscribe === 'function') {
+      if (authSubscription) {
         authSubscription.unsubscribe();
-      } else if (authSubscription && authSubscription.data && typeof authSubscription.data.subscription?.unsubscribe === 'function') {
-        authSubscription.data.subscription.unsubscribe();
       }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [toast]);
 
-  // ✅ FIXED: Better loading state with detailed feedback
+  // Show loading state during auth initialization
   if (authLoading) {
     return (
       <div className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-6 text-center">
-        <div className="text-blue-400 font-semibold text-lg mb-2">
-          🔄 Loading Authentication...
-        </div>
-        <p className="text-white/80 mb-2">Checking your login status</p>
-        <div className="animate-spin h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full mx-auto"></div>
-        <small className="text-white/60 text-sm block mt-2">
-          If this takes more than a few seconds, please refresh the page
-        </small>
+        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+        <h3 className="text-lg font-bold text-white mb-2">Initializing Authentication...</h3>
+        <p className="text-white/60">Setting up secure connection...</p>
       </div>
     );
   }
 
-  // ✅ FIXED: Enhanced authentication required state with better error info
-  if (!user) {
+  // Show auth error with detailed troubleshooting
+  if (authError) {
     return (
       <div className="w-full bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 rounded-xl p-6 text-center">
-        <div className="text-red-400 font-semibold text-lg mb-2">
-          🔒 Authentication Required
-        </div>
-        <p className="text-white/80 mb-2">Please log in to upload your CSV files</p>
+        <div className="text-red-400 text-4xl mb-4">🔒</div>
+        <h3 className="text-lg font-bold text-white mb-2">Authentication Issue</h3>
+        <p className="text-white/80 mb-4">{authError}</p>
         
-        {authError && (
-          <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 mb-3">
-            <p className="text-red-300 text-sm font-medium">⚠️ Auth Error:</p>
-            <p className="text-red-200 text-sm">{authError}</p>
-          </div>
-        )}
-        
-        <div className="bg-gray-500/20 border border-gray-500/30 rounded-lg p-3 text-left">
-          <p className="text-white/70 text-sm mb-1">📋 Debug Info:</p>
-          <ul className="text-white/60 text-xs space-y-1">
-            <li>• Component mounted and auth subscription active</li>
-            <li>• Supabase URL: {import.meta.env.VITE_SUPABASE_URL || 'Using fallback'}</li>
+        <div className="bg-red-500/10 rounded-lg p-4 mb-4">
+          <h4 className="text-white font-medium mb-2">Authentication Details:</h4>
+          <ul className="text-white/70 text-sm text-left space-y-1">
+            <li>• Error: {authError}</li>
             <li>• Auth method: Waiting for login...</li>
             <li>• Timestamp: {new Date().toISOString()}</li>
           </ul>
@@ -209,14 +167,42 @@ export function CSVUpload() {
     );
   }
 
-  // ✅ FIXED: Enhanced file handling with better error management
+  // Show sign-in prompt when not authenticated
+  if (!user) {
+    return (
+      <div className="w-full bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl p-6 text-center">
+        <div className="text-purple-400 text-4xl mb-4">🔐</div>
+        <h3 className="text-lg font-bold text-white mb-2">Sign In Required</h3>
+        <p className="text-white/80 mb-4">Please sign in to upload and analyze your financial data.</p>
+        
+        <div className="bg-purple-500/10 rounded-lg p-4 mb-4">
+          <h4 className="text-white font-medium mb-2">Authentication Status:</h4>
+          <ul className="text-white/70 text-sm text-left space-y-1">
+            <li>• Status: Not authenticated</li>
+            <li>• Auth method: Waiting for login...</li>
+            <li>• Timestamp: {new Date().toISOString()}</li>
+          </ul>
+        </div>
+        
+        <p className="text-white/60 text-xs mt-3">
+          Try signing in with biometrics, magic link, or your preferred method
+        </p>
+      </div>
+    );
+  }
+
+  /**
+   * Enhanced file upload handler with user-friendly error messages
+   * Handles the complete workflow: CSV parsing -> AI categorization -> Budget generation
+   * Shows clear summaries and handles skipped rows gracefully
+   */
   async function handleFiles(files: FileList) {
     if (!files || files.length === 0) return;
     
     if (!user) {
       toast({ 
-        title: "❌ Authentication Error", 
-        description: "Please log in before uploading files",
+        title: "🔐 Authentication Required", 
+        description: "Please sign in before uploading files",
         variant: "destructive"
       });
       return;
@@ -241,6 +227,7 @@ export function CSVUpload() {
     try {
       const core = new SmartFinanceCore();
       
+      // Process the complete workflow with progress tracking
       const result = await core.processCompleteWorkflow(
         files,
         user.id,
@@ -256,30 +243,123 @@ export function CSVUpload() {
       if (result.success) {
         console.log('[CSVUpload] ✅ Upload successful:', result);
         
-        // Create detailed success message
-        let successMessage = `${result.transactionsProcessed} transactions processed successfully`;
-        if (result.skippedRows && result.skippedRows > 0) {
-          successMessage += ` (${result.skippedRows} rows skipped)`;
+        // Create user-friendly success message with clear summary
+        const successParts = [];
+        
+        // Main success message
+        if (result.transactionsProcessed > 0) {
+          successParts.push(`${result.transactionsProcessed} transactions imported successfully`);
         }
+        
+        // Handle skipped rows in a friendly way
+        if (result.skippedRows && result.skippedRows > 0) {
+          successParts.push(`${result.skippedRows} rows skipped (missing data)`);
+        }
+        
+        // Handle duplicates
+        if (result.duplicatesSkipped && result.duplicatesSkipped > 0) {
+          successParts.push(`${result.duplicatesSkipped} duplicates avoided`);
+        }
+        
+        // Additional features completed
+        const features = [];
+        if (result.budgetGenerated) features.push('budgets generated');
+        if (result.smartGoals && result.smartGoals.length > 0) {
+          features.push(`${result.smartGoals.length} SMART goals created`);
+        }
+        
+        if (features.length > 0) {
+          successParts.push(features.join(' and '));
+        }
+        
+        const successMessage = successParts.join(', ');
         
         toast({ 
           title: "✅ Upload Complete", 
-          description: successMessage 
+          description: successMessage,
+          duration: 8000 // Show longer for detailed message
         });
+        
+        // Show additional details if there were skipped rows (but not as an error)
+        if (result.skippedRows && result.skippedRows > 0 && result.skippedRowDetails && result.skippedRowDetails.length > 0) {
+          console.log('ℹ️ Skipped rows details:', result.skippedRowDetails);
+          
+          // Create a user-friendly explanation of skipped rows
+          const commonReasons = result.skippedRowDetails.map(detail => {
+            if (detail.error.includes('missing') || detail.error.includes('empty')) {
+              return 'missing data';
+            } else if (detail.error.includes('date')) {
+              return 'invalid date format';
+            } else if (detail.error.includes('amount')) {
+              return 'invalid amount';
+            } else {
+              return 'formatting issue';
+            }
+          });
+          
+          const uniqueReasons = [...new Set(commonReasons)];
+          
+          // Show a helpful info toast (not an error)
+          toast({
+            title: "ℹ️ Some Rows Skipped",
+            description: `${result.skippedRows} rows skipped due to: ${uniqueReasons.join(', ')}. This is normal for CSV files.`,
+            variant: "default",
+            duration: 6000
+          });
+        }
+        
       } else {
         console.error('[CSVUpload] ❌ Upload failed:', result.errors);
-        toast({ 
-          title: "❌ Upload Failed", 
-          description: result.errors.join('; '),
-          variant: "destructive"
-        });
+        
+        // Handle critical errors vs. normal skipped rows
+        const criticalErrors = result.errors.filter(error => 
+          !error.includes('skipped') && 
+          !error.includes('missing data') &&
+          !error.includes('empty')
+        );
+        
+        if (criticalErrors.length > 0) {
+          // Show critical errors to user
+          toast({ 
+            title: "❌ Upload Failed", 
+            description: criticalErrors.join('; '),
+            variant: "destructive"
+          });
+        } else if (result.transactionsProcessed === 0 && result.skippedRows && result.skippedRows > 0) {
+          // All rows were skipped - this is a user issue, not a system error
+          toast({
+            title: "⚠️ No Valid Transactions Found",
+            description: `All ${result.skippedRows} rows were skipped due to missing or invalid data. Please check your CSV format.`,
+            variant: "destructive",
+            duration: 8000
+          });
+        } else {
+          // Generic failure message
+          toast({ 
+            title: "❌ Upload Failed", 
+            description: "Unable to process the CSV file. Please try again.",
+            variant: "destructive"
+          });
+        }
       }
       
     } catch (error) {
       console.error('[CSVUpload] ❌ Upload exception:', error);
+      
+      // Handle different types of errors gracefully
+      let errorMessage = "An unexpected error occurred while processing your file.";
+      
+      if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = "Network error - please check your connection and try again.";
+      } else if (error.message.includes('auth') || error.message.includes('permission')) {
+        errorMessage = "Authentication error - please sign in again.";
+      } else if (error.message.includes('parse') || error.message.includes('CSV')) {
+        errorMessage = "CSV format error - please check your file format.";
+      }
+      
       toast({ 
         title: "❌ Upload Error", 
-        description: `Unexpected error: ${error.message}`,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -298,146 +378,68 @@ export function CSVUpload() {
       {/* ✅ FIXED: Enhanced header with user info */}
       <div className="mb-4 text-center">
         <h3 className="text-lg md:text-xl font-bold text-white mb-2">
-          📊 CSV Upload
+          Upload Bank Transactions
         </h3>
-        
-        <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 mb-3">
-          <p className="text-green-200 text-sm font-medium">
-            ✅ Ready to Upload
-          </p>
-          <p className="text-green-100 text-xs">
-            Authenticated as: {user.email} • User ID: {user.id.slice(0, 8)}...
-          </p>
-        </div>
-        
         <p className="text-white/70 text-sm">
-          Drag and drop your CSV files or click to browse
+          Upload your CSV bank statement for AI-powered analysis and budgeting
         </p>
+        
+        {/* User info display */}
+        {user && (
+          <div className="mt-2 text-xs text-white/50">
+            Signed in as: {user.email}
+          </div>
+        )}
       </div>
-      
-      <FileUploadZone 
+
+      {/* Progress indicator */}
+      {processing && progress && (
+        <div className="mb-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+            <span className="text-blue-300 text-sm font-medium">{progress}</span>
+          </div>
+        </div>
+      )}
+
+      {/* File upload zone */}
+      <FileUploadZone
         user={user}
         uploading={uploading}
         processing={processing}
         isPickerOpen={isPickerOpen}
-        onFilesSelected={handleFiles} 
+        onFilesSelected={handleFiles}
         onOpenFilePicker={handleOpenFilePicker}
       />
-      
-      {/* ✅ FIXED: Enhanced progress indicator */}
-      {progress && (
-        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
-            <p className="text-blue-200 text-sm font-medium">{progress}</p>
-          </div>
-        </div>
-      )}
-      
-      {/* ✅ FIXED: Enhanced results display */}
+
+      {/* Enhanced result display */}
       {result && (
-        <div className="mt-4 space-y-3">
-          {/* Success Summary */}
-          {result.success && (
-            <div className="text-sm text-left bg-green-500/20 border border-green-500/30 p-4 rounded-lg">
-              <div className="flex items-center space-x-2 mb-2">
-                <span className="text-green-400 text-lg">✅</span>
-                <strong className="text-green-200">Upload Complete!</strong>
-              </div>
-              
-              <div className="space-y-1 text-white/80">
-                <p>📊 {result.transactionsProcessed} transactions imported successfully</p>
-                {result.totalRowsProcessed && (
-                  <p className="text-sm text-white/60">
-                    Total rows processed: {result.totalRowsProcessed}
-                  </p>
-                )}
-                {result.duplicatesSkipped > 0 && (
-                  <p>🔁 {result.duplicatesSkipped} duplicate transactions removed</p>
-                )}
-                {result.budgetGenerated && <p>💰 Budget generated successfully</p>}
-                {result.smartGoals?.length > 0 && <p>🎯 {result.smartGoals.length} SMART goals created</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Skipped Rows Warning */}
-          {result.skippedRows > 0 && (
-            <div className="text-sm text-left bg-yellow-500/20 border border-yellow-500/30 p-4 rounded-lg">
-              <div className="flex items-center space-x-2 mb-2">
-                <span className="text-yellow-400">⚠️</span>
-                <strong className="text-yellow-200">
-                  {result.skippedRows} rows skipped due to errors
-                </strong>
-              </div>
-              
-              {result.skippedRowDetails && result.skippedRowDetails.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-yellow-100 text-xs font-medium">Sample errors:</p>
-                  {result.skippedRowDetails.map((row, index) => (
-                    <div key={index} className="bg-black/20 p-2 rounded text-xs space-y-1">
-                      <p className="text-yellow-200">
-                        Row {row.rowNumber}: {row.error}
-                      </p>
-                      <p className="text-white/50">
-                        Date: "{row.dateValue || '[empty]'}" | 
-                        Amount: "{row.amountValue || '[empty]'}"
-                      </p>
-                    </div>
-                  ))}
-                  {result.skippedRows > result.skippedRowDetails.length && (
-                    <p className="text-yellow-100/70 text-xs italic">
-                      ... and {result.skippedRows - result.skippedRowDetails.length} more rows
-                    </p>
-                  )}
-                </div>
-              )}
-              
-              <div className="mt-3 text-xs text-white/60">
-                <p>💡 Common issues:</p>
-                <ul className="list-disc list-inside ml-2 space-y-1">
-                  <li>Date formats: Use DD/MM/YYYY, DD/MM/YY, or YYYY-MM-DD</li>
-                  <li>Amount formats: Use numeric values like 123.45 or -123.45</li>
-                  <li>Required fields: Date, Description, and Amount</li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {/* Error Summary */}
-          {!result.success && result.errors.length > 0 && (
-            <div className="text-sm text-left bg-red-500/20 border border-red-500/30 p-4 rounded-lg">
-              <div className="flex items-center space-x-2 mb-2">
-                <span className="text-red-400">❌</span>
-                <strong className="text-red-200">Upload Failed</strong>
-              </div>
-              <div className="text-red-200 text-xs space-y-1">
-                {result.errors.map((error, index) => (
-                  <p key={index}>• {error}</p>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* ✅ FIXED: Enhanced idle state with helpful tips */}
-      {!uploading && !processing && !result && (
-        <div className="mt-4 text-center space-y-2">
-          <div className="text-white/60 text-sm">
-            <p>💡 Ready to process your financial data</p>
-            <p className="text-xs mt-1">
-              Supports: Bank statements, credit card exports, transaction CSVs
-            </p>
-          </div>
-          
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-            <p className="text-blue-200 text-xs">
-              🔐 Secure upload • 📊 Smart analysis • 🎯 Goal generation
-            </p>
+        <div className="mt-4 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+          <h4 className="text-green-300 font-medium mb-2">✅ Processing Complete</h4>
+          <div className="text-white/80 text-sm space-y-1">
+            <div>• {result.transactionsProcessed} transactions processed</div>
+            {result.skippedRows > 0 && (
+              <div>• {result.skippedRows} rows skipped (missing data)</div>
+            )}
+            {result.duplicatesSkipped > 0 && (
+              <div>• {result.duplicatesSkipped} duplicates avoided</div>
+            )}
+            {result.budgetGenerated && (
+              <div>• Budget generated for {result.monthlyBudgets?.length || 0} months</div>
+            )}
+            {result.smartGoals && result.smartGoals.length > 0 && (
+              <div>• {result.smartGoals.length} SMART goals created</div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Enhanced help text */}
+      <div className="mt-4 text-xs text-white/50 space-y-1">
+        <div>💡 Supported formats: CSV files from major NZ banks (ANZ, ASB, Westpac, BNZ, Kiwibank)</div>
+        <div>📊 Features: Auto-categorization, budget generation, SMART goals, duplicate detection</div>
+        <div>⚠️ Note: Some rows may be skipped due to missing data - this is normal</div>
+      </div>
     </div>
   );
 }

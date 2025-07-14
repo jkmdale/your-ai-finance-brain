@@ -34,6 +34,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Main CSV processing endpoint
+ * Handles file upload, parsing, and transaction creation with enhanced error handling
+ * Returns user-friendly error messages and detailed processing summaries
+ */
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -150,7 +155,10 @@ serve(async (req) => {
       console.log('Created new account:', accountId);
     }
 
-    // ✅ ENHANCEMENT 3: Enhanced row processing with better error handling
+    /**
+     * Enhanced row processing with user-friendly error categorization
+     * Processes each CSV row and categorizes errors for better user feedback
+     */
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowNumber = i + 1;
@@ -182,31 +190,61 @@ serve(async (req) => {
           } catch (dateError) {
             console.error(`❌ Row ${rowNumber}: Date parsing failed for "${cleanedRow[0]}":`, dateError);
             
-            // ✅ ENHANCEMENT 6: Enhanced error messages with raw values
-            const errorMessage = `Row ${rowNumber}: Invalid date "${cleanedRow[0]}" - ${dateError.message}`;
-            errors.push(errorMessage);
+            // ✅ ENHANCEMENT 6: User-friendly error categorization for skipped rows
+            let userFriendlyError = 'Invalid date format';
+            if (!cleanedRow[0] || cleanedRow[0].trim() === '') {
+              userFriendlyError = 'Missing date - this is normal for some CSV formats';
+            } else {
+              userFriendlyError = `Invalid date format "${cleanedRow[0]}" - expected DD/MM/YYYY format`;
+            }
             
             skippedRows.push({
               rowNumber,
-              error: errorMessage,
+              error: userFriendlyError,
               rawDate: cleanedRow[0],
               delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
               headers: headers.join(' | '),
               rowData: cleanedRow.slice(0, 5) // First 5 fields for debugging
             });
             
-            continue; // Skip this row
+            continue; // Skip this row but don't treat as critical error
           }
           
-          // ✅ ENHANCEMENT 7: Enhanced amount parsing with cleaning
+          // ✅ ENHANCEMENT 7: Enhanced amount parsing with user-friendly error handling
           const rawAmountValue = cleanedRow[2];
           const cleanedAmount = rawAmountValue.replace(/[$,\s]/g, '');
           const amount = parseFloat(cleanedAmount) || 0;
           
-          if (amount === 0) {
-            const warningMessage = `Row ${rowNumber}: Amount is 0 or invalid: "${rawAmountValue}" (cleaned: "${cleanedAmount}")`;
-            warnings.push(warningMessage);
-            console.warn(`⚠️ ${warningMessage}`);
+                  // Handle missing amounts more gracefully
+        if (!rawAmountValue || rawAmountValue.trim() === '') {
+          const friendlyError = 'Missing amount - this is normal for some CSV formats';
+          const warningMessage = `Row ${rowNumber}: ${friendlyError}`;
+          warnings.push(warningMessage);
+            
+            skippedRows.push({
+              rowNumber,
+              error: friendlyError,
+              delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
+              headers: headers.join(' | '),
+              rowData: cleanedRow.slice(0, 5)
+            });
+            continue;
+          }
+          
+                  if (amount === 0 && cleanedAmount !== '0') {
+          const warningMessage = `Invalid amount format "${rawAmountValue}" - expected numeric value`;
+          const fullWarningMessage = `Row ${rowNumber}: ${warningMessage}`;
+          warnings.push(fullWarningMessage);
+            console.warn(`⚠️ Row ${rowNumber}: ${warningMessage}`);
+            
+            skippedRows.push({
+              rowNumber,
+              error: warningMessage,
+              delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
+              headers: headers.join(' | '),
+              rowData: cleanedRow.slice(0, 5)
+            });
+            continue;
           }
 
           // Create transaction with enhanced data
@@ -229,13 +267,15 @@ serve(async (req) => {
           console.log(`✅ Row ${rowNumber}: Parsed transaction - ${transaction.description} - $${transaction.amount}`);
           
         } else {
-          const errorMessage = `Row ${rowNumber}: Insufficient columns (${cleanedRow.length}), requires at least 3`;
-          warnings.push(errorMessage);
-          console.warn(`⚠️ ${errorMessage}`);
+          // Handle insufficient columns gracefully
+          const friendlyError = 'Missing required data (need at least date, description, and amount)';
+          const warningMessage = `Row ${rowNumber}: ${friendlyError}`;
+          warnings.push(warningMessage);
+          console.warn(`⚠️ Row ${rowNumber}: ${friendlyError}`);
           
           skippedRows.push({
             rowNumber,
-            error: errorMessage,
+            error: friendlyError,
             delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
             headers: headers.join(' | '),
             rowData: cleanedRow
@@ -243,12 +283,13 @@ serve(async (req) => {
         }
       } catch (rowError) {
         console.error(`❌ Error parsing row ${rowNumber}:`, rowError);
-        const errorMessage = `Row ${rowNumber}: ${rowError.message}`;
-        errors.push(errorMessage);
+        
+        // Provide user-friendly error message instead of technical details
+        const friendlyError = 'Row formatting issue - unable to process this row';
         
         skippedRows.push({
           rowNumber,
-          error: errorMessage,
+          error: friendlyError,
           delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
           headers: headers.join(' | '),
           rowData: row
@@ -264,7 +305,7 @@ serve(async (req) => {
     const insertedTransactions: any[] = [];
 
     if (transactions.length > 0) {
-      // Insert in batches of 100
+      // Insert in batches of 100 for optimal performance
       const batchSize = 100;
       for (let i = 0; i < transactions.length; i += batchSize) {
         const batch = transactions.slice(i, i + batchSize);
@@ -277,7 +318,8 @@ serve(async (req) => {
         if (insertError) {
           console.error('❌ Batch insert error:', insertError);
           failedCount += batch.length;
-          errors.push(`Batch insert failed: ${insertError.message}`);
+          // Don't expose technical database errors to users
+          errors.push(`Unable to save ${batch.length} transactions to database`);
         } else {
           processedCount += insertedBatch?.length || 0;
           if (insertedBatch) {
@@ -287,14 +329,17 @@ serve(async (req) => {
       }
     }
 
-    // ✅ ENHANCEMENT 8: Enhanced response with detailed debugging info
+    /**
+     * Enhanced response with user-friendly error categorization
+     * Provides clear summaries and actionable feedback for users
+     */
     const response = {
       success: processedCount > 0,
       processed: processedCount,
       failed: failedCount,
       skipped: skippedRows.length,
-      warnings,
-      errors,
+      warnings: warnings.filter(w => !w.includes('Row')), // Remove row-specific warnings from global list
+      errors: errors.filter(e => e.length > 0), // Only include meaningful errors
       transactions: insertedTransactions.slice(0, 10), // Return first 10 for preview
       totalRows: rows.length,
       fileName,
@@ -305,7 +350,15 @@ serve(async (req) => {
         totalDataRows: rows.length,
         headerRowIndex: validation.headerIndex
       },
-      skippedRowDetails: skippedRows.slice(0, 10) // First 10 skipped rows for debugging
+      // Enhanced skipped row details with user-friendly categorization
+      skippedRowDetails: skippedRows.slice(0, 10).map(row => ({
+        rowNumber: row.rowNumber,
+        error: row.error,
+        category: categorizeSkippedRowError(row.error),
+        rawData: row.rawDate || (row.rowData && row.rowData[0]) || 'N/A'
+      })),
+      // User-friendly summary for display
+      userSummary: createUserFriendlySummary(processedCount, skippedRows.length, rows.length)
     };
 
     console.log('✅ Processing complete:', {
@@ -326,13 +379,57 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error', 
-        details: error.message,
+        details: 'An unexpected error occurred while processing your file. Please try again.',
         success: false 
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
+
+/**
+ * Helper function to categorize skipped row errors for user-friendly display
+ * @param error - The error message from a skipped row
+ * @returns User-friendly category for the error
+ */
+function categorizeSkippedRowError(error: string): string {
+  if (error.includes('Missing date') || error.includes('Missing amount') || error.includes('Missing required')) {
+    return 'missing_data';
+  } else if (error.includes('Invalid date')) {
+    return 'date_format';
+  } else if (error.includes('Invalid amount')) {
+    return 'amount_format';
+  } else {
+    return 'formatting';
+  }
+}
+
+/**
+ * Creates a user-friendly summary message for display
+ * @param processed - Number of successfully processed transactions
+ * @param skipped - Number of skipped rows
+ * @param total - Total number of rows
+ * @returns User-friendly summary string
+ */
+function createUserFriendlySummary(processed: number, skipped: number, total: number): string {
+  const parts = [];
+  
+  if (processed > 0) {
+    parts.push(`${processed} transactions imported successfully`);
+  }
+  
+  if (skipped > 0) {
+    parts.push(`${skipped} rows skipped (missing data)`);
+  }
+  
+  const successRate = total > 0 ? Math.round((processed / total) * 100) : 0;
+  
+  if (parts.length > 0) {
+    return `${parts.join(', ')} • ${successRate}% success rate`;
+  } else {
+    return 'No valid transactions found in the uploaded file';
+  }
+}
 
 // Helper functions
 function extractMerchant(description: string): string | null {
