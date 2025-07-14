@@ -16,16 +16,14 @@ describe('parseBNZ', () => {
         amount: -75.0,
         description: 'Restaurant',
         type: 'debit',
-        account: 'BNZ',
-        source: 'BNZ'
+        account: 'BNZ'
       },
       {
         date: '2024-01-06',
         amount: 150.0,
         description: 'Refund',
         type: 'credit',
-        account: 'BNZ',
-        source: 'BNZ'
+        account: 'BNZ'
       }
     ])
   })

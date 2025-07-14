@@ -1,144 +1,109 @@
 
-export const parseCSV = (csvData: string): { headers: string[], rows: string[][], validation: any } => {
-  console.log('📄 Starting comprehensive CSV parsing...');
-  
-  const lines = csvData.trim().split(/\r?\n/);
-  console.log(`📊 Found ${lines.length} total lines`);
-  
-  if (lines.length < 1) {
-    throw new Error('CSV file is empty');
-  }
+// Enhanced CSV Parser with automatic delimiter detection
+// Supports comma, semicolon, tab, and pipe delimiters
 
-  // Auto-detect separator
-  const detectSeparator = (sampleLines: string[]): string => {
-    const separators = [',', ';', '\t', '|'];
-    const scores = separators.map(sep => ({
-      separator: sep,
-      avgCount: sampleLines.reduce((sum, line) => sum + (line.split(sep).length - 1), 0) / sampleLines.length
-    }));
-    
-    const best = scores.filter(s => s.avgCount >= 1).sort((a, b) => b.avgCount - a.avgCount)[0];
-    console.log(`🔍 Detected separator: "${best?.separator === '\t' ? '\\t' : best?.separator || ','}"`);
-    return best?.separator || ',';
+export interface CSVParseResult {
+  headers: string[];
+  rows: string[][];
+  validation: {
+    separator: string;
+    headerIndex: number;
+    totalRows: number;
+    hasHeaders: boolean;
   };
+}
 
-  const nonEmptyLines = lines.filter(line => line.trim());
-  const separator = detectSeparator(nonEmptyLines.slice(0, 5));
+export function parseCSV(csvData: string): CSVParseResult {
+  if (!csvData || typeof csvData !== 'string') {
+    throw new Error('Invalid CSV data provided');
+  }
 
-  const parseCSVLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    let quoteChar = '"';
-    
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      const nextChar = line[i + 1];
-      
-      if ((char === '"' || char === "'") && !inQuotes) {
-        inQuotes = true;
-        quoteChar = char;
-      } else if (char === quoteChar && inQuotes) {
-        if (nextChar === quoteChar) {
-          current += quoteChar;
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else if (char === separator && !inQuotes) {
-        result.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    result.push(current.trim());
-    
-    return result.map(cell => {
-      if ((cell.startsWith('"') && cell.endsWith('"')) || 
-          (cell.startsWith("'") && cell.endsWith("'"))) {
-        cell = cell.slice(1, -1);
-      }
-      return cell.trim();
-    });
-  };
-
-  // Find header row with enhanced detection
-  let headerIndex = -1;
-  let headers: string[] = [];
+  const lines = csvData.trim().split('\n').filter(line => line.trim());
   
-  for (let i = 0; i < Math.min(10, nonEmptyLines.length); i++) {
-    const parsedLine = parseCSVLine(nonEmptyLines[i]);
-    if (parsedLine.length >= 2 && parsedLine.some(cell => cell.length > 0)) {
-      const headerTerms = ['date', 'amount', 'description', 'details', 'transaction', 'debit', 'credit', 'balance'];
-      const lowerCells = parsedLine.map(c => c.toLowerCase());
-      const hasHeaderTerms = lowerCells.some(cell => 
-        headerTerms.some(term => cell.includes(term))
-      );
-      
-      if (hasHeaderTerms || i === 0) {
-        headers = parsedLine;
-        headerIndex = i;
-        console.log(`📋 Headers found at row ${i + 1}: ${headers.join(', ')}`);
-        break;
-      }
+  if (lines.length < 2) {
+    throw new Error('CSV must have at least header and one data row');
+  }
+
+  // Detect delimiter
+  const delimiter = detectDelimiter(lines[0]);
+  console.log(`🔍 Detected delimiter: "${delimiter === '\t' ? '\\t' : delimiter}"`);
+
+  // Parse headers
+  const headers = parseCSVLine(lines[0], delimiter);
+  console.log(`📋 Headers detected: ${headers.join(' | ')}`);
+
+  // Parse data rows
+  const rows: string[][] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i], delimiter);
+    if (row.length > 0) {
+      rows.push(row);
     }
   }
 
-  if (headerIndex === -1) {
-    // Use first non-empty row as headers
-    for (let i = 0; i < Math.min(3, nonEmptyLines.length); i++) {
-      const parsedLine = parseCSVLine(nonEmptyLines[i]);
-      if (parsedLine.length >= 2) {
-        headers = parsedLine;
-        headerIndex = i;
-        console.log(`📋 Using row ${i + 1} as headers: ${headers.join(', ')}`);
-        break;
-      }
-    }
-  }
-
-  if (headerIndex === -1) {
-    throw new Error('No valid header row found in first 10 lines');
-  }
-
-  // Parse ALL data rows - this is crucial
-  const dataLines = nonEmptyLines.slice(headerIndex + 1);
-  console.log(`📊 Processing ${dataLines.length} data lines...`);
-  
-  const rows = [];
-  for (let i = 0; i < dataLines.length; i++) {
-    const line = dataLines[i];
-    if (!line.trim()) continue;
-    
-    const parsedRow = parseCSVLine(line);
-    
-    // Skip only completely empty rows
-    if (parsedRow.length === 0 || parsedRow.every(cell => !cell.trim())) {
-      console.log(`⏭️ Skipping empty row ${headerIndex + i + 2}`);
-      continue;
-    }
-    
-    // Pad row to match header length
-    while (parsedRow.length < headers.length) {
-      parsedRow.push('');
-    }
-    
-    rows.push(parsedRow);
-    console.log(`✅ Row ${headerIndex + i + 2}: ${parsedRow.slice(0, 3).join(' | ')}`);
-  }
-  
-  console.log(`✅ Successfully parsed ${rows.length} data rows from ${dataLines.length} lines`);
-  
-  return { 
-    headers, 
-    rows, 
+  return {
+    headers,
+    rows,
     validation: {
-      isValid: rows.length > 0,
-      totalLines: lines.length,
-      dataRows: rows.length,
-      separator,
-      headerIndex: headerIndex + 1
+      separator: delimiter,
+      headerIndex: 0,
+      totalRows: rows.length,
+      hasHeaders: true
     }
   };
-};
+}
+
+function detectDelimiter(line: string): string {
+  const delimiters = [',', ';', '\t', '|'];
+  const scores: { [key: string]: number } = {};
+
+  for (const delimiter of delimiters) {
+    const fields = parseCSVLine(line, delimiter);
+    scores[delimiter] = fields.length;
+  }
+
+  // Find delimiter with most fields
+  let bestDelimiter = ',';
+  let maxFields = 0;
+  
+  for (const delimiter of delimiters) {
+    if (scores[delimiter] > maxFields) {
+      maxFields = scores[delimiter];
+      bestDelimiter = delimiter;
+    }
+  }
+
+  return bestDelimiter;
+}
+
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+    
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Double quote escape
+        current += '"';
+        i += 2;
+      } else {
+        inQuotes = !inQuotes;
+        i++;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+      i++;
+    } else {
+      current += char;
+      i++;
+    }
+  }
+  
+  result.push(current.trim());
+  return result.map(val => val.replace(/^"|"$/g, ''));
+}
