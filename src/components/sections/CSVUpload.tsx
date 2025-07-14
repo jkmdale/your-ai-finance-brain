@@ -16,121 +16,145 @@ export function CSVUpload() {
   const [processing, setProcessing] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
-  // ✅ FIXED: Enhanced authentication state management with proper error handling
+  /**
+   * Enhanced authentication state management with proper cleanup
+   * Runs once on mount and properly manages auth subscription lifecycle
+   */
   useEffect(() => {
     let isMounted = true;
     let authSubscription: any = null;
 
     console.log('[CSVUpload] 🚀 Component mounted - initializing authentication...');
 
-    // Enhanced initial auth state check
-    async function initializeAuth() {
-      try {
-        setAuthLoading(true);
-        setAuthError(null);
-        
-        // First, get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+    // Initialize auth state synchronously (not in async function)
+    const initializeAuth = () => {
+      setAuthLoading(true);
+      setAuthError(null);
+
+      // Get initial session and user state
+      supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
+        if (!isMounted) return;
+
         if (sessionError) {
           console.error('[CSVUpload] ❌ Session error:', sessionError);
           setAuthError(`Session error: ${sessionError.message}`);
-          if (isMounted) {
-            setUser(null);
-            setAuthLoading(false);
-          }
+          setUser(null);
+          setAuthLoading(false);
           return;
         }
 
-        // Then get the current user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) {
-          console.error('[CSVUpload] ❌ User error:', userError);
-          setAuthError(`User error: ${userError.message}`);
-          if (isMounted) {
+        supabase.auth.getUser().then(({ data: { user }, error: userError }) => {
+          if (!isMounted) return;
+
+          if (userError) {
+            console.error('[CSVUpload] ❌ User error:', userError);
+            setAuthError(`User error: ${userError.message}`);
             setUser(null);
             setAuthLoading(false);
+            return;
           }
-          return;
-        }
 
-        if (isMounted) {
           setUser(user);
           setAuthError(null);
           setAuthLoading(false);
-        }
-        
-        console.log('[CSVUpload] 🔍 Initial auth state:', {
-          hasSession: !!session,
-          hasUser: !!user,
-          userId: user?.id,
-          email: user?.email
-        });
-        
-        // Subscribe to auth changes
-        authSubscription = supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            if (!isMounted) return;
-            
-            console.log('[CSVUpload] 🔄 Auth state change:', {
-              event,
-              hasSession: !!session,
-              hasUser: !!session?.user,
-              userId: session?.user?.id
-            });
 
-            switch (event) {
-              case 'SIGNED_IN':
-                setUser(session?.user || null);
-                setAuthError(null);
-                setAuthLoading(false);
-                console.log('[CSVUpload] ✅ User signed in successfully');
-                toast({
-                  title: "🔐 Authentication Success",
-                  description: "You can now upload CSV files",
-                  variant: "default"
-                });
-                break;
-              case 'SIGNED_OUT':
-                setUser(null);
-                setAuthError(null);
-                setAuthLoading(false);
-                console.log('[CSVUpload] 🚪 User signed out');
-                toast({
-                  title: "👋 Signed Out",
-                  description: "Please sign in to upload CSV files",
-                  variant: "default"
-                });
-                break;
-              case 'TOKEN_REFRESHED':
-                console.log('[CSVUpload] 🔄 Auth token refreshed');
-                break;
-              default:
-                setAuthLoading(false);
-                break;
-            }
-          }
-        );
-        
-      } catch (error) {
-        console.error('[CSVUpload] ❌ Auth initialization error:', error);
-        if (isMounted) {
+          console.log('[CSVUpload] 🔍 Initial auth state:', {
+            hasSession: !!session,
+            hasUser: !!user,
+            userId: user?.id,
+            email: user?.email
+          });
+        }).catch((error) => {
+          if (!isMounted) return;
+          console.error('[CSVUpload] ❌ Auth initialization error:', error);
           setAuthError(`Authentication failed: ${error.message}`);
           setAuthLoading(false);
-        }
-      }
-    }
+        });
+      }).catch((error) => {
+        if (!isMounted) return;
+        console.error('[CSVUpload] ❌ Session initialization error:', error);
+        setAuthError(`Session failed: ${error.message}`);
+        setAuthLoading(false);
+      });
+    };
 
+    // Set up auth state change subscription (outside of async function)
+    authSubscription = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
+      console.log('[CSVUpload] 🔄 Auth state change:', {
+        event,
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id
+      });
+
+      // Handle different auth events with proper error boundaries
+      try {
+        switch (event) {
+          case 'SIGNED_IN':
+            setUser(session?.user || null);
+            setAuthError(null);
+            setAuthLoading(false);
+            console.log('[CSVUpload] ✅ User signed in successfully');
+            toast({
+              title: "🔐 Authentication Success",
+              description: "You can now upload CSV files",
+              variant: "default"
+            });
+            break;
+          case 'SIGNED_OUT':
+            setUser(null);
+            setAuthError(null);
+            setAuthLoading(false);
+            console.log('[CSVUpload] 🚪 User signed out');
+            toast({
+              title: "👋 Signed Out",
+              description: "Please sign in to upload CSV files",
+              variant: "default"
+            });
+            break;
+          case 'TOKEN_REFRESHED':
+            console.log('[CSVUpload] 🔄 Auth token refreshed');
+            // Update user state if session exists
+            if (session?.user) {
+              setUser(session.user);
+            }
+            break;
+          case 'USER_UPDATED':
+            console.log('[CSVUpload] 👤 User profile updated');
+            if (session?.user) {
+              setUser(session.user);
+            }
+            break;
+          default:
+            console.log(`[CSVUpload] 📝 Auth event: ${event}`);
+            setAuthLoading(false);
+            break;
+        }
+      } catch (error) {
+        console.error('[CSVUpload] ❌ Error handling auth event:', error);
+        setAuthError(`Auth event error: ${error.message}`);
+        setAuthLoading(false);
+      }
+    });
+
+    // Initialize auth state
     initializeAuth();
 
+    // Cleanup function to prevent memory leaks
     return () => {
+      console.log('[CSVUpload] 🧹 Cleaning up auth subscription...');
       isMounted = false;
-      if (authSubscription) {
+      
+      // Properly unsubscribe from auth changes
+      if (authSubscription && typeof authSubscription.unsubscribe === 'function') {
         authSubscription.unsubscribe();
+      } else if (authSubscription?.data?.subscription?.unsubscribe) {
+        authSubscription.data.subscription.unsubscribe();
       }
     };
-  }, [toast]);
+  }, []); // Empty dependency array - runs once on mount
 
   // Show loading state during auth initialization
   if (authLoading) {
@@ -251,7 +275,7 @@ export function CSVUpload() {
           successParts.push(`${result.transactionsProcessed} transactions imported successfully`);
         }
         
-        // Handle skipped rows in a friendly way
+        // Handle skipped rows in a friendly way (not as errors)
         if (result.skippedRows && result.skippedRows > 0) {
           successParts.push(`${result.skippedRows} rows skipped (missing data)`);
         }
@@ -299,13 +323,15 @@ export function CSVUpload() {
           
           const uniqueReasons = [...new Set(commonReasons)];
           
-          // Show a helpful info toast (not an error)
-          toast({
-            title: "ℹ️ Some Rows Skipped",
-            description: `${result.skippedRows} rows skipped due to: ${uniqueReasons.join(', ')}. This is normal for CSV files.`,
-            variant: "default",
-            duration: 6000
-          });
+          // Show a helpful info toast (not an error) - only for critical warnings
+          if (uniqueReasons.some(reason => reason !== 'missing data')) {
+            toast({
+              title: "ℹ️ Some Rows Skipped",
+              description: `${result.skippedRows} rows skipped due to: ${uniqueReasons.join(', ')}. This is normal for CSV files.`,
+              variant: "default",
+              duration: 6000
+            });
+          }
         }
         
       } else {
@@ -315,11 +341,13 @@ export function CSVUpload() {
         const criticalErrors = result.errors.filter(error => 
           !error.includes('skipped') && 
           !error.includes('missing data') &&
-          !error.includes('empty')
+          !error.includes('empty') &&
+          !error.includes('Missing amount') && // Filter out friendly missing data messages
+          !error.includes('Missing date')
         );
         
         if (criticalErrors.length > 0) {
-          // Show critical errors to user
+          // Show only critical errors to user
           toast({ 
             title: "❌ Upload Failed", 
             description: criticalErrors.join('; '),
@@ -375,7 +403,7 @@ export function CSVUpload() {
 
   return (
     <div className="w-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4 md:p-6">
-      {/* ✅ FIXED: Enhanced header with user info */}
+      {/* Enhanced header with user info */}
       <div className="mb-4 text-center">
         <h3 className="text-lg md:text-xl font-bold text-white mb-2">
           Upload Bank Transactions
