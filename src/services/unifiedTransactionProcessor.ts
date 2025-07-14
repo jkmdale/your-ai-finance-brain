@@ -131,12 +131,32 @@ export class UnifiedTransactionProcessor {
       duplicatesSkipped: number;
       errors: string[];
       warnings: string[];
+      skippedRows: Array<{
+        rowNumber: number;
+        error: string;
+        details?: {
+          dateValue?: string;
+          amountValue?: string;
+          descriptionValue?: string;
+        };
+      }>;
+      totalRowsProcessed: number;
     };
   }> {
     const allTransactions: NormalizedTransaction[] = [];
     const errors: string[] = [];
     const warnings: string[] = [];
+    const skippedRows: Array<{
+      rowNumber: number;
+      error: string;
+      details?: {
+        dateValue?: string;
+        amountValue?: string;
+        descriptionValue?: string;
+      };
+    }> = [];
     let totalTransactions = 0;
+    let totalRowsProcessed = 0;
 
     console.log(`🏦 Processing ${files.length} CSV files...`);
 
@@ -146,9 +166,11 @@ export class UnifiedTransactionProcessor {
       console.log(`📄 Processing file ${i + 1}/${files.length}: ${file.name}`);
 
       try {
-        const fileTransactions = await this.processSingleCSV(file);
-        allTransactions.push(...fileTransactions);
-        totalTransactions += fileTransactions.length;
+        const result = await this.processSingleCSVWithDetails(file);
+        allTransactions.push(...result.transactions);
+        totalTransactions += result.transactions.length;
+        totalRowsProcessed += result.totalRowsProcessed;
+        skippedRows.push(...result.skippedRows);
       } catch (error: any) {
         console.error(`❌ Error processing ${file.name}:`, error);
         errors.push(`${file.name}: ${error.message}`);
@@ -159,7 +181,7 @@ export class UnifiedTransactionProcessor {
     const uniqueTransactions = await this.removeDuplicates(allTransactions, userId);
     const duplicatesSkipped = allTransactions.length - uniqueTransactions.length;
 
-    console.log(`✅ Processed ${files.length} files: ${totalTransactions} total, ${duplicatesSkipped} duplicates skipped`);
+    console.log(`✅ Processed ${files.length} files: ${totalTransactions} total, ${duplicatesSkipped} duplicates skipped, ${skippedRows.length} rows skipped`);
 
     return {
       transactions: uniqueTransactions,
@@ -168,22 +190,41 @@ export class UnifiedTransactionProcessor {
         totalTransactions,
         duplicatesSkipped,
         errors,
-        warnings
+        warnings,
+        skippedRows,
+        totalRowsProcessed
       }
     };
   }
 
   /**
-   * Process a single CSV file
+   * Process a single CSV file with detailed error reporting
    */
-  private async processSingleCSV(file: File): Promise<NormalizedTransaction[]> {
+  private async processSingleCSVWithDetails(file: File): Promise<{
+    transactions: NormalizedTransaction[];
+    totalRowsProcessed: number;
+    skippedRows: Array<{
+      rowNumber: number;
+      error: string;
+      details?: {
+        dateValue?: string;
+        amountValue?: string;
+        descriptionValue?: string;
+      };
+    }>;
+  }> {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
+        delimiter: "", // Auto-detect delimiter (handles tab-delimited NZ bank files)
+        delimitersToGuess: [',', '\t', '|', ';'], // Common delimiters including tab
         transformHeader: (header) => header.trim(), // Clean headers
         complete: (results) => {
           try {
+            // Log the detected delimiter for debugging
+            console.log(`🔍 Detected delimiter: "${results.meta.delimiter === '\t' ? '\\t' : results.meta.delimiter}" for ${file.name}`);
+            
             // Detect bank format
             const bankFormat = this.detectBankFormat(file.name, results.meta.fields || []);
             if (!bankFormat) {
@@ -193,14 +234,14 @@ export class UnifiedTransactionProcessor {
 
             console.log(`🏛️ Detected ${bankFormat.name} format for ${file.name}`);
 
-            // Process rows
-            const transactions = this.normalizeTransactions(
+            // Process rows with detailed error tracking
+            const result = this.normalizeTransactionsWithDetails(
               results.data as any[], 
               bankFormat, 
               file.name
             );
 
-            resolve(transactions);
+            resolve(result);
           } catch (error: any) {
             reject(new Error(`Error processing ${file.name}: ${error.message}`));
           }
@@ -213,41 +254,117 @@ export class UnifiedTransactionProcessor {
   }
 
   /**
+   * Process a single CSV file (legacy method for backward compatibility)
+   */
+  private async processSingleCSV(file: File): Promise<NormalizedTransaction[]> {
+    const result = await this.processSingleCSVWithDetails(file);
+    return result.transactions;
+  }
+
+  /**
    * Detect bank format from filename and headers
    */
   private detectBankFormat(filename: string, headers: string[]): BankFormat | null {
     const lowerFilename = filename.toLowerCase();
     const lowerHeaders = headers.map(h => h.toLowerCase());
 
+    console.log(`🔍 Detecting bank format for ${filename}:`, {
+      filename: lowerFilename,
+      headers: lowerHeaders
+    });
+
     for (const format of this.bankFormats) {
       // Check filename patterns
       const filenameMatch = format.patterns.filename.some(pattern => pattern.test(lowerFilename));
       
-      // Check header patterns
+      // Check header patterns - be more flexible
       const requiredHeaders = format.patterns.headers;
-      const headerMatch = requiredHeaders.every(reqHeader => 
-        lowerHeaders.some(h => h.includes(reqHeader.toLowerCase()))
+      const headerMatch = requiredHeaders.some(reqHeader => 
+        lowerHeaders.some(h => h.includes(reqHeader.toLowerCase()) || reqHeader.toLowerCase().includes(h))
       );
 
       if (filenameMatch || headerMatch) {
+        console.log(`✅ Matched ${format.name} format`);
         return format;
       }
+    }
+
+    // If no specific format matches, try to create a universal format
+    console.log(`⚠️ No specific bank format detected, attempting universal format`);
+    
+    // Look for common transaction fields
+    const hasDate = lowerHeaders.some(h => h.includes('date') || h.includes('datum'));
+    const hasAmount = lowerHeaders.some(h => h.includes('amount') || h.includes('value') || h.includes('sum'));
+    const hasDescription = lowerHeaders.some(h => 
+      h.includes('description') || h.includes('detail') || h.includes('particulars') || 
+      h.includes('payee') || h.includes('reference') || h.includes('memo')
+    );
+
+    if (hasDate && hasAmount && hasDescription) {
+      console.log(`✅ Created universal format for ${filename}`);
+      return {
+        name: 'Universal',
+        patterns: {
+          filename: [],
+          headers: []
+        },
+        columnMappings: {
+          date: headers.filter(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('datum')),
+          description: headers.filter(h => {
+            const lower = h.toLowerCase();
+            return lower.includes('description') || lower.includes('detail') || lower.includes('particulars') || 
+                   lower.includes('payee') || lower.includes('reference') || lower.includes('memo');
+          }),
+          amount: headers.filter(h => {
+            const lower = h.toLowerCase();
+            return lower.includes('amount') || lower.includes('value') || lower.includes('sum');
+          }),
+          debit: headers.filter(h => h.toLowerCase().includes('debit')),
+          credit: headers.filter(h => h.toLowerCase().includes('credit'))
+        }
+      };
     }
 
     return null;
   }
 
   /**
-   * Normalize transactions from CSV data using bank format
+   * Normalize transactions from CSV data using bank format with detailed error reporting
    */
-  private normalizeTransactions(
+  private normalizeTransactionsWithDetails(
     csvData: any[], 
     bankFormat: BankFormat, 
     filename: string
-  ): NormalizedTransaction[] {
+  ): {
+    transactions: NormalizedTransaction[];
+    totalRowsProcessed: number;
+    skippedRows: Array<{
+      rowNumber: number;
+      error: string;
+      details?: {
+        dateValue?: string;
+        amountValue?: string;
+        descriptionValue?: string;
+      };
+    }>;
+  } {
     const transactions: NormalizedTransaction[] = [];
+    const skippedRows: Array<{
+      rowNumber: number;
+      error: string;
+      details?: {
+        dateValue?: string;
+        amountValue?: string;
+        descriptionValue?: string;
+      };
+    }> = [];
+    let totalRowsProcessed = 0;
 
-    for (const row of csvData) {
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      const rowNumber = i + 2; // +2 because of header row and 1-based indexing
+      totalRowsProcessed++;
+
       // Skip completely empty rows
       if (!row || Object.values(row).every(val => !val || val.toString().trim() === '')) {
         continue;
@@ -259,12 +376,43 @@ export class UnifiedTransactionProcessor {
           transactions.push(transaction);
         }
       } catch (error: any) {
-        console.warn(`⚠️ Skipping row in ${filename}:`, error.message, row);
+        console.warn(`⚠️ Skipping row ${rowNumber} in ${filename}:`, error.message, row);
+        
+        // Extract field values for detailed error reporting
+        const dateValue = this.findColumnValue(row, bankFormat.columnMappings.date);
+        const amountValue = this.findColumnValue(row, bankFormat.columnMappings.amount);
+        const descriptionValue = this.findColumnValue(row, bankFormat.columnMappings.description);
+        
+        skippedRows.push({
+          rowNumber,
+          error: error.message,
+          details: {
+            dateValue: dateValue || '[empty]',
+            amountValue: amountValue || '[empty]',
+            descriptionValue: descriptionValue || '[empty]'
+          }
+        });
       }
     }
 
-    console.log(`📊 Normalized ${transactions.length} transactions from ${filename}`);
-    return transactions;
+    console.log(`📊 Normalized ${transactions.length} transactions from ${filename} (${skippedRows.length} rows skipped)`);
+    return {
+      transactions,
+      totalRowsProcessed,
+      skippedRows
+    };
+  }
+
+  /**
+   * Normalize transactions from CSV data using bank format (legacy method for backward compatibility)
+   */
+  private normalizeTransactions(
+    csvData: any[], 
+    bankFormat: BankFormat, 
+    filename: string
+  ): NormalizedTransaction[] {
+    const result = this.normalizeTransactionsWithDetails(csvData, bankFormat, filename);
+    return result.transactions;
   }
 
   /**
@@ -279,7 +427,7 @@ export class UnifiedTransactionProcessor {
     const dateValue = this.findColumnValue(row, bankFormat.columnMappings.date);
     const normalizedDate = this.normalizeDate(dateValue);
     if (!normalizedDate) {
-      throw new Error(`Invalid or missing date: ${dateValue}`);
+      throw new Error(`Invalid date format: "${dateValue || '[empty]'}" - Expected formats: DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD, DD MMM YYYY, DD-MM-YY`);
     }
 
     // Extract description
@@ -311,23 +459,23 @@ export class UnifiedTransactionProcessor {
         amount = creditAmount;
         isIncome = true;
       } else {
-        throw new Error('No amount found in debit or credit columns');
+        throw new Error(`No amount found in debit or credit columns - Debit: "${debitValue || '[empty]'}", Credit: "${creditValue || '[empty]'}"`);
       }
-    } else {
-      // Single amount column
-      const amountValue = this.findColumnValue(row, bankFormat.columnMappings.amount);
-      if (!amountValue) {
-        throw new Error('Missing amount');
-      }
+          } else {
+        // Single amount column
+        const amountValue = this.findColumnValue(row, bankFormat.columnMappings.amount);
+        if (!amountValue) {
+          throw new Error(`Missing amount - Expected columns: [${bankFormat.columnMappings.amount.join(', ')}]`);
+        }
 
-      const parsedAmount = this.parseAmount(amountValue);
-      if (parsedAmount === 0) {
-        return null; // Skip zero-amount transactions
-      }
+        const parsedAmount = this.parseAmount(amountValue);
+        if (parsedAmount === 0) {
+          return null; // Skip zero-amount transactions
+        }
 
-      amount = Math.abs(parsedAmount);
-      isIncome = parsedAmount > 0;
-    }
+        amount = Math.abs(parsedAmount);
+        isIncome = parsedAmount > 0;
+      }
 
     // Extract merchant from description
     const merchant = this.extractMerchant(description.toString());
@@ -423,7 +571,7 @@ export class UnifiedTransactionProcessor {
       // Fallback failed
     }
     
-    console.error(`❌ Could not parse date: "${cleanDateStr}" - Skipping row`);
+    console.error(`❌ Could not parse date: "${cleanDateStr}" - Tried formats: DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD, DD MMM YYYY, DD-MM-YY, DD-MM-YYYY, DD.MM.YYYY, MM/DD/YYYY, YYYY/MM/DD`);
     return null;
   }
 
