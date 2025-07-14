@@ -1,837 +1,118 @@
-/**
- * Unified Transaction Processing System
- * Handles CSV upload, parsing, normalization, duplicate detection, and Claude categorization
- * for NZ banks (ANZ, ASB, Westpac, Kiwibank, BNZ)
- */
+import { parse as parseDate, isValid as isValidDate } from 'date-fns';
 
-import Papa from 'papaparse';
-import { parse, isValid } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
-
-// Core transaction interface - unified schema
-export interface NormalizedTransaction {
-  date: string; // YYYY-MM-DD format
+export interface Transaction {
+  date: string;
+  amount: number;
+  isIncome: boolean;
   description: string;
-  amount: number; // Always positive, sign determined by is_income
-  is_income: boolean;
-  merchant?: string;
-  category?: string;
-  confidence?: number;
-  source_bank: string;
-  raw_data: any; // Original CSV row for debugging
+  [key: string]: any;
 }
-
-// Claude categorization result
-export interface CategorizationResult {
-  category: string;
-  budgetGroup: 'needs' | 'wants' | 'savings';
-  excludeFromBudget: boolean; // For transfers/reversals
-  confidence: number;
-  reasoning: string;
-}
-
-// Bank format definitions
-interface BankFormat {
-  name: string;
-  patterns: {
-    filename: RegExp[];
-    headers: string[];
-  };
+export interface BankFormat {
   columnMappings: {
     date: string[];
-    description: string[];
     amount: string[];
     debit?: string[];
     credit?: string[];
+    description: string[];
   };
-}
-
-// Configuration interface for processor instances
-export interface ProcessorConfig {
-  supportedBanks?: string[];
-  defaultBankFormat?: string;
-  customBankFormats?: BankFormat[];
+  [key: string]: any;
 }
 
 export class UnifiedTransactionProcessor {
-  private bankFormats: BankFormat[] = [
-    {
-      name: 'ANZ',
-      patterns: {
-        filename: [/anz/i],
-        headers: ['Date', 'Details', 'Amount']
-      },
-      columnMappings: {
-        date: ['Date', 'Transaction Date'],
-        description: ['Details', 'Description', 'Transaction Details'],
-        amount: ['Amount'],
-        debit: ['Debit'],
-        credit: ['Credit']
-      }
-    },
-    {
-      name: 'ASB',
-      patterns: {
-        filename: [/asb/i],  
-        headers: ['Date', 'Particulars', 'Amount']
-      },
-      columnMappings: {
-        date: ['Date', 'Transaction Date'],
-        description: ['Particulars', 'Description'],
-        amount: ['Amount'],
-        debit: ['Debit'],
-        credit: ['Credit']
-      }
-    },
-    {
-      name: 'Westpac',
-      patterns: {
-        filename: [/westpac/i],
-        headers: ['Date', 'Transaction Details', 'Amount']
-      },
-      columnMappings: {
-        date: ['Date', 'Processing Date'],
-        description: ['Transaction Details', 'Description'],
-        amount: ['Amount'],
-        debit: ['Debit Amount'],
-        credit: ['Credit Amount']
-      }
-    },
-    {
-      name: 'Kiwibank',
-      patterns: {
-        filename: [/kiwibank/i, /kiwibank/i],
-        headers: ['Date', 'Payee', 'Amount']
-      },
-      columnMappings: {
-        date: ['Date', 'Transaction Date'],
-        description: ['Payee', 'Description', 'Details'],
-        amount: ['Amount'],
-        debit: ['Debit'],
-        credit: ['Credit']
-      }
-    },
-    {
-      name: 'BNZ',
-      patterns: {
-        filename: [/bnz/i],
-        headers: ['Date', 'Description', 'Amount']
-      },
-      columnMappings: {
-        date: ['Date', 'Transaction Date'],
-        description: ['Description', 'Details'],
-        amount: ['Amount'],
-        debit: ['Debit Amount'],
-        credit: ['Credit Amount']
-      }
-    }
-  ];
+  constructor(public bankFormat: BankFormat) {}
 
-  private config: ProcessorConfig;
-
-  constructor(config: ProcessorConfig = {}) {
-    this.config = config;
-    
-    // Apply custom bank formats if provided
-    if (config.customBankFormats) {
-      this.bankFormats.push(...config.customBankFormats);
+  parseAmount(value: string): number {
+    if (!value) return 0;
+    let clean = value.replace(/[$,()\s]/g, '');
+    if (clean === '') return 0;
+    if (/\(\d+(\.\d+)?\)/.test(value)) {
+      clean = '-' + clean.replace(/[()]/g, '');
     }
-    
-    // Filter to supported banks if specified
-    if (config.supportedBanks) {
-      this.bankFormats = this.bankFormats.filter(format => 
-        config.supportedBanks!.includes(format.name)
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  findColumnValue(row: any, columns: string[]): string {
+    for (const col of columns) {
+      if (row.hasOwnProperty(col)) {
+        return (row[col] ?? '').toString().trim();
+      }
+      const key = Object.keys(row).find(
+        k => k.trim().toLowerCase() === col.trim().toLowerCase()
       );
+      if (key) return (row[key] ?? '').toString().trim();
     }
+    return '';
   }
 
-  /**
-   * Process multiple CSV files and return normalized transactions
-   */
-  async processCSVFiles(files: FileList, userId: string): Promise<{
-    transactions: NormalizedTransaction[];
-    summary: {
-      totalFiles: number;
-      totalTransactions: number;
-      duplicatesSkipped: number;
-      errors: string[];
-      warnings: string[];
-    };
-  }> {
-    const allTransactions: NormalizedTransaction[] = [];
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    let totalTransactions = 0;
-
-    console.log(`🏦 Processing ${files.length} CSV files...`);
-
-    // Process each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`📄 Processing file ${i + 1}/${files.length}: ${file.name}`);
-
-      try {
-        const fileTransactions = await this.processSingleCSV(file);
-        allTransactions.push(...fileTransactions);
-        totalTransactions += fileTransactions.length;
-      } catch (error: any) {
-        console.error(`❌ Error processing ${file.name}:`, error);
-        errors.push(`${file.name}: ${error.message}`);
-      }
-    }
-
-    // Remove duplicates (including existing ones in database)
-    const uniqueTransactions = await this.removeDuplicates(allTransactions, userId);
-    const duplicatesSkipped = allTransactions.length - uniqueTransactions.length;
-
-    console.log(`✅ Processed ${files.length} files: ${totalTransactions} total, ${duplicatesSkipped} duplicates skipped`);
-
-    return {
-      transactions: uniqueTransactions,
-      summary: {
-        totalFiles: files.length,
-        totalTransactions,
-        duplicatesSkipped,
-        errors,
-        warnings
-      }
-    };
-  }
-
-  /**
-   * Process a single CSV file
-   */
-  private async processSingleCSV(file: File): Promise<NormalizedTransaction[]> {
-    return new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header) => header.trim(), // Clean headers
-        complete: (results) => {
-          try {
-            // Detect bank format
-            const bankFormat = this.detectBankFormat(file.name, results.meta.fields || []);
-            if (!bankFormat) {
-              reject(new Error(`Unsupported bank format in ${file.name}. Expected ANZ, ASB, Westpac, Kiwibank, or BNZ format.`));
-              return;
-            }
-
-            console.log(`🏛️ Detected ${bankFormat.name} format for ${file.name}`);
-
-            // Process rows
-            const transactions = this.normalizeTransactions(
-              results.data as any[], 
-              bankFormat, 
-              file.name
-            );
-
-            resolve(transactions);
-          } catch (error: any) {
-            reject(new Error(`Error processing ${file.name}: ${error.message}`));
-          }
-        },
-        error: (error) => {
-          reject(new Error(`CSV parsing error in ${file.name}: ${error.message}`));
-        }
-      });
-    });
-  }
-
-  /**
-   * Detect bank format from filename and headers
-   */
-  private detectBankFormat(filename: string, headers: string[]): BankFormat | null {
-    const lowerFilename = filename.toLowerCase();
-    const lowerHeaders = headers.map(h => h.toLowerCase());
-
-    for (const format of this.bankFormats) {
-      // Check filename patterns
-      const filenameMatch = format.patterns.filename.some(pattern => pattern.test(lowerFilename));
-      
-      // Check header patterns
-      const requiredHeaders = format.patterns.headers;
-      const headerMatch = requiredHeaders.every(reqHeader => 
-        lowerHeaders.some(h => h.includes(reqHeader.toLowerCase()))
-      );
-
-      if (filenameMatch || headerMatch) {
-        return format;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Normalize transactions from CSV data using bank format
-   */
-  private normalizeTransactions(
-    csvData: any[], 
-    bankFormat: BankFormat, 
-    filename: string
-  ): NormalizedTransaction[] {
-    const transactions: NormalizedTransaction[] = [];
-
-    for (const row of csvData) {
-      // Skip completely empty rows
-      if (!row || Object.values(row).every(val => !val || val.toString().trim() === '')) {
-        continue;
-      }
-
-      try {
-        const transaction = this.normalizeTransaction(row, bankFormat, filename);
-        if (transaction) {
-          transactions.push(transaction);
-        }
-      } catch (error: any) {
-        console.warn(`⚠️ Skipping row in ${filename}:`, error.message, row);
-      }
-    }
-
-    console.log(`📊 Normalized ${transactions.length} transactions from ${filename}`);
-    return transactions;
-  }
-
-  /**
-   * Normalize a single transaction
-   */
-  private normalizeTransaction(
-    row: any, 
-    bankFormat: BankFormat, 
-    filename: string
-  ): NormalizedTransaction | null {
-    // Extract date
-    const dateValue = this.findColumnValue(row, bankFormat.columnMappings.date);
-    const normalizedDate = this.normalizeDate(dateValue);
-    if (!normalizedDate) {
-      throw new Error(`Invalid or missing date: ${dateValue}`);
-    }
-
-    // Extract description
-    const description = this.findColumnValue(row, bankFormat.columnMappings.description);
-    if (!description || description.trim() === '') {
-      throw new Error('Missing description');
-    }
-
-    // Extract amount - handle both single amount column and separate debit/credit
+  normalizeTransaction(row: any): Transaction | null {
     let amount = 0;
     let isIncome = false;
+    const amountValue = this.findColumnValue(row, this.bankFormat.columnMappings.amount);
 
-    if (bankFormat.columnMappings.debit && bankFormat.columnMappings.credit) {
-      // Separate debit/credit columns
-      const debitValue = this.findColumnValue(row, bankFormat.columnMappings.debit) || '0';
-      const creditValue = this.findColumnValue(row, bankFormat.columnMappings.credit) || '0';
-      
-      const debitAmount = this.parseAmount(debitValue);
-      const creditAmount = this.parseAmount(creditValue);
-
-      if (debitAmount > 0 && creditAmount > 0) {
-        throw new Error('Both debit and credit have values - ambiguous transaction');
-      }
-
-      if (debitAmount > 0) {
-        amount = debitAmount;
-        isIncome = false;
-      } else if (creditAmount > 0) {
-        amount = creditAmount;
-        isIncome = true;
-      } else {
-        throw new Error('No amount found in debit or credit columns');
-      }
-    } else {
-      // Single amount column
-      const amountValue = this.findColumnValue(row, bankFormat.columnMappings.amount);
-      if (!amountValue) {
-        throw new Error('Missing amount');
-      }
-
+    if (amountValue && amountValue !== '' && amountValue !== '0') {
       const parsedAmount = this.parseAmount(amountValue);
-      if (parsedAmount === 0) {
-        return null; // Skip zero-amount transactions
-      }
-
+      if (parsedAmount === 0) return null;
       amount = Math.abs(parsedAmount);
       isIncome = parsedAmount > 0;
+    } else {
+      const debitValue = this.findColumnValue(row, this.bankFormat.columnMappings.debit || []);
+      const creditValue = this.findColumnValue(row, this.bankFormat.columnMappings.credit || []);
+      if ((debitValue && debitValue !== '' && debitValue !== '0') ||
+          (creditValue && creditValue !== '' && creditValue !== '0')) {
+        const debitAmount = this.parseAmount(debitValue || '0');
+        const creditAmount = this.parseAmount(creditValue || '0');
+        if (debitAmount > 0 && creditAmount > 0) {
+          throw new Error('Both debit and credit have values - ambiguous transaction');
+        }
+        if (debitAmount > 0) {
+          amount = debitAmount;
+          isIncome = false;
+        } else if (creditAmount > 0) {
+          amount = creditAmount;
+          isIncome = true;
+        } else {
+          throw new Error(`No amount found in debit or credit columns - Debit: "${debitValue || '[empty]'}", Credit: "${creditValue || '[empty]'}"`);
+        }
+      } else {
+        const availableColumns = Object.keys(row).join(', ');
+        const expectedColumns = [
+          ...(this.bankFormat.columnMappings.amount || []),
+          ...(this.bankFormat.columnMappings.debit || []),
+          ...(this.bankFormat.columnMappings.credit || [])
+        ].join(', ');
+        throw new Error(`No amount column detected. Available columns: [${availableColumns}]. Expected: [${expectedColumns}]`);
+      }
     }
 
-    // Extract merchant from description
-    const merchant = this.extractMerchant(description.toString());
+    const dateValue = this.findColumnValue(row, this.bankFormat.columnMappings.date);
+    let dateParsed: Date | null = null;
+    let dateFormats = [
+      'dd/MM/yyyy', 'yyyy-MM-dd', 'dd MMM yyyy', 'dd-MM-yyyy', 'dd-MM-yy', 'dd.MM.yyyy', 'yyyyMMdd'
+    ];
+    for (const fmt of dateFormats) {
+      const d = parseDate(dateValue, fmt, new Date());
+      if (isValidDate(d)) {
+        dateParsed = d;
+        break;
+      }
+    }
+    if (!dateParsed) {
+      throw new Error(`Invalid date value: "${dateValue}" - expected one of formats [${dateFormats.join(', ')}]`);
+    }
+
+    let description = '';
+    for (const descCol of this.bankFormat.columnMappings.description) {
+      const v = this.findColumnValue(row, [descCol]);
+      if (v) description += v + ' ';
+    }
+    description = description.trim();
 
     return {
-      date: normalizedDate,
-      description: description.toString().trim().substring(0, 255), // Limit description length
+      date: dateParsed.toISOString(),
       amount,
-      is_income: isIncome,
-      merchant,
-      source_bank: bankFormat.name,
-      raw_data: row
+      isIncome,
+      description
     };
-  }
-
-  /**
-   * Find column value by trying multiple possible column names
-   */
-  private findColumnValue(row: any, possibleColumns: string[]): string | null {
-    for (const col of possibleColumns) {
-      // Try exact match first
-      if (row[col] !== undefined && row[col] !== null && row[col] !== '') {
-        return row[col].toString().trim();
-      }
-      
-      // Try case-insensitive match
-      const keys = Object.keys(row);
-      const matchingKey = keys.find(key => key.toLowerCase().includes(col.toLowerCase()));
-      if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null && row[matchingKey] !== '') {
-        return row[matchingKey].toString().trim();
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Robust date parser using date-fns for NZ bank CSV formats
-   * Handles: dd/MM/yyyy (ANZ), yyyy-MM-dd (ASB), dd MMM yyyy (Kiwibank), dd-MM-yy (Westpac)
-   */
-  private tryParseDate(dateStr: string | null): string | null {
-    if (!dateStr?.trim()) {
-      console.warn('❌ Empty date string provided');
-      return null;
-    }
-
-    const cleanDateStr = String(dateStr).trim();
-    console.log(`🗓️ Parsing date: "${cleanDateStr}"`);
-    
-    // NZ bank date formats in order of preference
-    const formats = [
-      'dd/MM/yyyy',    // ANZ: 12/05/2024
-      'yyyy-MM-dd',    // ASB: 2024-05-12  
-      'dd MMM yyyy',   // Kiwibank: 12 May 2024
-      'dd-MM-yy',      // Westpac: 12-05-24
-      'dd-MM-yyyy',    // Alternative format
-      'dd.MM.yyyy',    // Dot separator
-      'MM/dd/yyyy',    // US format fallback
-      'yyyy/MM/dd'     // Alternative ISO
-    ];
-
-    // Try each format using date-fns
-    for (const format of formats) {
-      try {
-        const parsedDate = parse(cleanDateStr, format, new Date());
-        
-        // Validate the parsed date
-        if (isValid(parsedDate) && 
-            parsedDate.getFullYear() >= 1900 && 
-            parsedDate.getFullYear() <= 2100) {
-          
-          const isoDate = parsedDate.toISOString().split('T')[0];
-          console.log(`✅ Date parsed successfully with format "${format}": ${isoDate}`);
-          return isoDate;
-        }
-      } catch (error) {
-        // Continue to next format
-        continue;
-      }
-    }
-    
-    // Fallback: try native Date parsing for edge cases
-    try {
-      const fallbackDate = new Date(cleanDateStr);
-      if (isValid(fallbackDate) && 
-          fallbackDate.getFullYear() >= 1900 && 
-          fallbackDate.getFullYear() <= 2100) {
-        
-        const isoDate = fallbackDate.toISOString().split('T')[0];
-        console.log(`✅ Date parsed with fallback: ${isoDate}`);
-        return isoDate;
-      }
-    } catch (error) {
-      // Fallback failed
-    }
-    
-    console.error(`❌ Could not parse date: "${cleanDateStr}" - Skipping row`);
-    return null;
-  }
-
-  /**
-   * Legacy method - redirects to tryParseDate for compatibility
-   */
-  private normalizeDate(dateStr: string | null): string | null {
-    return this.tryParseDate(dateStr);
-  }
-
-  /**
-   * Parse amount string to number
-   */
-  private parseAmount(amountStr: string): number {
-    if (!amountStr) return 0;
-
-    // Remove currency symbols, commas, and extra spaces
-    let cleaned = amountStr.toString().replace(/[$,\s]/g, '');
-
-    // Handle negative amounts in parentheses
-    if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
-      cleaned = '-' + cleaned.slice(1, -1);
-    }
-
-    // Handle negative amounts with minus sign
-    const isNegative = cleaned.startsWith('-');
-    if (isNegative) {
-      cleaned = cleaned.substring(1);
-    }
-
-    const parsed = parseFloat(cleaned) || 0;
-    return isNegative ? -parsed : parsed;
-  }
-
-  /**
-   * Extract merchant name from description
-   */
-  private extractMerchant(description: string): string | undefined {
-    // Remove common transaction prefixes
-    const cleaned = description
-      .replace(/^(EFTPOS|VISA|MASTERCARD|PURCHASE|TST\*|SQ \*|AMZN MKTP|PAYPAL \*)\s*/i, '')
-      .replace(/\*\w+$/, '') // Remove trailing reference codes
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Extract meaningful merchant name (first 50 chars)
-    const merchant = cleaned.substring(0, 50).trim();
-    return merchant.length > 0 ? merchant : undefined;
-  }
-
-  /**
-   * Remove duplicates including existing ones in database
-   */
-  private async removeDuplicates(
-    transactions: NormalizedTransaction[], 
-    userId: string
-  ): Promise<NormalizedTransaction[]> {
-    console.log(`🔍 Checking for duplicates among ${transactions.length} transactions...`);
-
-    // Get existing transactions from database for the date range
-    const dates = transactions.map(t => t.date);
-    const minDate = Math.min(...dates.map(d => new Date(d).getTime()));
-    const maxDate = Math.max(...dates.map(d => new Date(d).getTime()));
-
-    const { data: existingTransactions } = await supabase
-      .from('transactions')
-      .select('transaction_date, description, amount')
-      .eq('user_id', userId)
-      .gte('transaction_date', new Date(minDate).toISOString().split('T')[0])
-      .lte('transaction_date', new Date(maxDate).toISOString().split('T')[0]);
-
-    // Create a set of existing transaction signatures
-    const existingSignatures = new Set(
-      (existingTransactions || []).map(t => 
-        `${t.transaction_date}|${t.description}|${Math.abs(t.amount)}`
-      )
-    );
-
-    // Filter out duplicates
-    const uniqueTransactions: NormalizedTransaction[] = [];
-    const seenSignatures = new Set<string>();
-
-    for (const transaction of transactions) {
-      const signature = `${transaction.date}|${transaction.description}|${transaction.amount}`;
-      
-      if (existingSignatures.has(signature) || seenSignatures.has(signature)) {
-        console.log(`🔄 Skipping duplicate: ${transaction.description} - $${transaction.amount}`);
-        continue;
-      }
-
-      seenSignatures.add(signature);
-      uniqueTransactions.push(transaction);
-    }
-
-    console.log(`✅ Filtered ${transactions.length} -> ${uniqueTransactions.length} unique transactions`);
-    return uniqueTransactions;
-  }
-
-  /**
-   * Enhanced Claude categorization with retry logic and mobile optimization
-   */
-  async categorizeWithClaude(
-    transactions: NormalizedTransaction[],
-    onProgress?: (completed: number, total: number) => void
-  ): Promise<NormalizedTransaction[]> {
-    console.log(`🧠 Starting enhanced Claude categorization for ${transactions.length} transactions...`);
-    
-    const categorizedTransactions: NormalizedTransaction[] = [];
-    const batchSize = 20; // Optimized batch size for mobile performance
-    const maxRetries = 2;
-    
-    for (let i = 0; i < transactions.length; i += batchSize) {
-      const batch = transactions.slice(i, i + batchSize);
-      const batchNumber = Math.floor(i/batchSize) + 1;
-      const totalBatches = Math.ceil(transactions.length/batchSize);
-      
-      console.log(`🔄 Processing batch ${batchNumber}/${totalBatches} (${batch.length} transactions)`);
-      
-      let retryCount = 0;
-      let batchResults: NormalizedTransaction[] = [];
-      
-      while (retryCount <= maxRetries) {
-        try {
-          // Batch categorization prompt for efficiency
-          const batchPrompt = this.createBatchCategorizationPrompt(batch);
-          
-          const { data, error } = await supabase.functions.invoke('claude-ai-coach', {
-            body: { 
-              message: batchPrompt,
-              type: 'batch_transaction_categorization'
-            }
-          });
-
-          if (error) {
-            throw new Error(`Claude API error: ${error.message}`);
-          }
-
-          // Parse batch response
-          batchResults = this.parseBatchCategorizationResponse(data.response, batch);
-          break; // Success, exit retry loop
-          
-        } catch (error) {
-          retryCount++;
-          console.warn(`Batch ${batchNumber} attempt ${retryCount} failed:`, error);
-          
-          if (retryCount > maxRetries) {
-            console.error(`Batch ${batchNumber} failed after ${maxRetries} retries, using fallback categorization`);
-            batchResults = batch.map(tx => this.createFallbackTransaction(tx));
-          } else {
-            // Exponential backoff for retries
-            const delay = Math.pow(2, retryCount) * 1000;
-            console.log(`Retrying batch ${batchNumber} in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
-      }
-      
-      categorizedTransactions.push(...batchResults);
-      onProgress?.(categorizedTransactions.length, transactions.length);
-      
-      // Rate limiting delay for mobile networks
-      if (i + batchSize < transactions.length) {
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-    }
-    
-    console.log(`✅ Enhanced Claude categorization complete: ${categorizedTransactions.length} transactions processed`);
-    return categorizedTransactions;
-  }
-
-  /**
-   * Create efficient batch categorization prompt
-   */
-  private createBatchCategorizationPrompt(transactions: NormalizedTransaction[]): string {
-    const transactionList = transactions.map((tx, index) => 
-      `${index + 1}. "${tx.description}" | $${tx.amount} | ${tx.is_income ? 'Income' : 'Expense'} | ${tx.source_bank}`
-    ).join('\n');
-
-    return `Categorize these ${transactions.length} New Zealand banking transactions. Return a JSON array with exactly ${transactions.length} objects, each containing: {"index": number, "category": string, "reasoning": string}
-
-Categories for expenses: Housing, Transportation, Food & Dining, Utilities, Healthcare, Entertainment, Shopping, Personal Care, Education, Other
-Categories for income: Salary, Investment Income, Other Income
-Special: Transfer (for internal transfers/reversals)
-
-Transactions:
-${transactionList}
-
-Return only the JSON array, no other text.`;
-  }
-
-  /**
-   * Parse batch categorization response with fallback
-   */
-  private parseBatchCategorizationResponse(
-    response: string, 
-    originalBatch: NormalizedTransaction[]
-  ): NormalizedTransaction[] {
-    try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        throw new Error('No JSON array found in response');
-      }
-
-      const categories = JSON.parse(jsonMatch[0]);
-      
-      if (!Array.isArray(categories) || categories.length !== originalBatch.length) {
-        throw new Error(`Expected ${originalBatch.length} categories, got ${categories.length}`);
-      }
-
-      return originalBatch.map((transaction, index) => {
-        const categoryData = categories.find(cat => cat.index === index + 1) || categories[index];
-        
-        // Check for transfers/reversals
-        if (this.isTransferOrReversal(transaction.description)) {
-          return {
-            ...transaction,
-            category: 'Transfer',
-            confidence: 0.9
-          };
-        }
-
-        return {
-          ...transaction,
-          category: categoryData?.category || 'Uncategorised',
-          confidence: categoryData?.category ? 0.85 : 0.3
-        };
-      });
-      
-    } catch (error) {
-      console.error('Failed to parse batch categorization response:', error);
-      return originalBatch.map(tx => this.createFallbackTransaction(tx));
-    }
-  }
-
-  /**
-   * Create fallback transaction with rule-based categorization
-   */
-  private createFallbackTransaction(transaction: NormalizedTransaction): NormalizedTransaction {
-    const fallbackResult = this.fallbackCategorization(transaction);
-    return {
-      ...transaction,
-      category: fallbackResult.category,
-      confidence: fallbackResult.confidence
-    };
-  }
-
-  /**
-   * Check if transaction is a transfer or reversal that should be excluded
-   */
-  private isTransferOrReversal(description: string): boolean {
-    const lowerDesc = description.toLowerCase();
-    const transferPatterns = [
-      'transfer', 'trnsfr', 'tfr', 'xfer',
-      'reversal', 'reverse', 'refund', 'credit adjustment',
-      'deposit correction', 'withdrawal correction',
-      'account fee reversal', 'duplicate transaction'
-    ];
-    
-    return transferPatterns.some(pattern => lowerDesc.includes(pattern));
-  }
-
-  /**
-   * Extract category from Claude response
-   */
-  private extractCategoryFromResponse(claudeResponse: string, transaction: NormalizedTransaction): string {
-    try {
-      // Try to extract category from JSON response
-      const jsonMatch = claudeResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return parsed.category || (transaction.is_income ? 'Other Income' : 'Uncategorised');
-      }
-      
-      // Fallback to text parsing
-      if (transaction.is_income) {
-        return claudeResponse.includes('salary') ? 'Salary' : 'Other Income';
-      }
-      
-      return 'Uncategorised';
-    } catch (error) {
-      console.warn('Failed to parse Claude response:', error);
-      return transaction.is_income ? 'Other Income' : 'Uncategorised';
-    }
-  }
-
-  /**
-   * Fallback categorization when Claude fails
-   */
-  private fallbackCategorization(transaction: NormalizedTransaction): CategorizationResult {
-    const desc = transaction.description.toLowerCase();
-    
-    // Check if it's a transfer/reversal first
-    if (this.isTransferOrReversal(transaction.description)) {
-      return {
-        category: 'Transfer',
-        budgetGroup: 'wants',
-        excludeFromBudget: true,
-        confidence: 0.9,
-        reasoning: 'Detected transfer/reversal pattern'
-      };
-    }
-    
-    // Income categorization
-    if (transaction.is_income) {
-      if (desc.includes('salary') || desc.includes('wage') || desc.includes('pay')) {
-        return { 
-          category: 'Salary', 
-          budgetGroup: 'savings',
-          excludeFromBudget: false,
-          confidence: 0.8,
-          reasoning: 'Salary/wage pattern detected'
-        };
-      }
-      if (desc.includes('dividend') || desc.includes('interest') || desc.includes('investment')) {
-        return { 
-          category: 'Investment Income', 
-          budgetGroup: 'savings',
-          excludeFromBudget: false,
-          confidence: 0.8,
-          reasoning: 'Investment income pattern detected'
-        };
-      }
-      return { 
-        category: 'Other Income', 
-        budgetGroup: 'savings',
-        excludeFromBudget: false,
-        confidence: 0.6,
-        reasoning: 'Generic income classification'
-      };
-    }
-    
-    // Expense categorization with NZ-specific patterns
-    const categoryMap = {
-      'Groceries': ['countdown', 'paknsave', 'new world', 'woolworths', 'grocery', 'supermarket', 'fresh choice'],
-      'Transportation': ['bp', 'shell', 'z energy', 'caltex', 'mobil', 'uber', 'taxi', 'bus', 'train'],
-      'Dining Out': ['mcdonald', 'kfc', 'subway', 'pizza', 'restaurant', 'cafe', 'takeaway'],
-      'Housing & Utilities': ['rent', 'mortgage', 'power', 'gas', 'water', 'internet', 'phone', 'rates'],
-      'Healthcare': ['pharmacy', 'chemist', 'doctor', 'medical', 'dental', 'hospital'],
-      'Entertainment': ['netflix', 'spotify', 'cinema', 'movie', 'entertainment', 'games'],
-      'Shopping': ['warehouse', 'kmart', 'target', 'amazon', 'shopping', 'retail']
-    };
-    
-    for (const [category, keywords] of Object.entries(categoryMap)) {
-      if (keywords.some(keyword => desc.includes(keyword))) {
-        const budgetGroup = ['Housing & Utilities', 'Groceries', 'Healthcare'].includes(category) ? 'needs' : 'wants';
-        return { 
-          category, 
-          budgetGroup: budgetGroup as 'needs' | 'wants',
-          excludeFromBudget: false,
-          confidence: 0.7,
-          reasoning: `Matched keyword patterns for ${category}`
-        };
-      }
-    }
-    
-    return { 
-      category: 'Uncategorised', 
-      budgetGroup: 'wants',
-      excludeFromBudget: false,
-      confidence: 0.3,
-      reasoning: 'No matching patterns found'
-    };
-  }
-
-  /**
-   * Get supported bank formats
-   */
-  getSupportedBanks(): string[] {
-    return this.bankFormats.map(format => format.name);
-  }
-
-  /**
-   * Create a processor instance for a specific bank
-   */
-  static forBank(bankName: string): UnifiedTransactionProcessor {
-    return new UnifiedTransactionProcessor({ supportedBanks: [bankName] });
-  }
-
-  /**
-   * Create a processor instance for multiple banks
-   */
-  static forBanks(bankNames: string[]): UnifiedTransactionProcessor {
-    return new UnifiedTransactionProcessor({ supportedBanks: bankNames });
   }
 }
