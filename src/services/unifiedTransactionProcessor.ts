@@ -7,7 +7,6 @@ export interface Transaction {
   description: string;
   [key: string]: any;
 }
-
 export interface BankFormat {
   columnMappings: {
     date: string[];
@@ -24,14 +23,11 @@ export class UnifiedTransactionProcessor {
 
   parseAmount(value: string): number {
     if (!value) return 0;
-    // Remove currency symbols, spaces, commas, parentheses for negatives, etc.
     let clean = value.replace(/[$,()\s]/g, '');
     if (clean === '') return 0;
-    // Handle parentheses for negatives: (123.45)
     if (/\(\d+(\.\d+)?\)/.test(value)) {
       clean = '-' + clean.replace(/[()]/g, '');
     }
-    // Parse as float
     const parsed = parseFloat(clean);
     return isNaN(parsed) ? 0 : parsed;
   }
@@ -41,7 +37,6 @@ export class UnifiedTransactionProcessor {
       if (row.hasOwnProperty(col)) {
         return (row[col] ?? '').toString().trim();
       }
-      // Also try case-insensitive match
       const key = Object.keys(row).find(
         k => k.trim().toLowerCase() === col.trim().toLowerCase()
       );
@@ -51,35 +46,25 @@ export class UnifiedTransactionProcessor {
   }
 
   normalizeTransaction(row: any): Transaction | null {
-    // --- Extract Amount ---
     let amount = 0;
     let isIncome = false;
-
-    // 1. Single Amount column (most NZ banks)
     const amountValue = this.findColumnValue(row, this.bankFormat.columnMappings.amount);
 
     if (amountValue && amountValue !== '' && amountValue !== '0') {
       const parsedAmount = this.parseAmount(amountValue);
-      if (parsedAmount === 0) {
-        return null; // Skip zero-amount
-      }
+      if (parsedAmount === 0) return null;
       amount = Math.abs(parsedAmount);
       isIncome = parsedAmount > 0;
     } else {
-      // 2. Fallback: debit/credit columns (less common)
       const debitValue = this.findColumnValue(row, this.bankFormat.columnMappings.debit || []);
       const creditValue = this.findColumnValue(row, this.bankFormat.columnMappings.credit || []);
-
       if ((debitValue && debitValue !== '' && debitValue !== '0') ||
           (creditValue && creditValue !== '' && creditValue !== '0')) {
-
         const debitAmount = this.parseAmount(debitValue || '0');
         const creditAmount = this.parseAmount(creditValue || '0');
-
         if (debitAmount > 0 && creditAmount > 0) {
           throw new Error('Both debit and credit have values - ambiguous transaction');
         }
-
         if (debitAmount > 0) {
           amount = debitAmount;
           isIncome = false;
@@ -90,7 +75,6 @@ export class UnifiedTransactionProcessor {
           throw new Error(`No amount found in debit or credit columns - Debit: "${debitValue || '[empty]'}", Credit: "${creditValue || '[empty]'}"`);
         }
       } else {
-        // 3. No amount found: critical error
         const availableColumns = Object.keys(row).join(', ');
         const expectedColumns = [
           ...(this.bankFormat.columnMappings.amount || []),
@@ -101,7 +85,6 @@ export class UnifiedTransactionProcessor {
       }
     }
 
-    // --- Extract Date ---
     const dateValue = this.findColumnValue(row, this.bankFormat.columnMappings.date);
     let dateParsed: Date | null = null;
     let dateFormats = [
@@ -118,7 +101,6 @@ export class UnifiedTransactionProcessor {
       throw new Error(`Invalid date value: "${dateValue}" - expected one of formats [${dateFormats.join(', ')}]`);
     }
 
-    // --- Extract Description ---
     let description = '';
     for (const descCol of this.bankFormat.columnMappings.description) {
       const v = this.findColumnValue(row, [descCol]);
