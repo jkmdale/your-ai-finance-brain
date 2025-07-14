@@ -27,6 +27,7 @@ interface Transaction {
   external_id: string;
   created_at: string;
   updated_at: string;
+  tags: string[];
 }
 
 const corsHeaders = {
@@ -171,16 +172,10 @@ serve(async (req) => {
           let transactionDate: string;
           let dateWarning: string | undefined;
           
-<<<<<<< HEAD
-          const dateValue = getColumnValue(values, headers, columnMapping.date);
-          
-          try {
-=======
           const dateValue = getColumnValue(cleanedRow, headers, columnMapping.date);
           
           try {
             const dateResult = parseDate(dateValue, rowNumber);
->>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
             transactionDate = dateResult.date;
             if (dateResult.warning) {
               dateWarning = dateResult.warning;
@@ -209,13 +204,6 @@ serve(async (req) => {
             continue; // Skip this row but don't treat as critical error
           }
           
-<<<<<<< HEAD
-          }
-
-          // Extract description and merchant properly
-          const description = getColumnValue(values, headers, columnMapping.description);
-          const merchant = getColumnValue(values, headers, columnMapping.merchant);
-=======
           // Enhanced amount parsing
           const amountValue = getColumnValue(cleanedRow, headers, columnMapping.amount);
           const amountStr = amountValue.replace(/[$,\s]/g, '');
@@ -228,7 +216,6 @@ serve(async (req) => {
           // Extract description and merchant properly
           const description = getColumnValue(cleanedRow, headers, columnMapping.description);
           const merchant = getColumnValue(cleanedRow, headers, columnMapping.merchant);
->>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
           
           // Determine best display text (prioritize merchant over card numbers)
           const displayText = getBestDisplayText(merchant, description);
@@ -238,18 +225,16 @@ serve(async (req) => {
             user_id: user.id,
             account_id: accountId,
             transaction_date: transactionDate,
-<<<<<<< HEAD
-=======
             description: displayText.substring(0, 255),
             amount: Math.abs(amount),
             is_income: amount > 0,
             category_id: null, // Will be set by categorization
             merchant: merchant && merchant.trim() ? merchant.trim() : null,
->>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
             imported_from: fileName,
             external_id: `${fileName}_${rowNumber}_${Date.now()}`,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            tags: [] // Initialize empty tags array to prevent dashboard filter errors
           };
           
           transactions.push(transaction);
