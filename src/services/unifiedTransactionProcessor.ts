@@ -46,6 +46,13 @@ interface BankFormat {
   };
 }
 
+// Configuration interface for processor instances
+export interface ProcessorConfig {
+  supportedBanks?: string[];
+  defaultBankFormat?: string;
+  customBankFormats?: BankFormat[];
+}
+
 export class UnifiedTransactionProcessor {
   private bankFormats: BankFormat[] = [
     {
@@ -119,6 +126,24 @@ export class UnifiedTransactionProcessor {
       }
     }
   ];
+
+  private config: ProcessorConfig;
+
+  constructor(config: ProcessorConfig = {}) {
+    this.config = config;
+    
+    // Apply custom bank formats if provided
+    if (config.customBankFormats) {
+      this.bankFormats.push(...config.customBankFormats);
+    }
+    
+    // Filter to supported banks if specified
+    if (config.supportedBanks) {
+      this.bankFormats = this.bankFormats.filter(format => 
+        config.supportedBanks!.includes(format.name)
+      );
+    }
+  }
 
   /**
    * Process multiple CSV files and return normalized transactions
@@ -788,6 +813,25 @@ Return only the JSON array, no other text.`;
       reasoning: 'No matching patterns found'
     };
   }
-}
 
-export const unifiedTransactionProcessor = new UnifiedTransactionProcessor();
+  /**
+   * Get supported bank formats
+   */
+  getSupportedBanks(): string[] {
+    return this.bankFormats.map(format => format.name);
+  }
+
+  /**
+   * Create a processor instance for a specific bank
+   */
+  static forBank(bankName: string): UnifiedTransactionProcessor {
+    return new UnifiedTransactionProcessor({ supportedBanks: [bankName] });
+  }
+
+  /**
+   * Create a processor instance for multiple banks
+   */
+  static forBanks(bankNames: string[]): UnifiedTransactionProcessor {
+    return new UnifiedTransactionProcessor({ supportedBanks: bankNames });
+  }
+}

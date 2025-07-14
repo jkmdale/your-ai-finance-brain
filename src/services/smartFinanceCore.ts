@@ -3,7 +3,7 @@
  * Integrates CSV processing, Claude categorization, budget generation, and SMART goals
  */
 
-import { unifiedTransactionProcessor } from './unifiedTransactionProcessor';
+import { UnifiedTransactionProcessor } from './unifiedTransactionProcessor';
 import { zeroBudgetGenerator } from './zeroBudgetGenerator';
 import { smartGoalsService } from './smartGoalsService';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,25 +56,18 @@ export class SmartFinanceCore {
     try {
       // Stage 1: Process CSV files
       onProgress?.('Processing CSV files...', 10);
-      const processingResult = await unifiedTransactionProcessor.processCSVFiles(files, userId);
+      
+      // Create a processor instance that supports all banks
+      const processor = new UnifiedTransactionProcessor();
+      const processingResult = await processor.processCSVFiles(files, userId);
       
       result.transactionsProcessed = processingResult.transactions.length;
       result.duplicatesSkipped = processingResult.summary.duplicatesSkipped;
       result.errors.push(...processingResult.summary.errors);
-      result.skippedRows = processingResult.summary.skippedRows.length;
-      result.totalRowsProcessed = processingResult.summary.totalRowsProcessed;
       
-      // Include sample of skipped rows for user feedback (max 5)
-      result.skippedRowDetails = processingResult.summary.skippedRows.slice(0, 5).map(row => ({
-        rowNumber: row.rowNumber,
-        error: row.error,
-        dateValue: row.details?.dateValue,
-        amountValue: row.details?.amountValue
-      }));
-
-      if (processingResult.transactions.length === 0 && processingResult.summary.skippedRows.length > 0) {
-        // All rows were skipped
-        result.errors.push(`All ${processingResult.summary.skippedRows.length} rows were skipped due to errors. Please check your CSV format.`);
+      if (processingResult.transactions.length === 0 && processingResult.summary.errors.length > 0) {
+        // All rows were skipped due to errors
+        result.errors.push(`No transactions could be processed. Please check your CSV format.`);
         result.success = false;
         return result;
       }
@@ -86,7 +79,7 @@ export class SmartFinanceCore {
 
       // Stage 2: Claude categorization
       onProgress?.('AI categorizing transactions...', 30);
-      const categorizedTransactions = await unifiedTransactionProcessor.categorizeWithClaude(
+      const categorizedTransactions = await processor.categorizeWithClaude(
         processingResult.transactions,
         (completed, total) => {
           const progress = 30 + (completed / total) * 40;
@@ -127,6 +120,150 @@ export class SmartFinanceCore {
 
     } catch (error: any) {
       console.error('SmartFinance workflow error:', error);
+      result.errors.push(error.message);
+    }
+
+    return result;
+  }
+
+  /**
+   * Process CSV files for a specific bank
+   */
+  async processCSVFilesForBank(
+    files: FileList,
+    bankName: string,
+    userId: string,
+    onProgress?: (stage: string, progress: number) => void
+  ): Promise<ProcessingResult> {
+    const result: ProcessingResult = {
+      success: false,
+      transactionsProcessed: 0,
+      duplicatesSkipped: 0,
+      budgetGenerated: false,
+      monthlyBudgets: [],
+      errors: []
+    };
+
+    try {
+      // Create a processor instance for the specific bank
+      const processor = UnifiedTransactionProcessor.forBank(bankName);
+      
+      onProgress?.(`Processing ${bankName} CSV files...`, 10);
+      const processingResult = await processor.processCSVFiles(files, userId);
+      
+      result.transactionsProcessed = processingResult.transactions.length;
+      result.duplicatesSkipped = processingResult.summary.duplicatesSkipped;
+      result.errors.push(...processingResult.summary.errors);
+
+      if (processingResult.transactions.length === 0) {
+        result.success = true;
+        return result;
+      }
+
+      // Categorize transactions
+      onProgress?.('AI categorizing transactions...', 30);
+      const categorizedTransactions = await processor.categorizeWithClaude(
+        processingResult.transactions,
+        (completed, total) => {
+          const progress = 30 + (completed / total) * 40;
+          onProgress?.(`AI categorizing: ${completed}/${total}`, progress);
+        }
+      );
+
+      // Save to database
+      onProgress?.('Saving to database...', 75);
+      await this.saveTransactionsToSupabase(categorizedTransactions, userId);
+
+      onProgress?.('Complete!', 100);
+      result.success = true;
+
+    } catch (error: any) {
+      console.error(`SmartFinance ${bankName} processing error:`, error);
+      result.errors.push(error.message);
+    }
+
+    return result;
+  }
+
+  /**
+   * Process multiple bank CSV files separately
+   */
+  async processMultipleBankCSVs(
+    filesByBank: Map<string, FileList>,
+    userId: string,
+    onProgress?: (stage: string, progress: number) => void
+  ): Promise<ProcessingResult> {
+    const result: ProcessingResult = {
+      success: false,
+      transactionsProcessed: 0,
+      duplicatesSkipped: 0,
+      budgetGenerated: false,
+      monthlyBudgets: [],
+      errors: []
+    };
+
+    try {
+      const allTransactions = [];
+      let totalProgress = 0;
+      const bankCount = filesByBank.size;
+
+      // Process each bank separately
+      for (const [bankName, files] of filesByBank) {
+        const processor = UnifiedTransactionProcessor.forBank(bankName);
+        
+        onProgress?.(`Processing ${bankName} files...`, totalProgress);
+        
+        const processingResult = await processor.processCSVFiles(files, userId);
+        result.transactionsProcessed += processingResult.transactions.length;
+        result.duplicatesSkipped += processingResult.summary.duplicatesSkipped;
+        result.errors.push(...processingResult.summary.errors);
+
+        if (processingResult.transactions.length > 0) {
+          // Categorize transactions for this bank
+          const categorizedTransactions = await processor.categorizeWithClaude(
+            processingResult.transactions
+          );
+          allTransactions.push(...categorizedTransactions);
+        }
+
+        totalProgress += (80 / bankCount);
+        onProgress?.(`Processed ${bankName}`, totalProgress);
+      }
+
+      if (allTransactions.length > 0) {
+        // Save all transactions to database
+        onProgress?.('Saving all transactions to database...', 85);
+        await this.saveTransactionsToSupabase(allTransactions, userId);
+
+        // Generate budgets
+        onProgress?.('Generating budgets...', 90);
+        const months = this.getUniqueMonths(allTransactions);
+        const monthlyBudgets = [];
+
+        for (const month of months) {
+          const budget = await zeroBudgetGenerator.generateMonthlyBudget(userId, month);
+          const recommendations = await zeroBudgetGenerator.generateBudgetRecommendations(userId, [budget]);
+          await zeroBudgetGenerator.saveBudgetToSupabase(userId, budget, recommendations);
+          monthlyBudgets.push(month);
+        }
+
+        result.monthlyBudgets = monthlyBudgets;
+        result.budgetGenerated = true;
+
+        // Generate SMART goals
+        onProgress?.('Generating SMART goals...', 95);
+        result.smartGoals = await this.generateSmartGoals(userId, monthlyBudgets);
+        
+        if (result.smartGoals && result.smartGoals.length > 0) {
+          await smartGoalsService.saveSmartGoals(userId, result.smartGoals);
+        }
+      }
+
+      onProgress?.('Complete!', 100);
+      result.success = true;
+
+    } catch (error: any) {
+      console.error('SmartFinance multi-bank processing error:', error);
       result.errors.push(error.message);
     }
 
