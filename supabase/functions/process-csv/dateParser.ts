@@ -1,5 +1,5 @@
 
-// Robust date parser for NZ bank CSV formats
+// Robust date parser for NZ bank CSV formats with enhanced error reporting
 const parseNZDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
   
@@ -8,7 +8,7 @@ const parseNZDate = (dateStr: string): Date | null => {
   
   // NZ bank date format patterns
   const patterns = [
-    // DD/MM/YYYY (most common NZ format)
+    // DD/MM/YYYY (most common NZ format - like 30/06/2025)
     { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/, type: 'dmy' },
     // DD/MM/YY (2-digit year)
     { regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/, type: 'dmy2' },
@@ -60,32 +60,44 @@ const parseNZDate = (dateStr: string): Date | null => {
 
 export const parseDate = (dateString: string, rowNumber: number): { date: string; warning?: string } => {
   // Clean input dates by removing zero-width spaces, newlines, and trimming
-  const cleanedDateString = dateString?.replace(/[\u200B\r\n]/g, '').trim();
+  const cleanedDateString = dateString?.replace(/[\u200B\u200C\u200D\uFEFF\r\n]/g, '').trim();
   
   if (!cleanedDateString) {
     const fallbackDate = new Date().toISOString().split('T')[0];
-    console.warn(`⚠️ Row ${rowNumber}: Empty date, using today: ${fallbackDate}`);
-    return { date: fallbackDate, warning: `Row ${rowNumber}: Empty date, used today` };
+    const warningMessage = `Row ${rowNumber}: Empty date field, using today (${fallbackDate})`;
+    console.warn(`⚠️ ${warningMessage}`);
+    return { date: fallbackDate, warning: warningMessage };
   }
-  
-  console.log(`🗓️ Row ${rowNumber}: Parsing cleaned date "${cleanedDateString}"`);
+
+  console.log(`🗓️ Row ${rowNumber}: Processing date "${cleanedDateString}"`);
   
   try {
     const parsedDate = parseNZDate(cleanedDateString);
     if (parsedDate) {
       const formattedDate = parsedDate.toISOString().split('T')[0];
-      console.log(`✅ Row ${rowNumber}: Date parsed successfully: ${formattedDate}`);
+      console.log(`✅ Row ${rowNumber}: Date parsed successfully: "${cleanedDateString}" -> ${formattedDate}`);
       return { date: formattedDate };
     }
   } catch (error) {
-    console.error(`❌ Row ${rowNumber}: Date parsing error:`, error);
+    console.error(`❌ Row ${rowNumber}: Date parsing exception for "${cleanedDateString}":`, error);
   }
   
-  // If parsing fails, use today as fallback
+  // Enhanced error handling with specific format guidance
+  const formatExamples = [
+    '30/06/2025 (DD/MM/YYYY)',
+    '30-06-2025 (DD-MM-YYYY)',
+    '2025-06-30 (YYYY-MM-DD)',
+    '30062025 (DDMMYYYY)',
+    '30/06/25 (DD/MM/YY)'
+  ];
+  
+  // If parsing fails, use today as fallback with detailed error
   const fallbackDate = new Date().toISOString().split('T')[0];
-  console.warn(`❌ Row ${rowNumber}: Could not parse date "${cleanedDateString}", using fallback: ${fallbackDate}`);
+  const errorMessage = `Row ${rowNumber}: Invalid date format "${cleanedDateString}". Expected formats: ${formatExamples.join(', ')}. Using fallback: ${fallbackDate}`;
+  
+  console.error(`❌ ${errorMessage}`);
   return { 
     date: fallbackDate,
-    warning: `Row ${rowNumber}: Could not parse date "${cleanedDateString}", used today as fallback`
+    warning: errorMessage
   };
 };
