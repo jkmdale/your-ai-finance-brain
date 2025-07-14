@@ -171,29 +171,36 @@ serve(async (req) => {
           let transactionDate: string;
           let dateWarning: string | undefined;
           
+<<<<<<< HEAD
           const dateValue = getColumnValue(values, headers, columnMapping.date);
           
           try {
+=======
+          const dateValue = getColumnValue(cleanedRow, headers, columnMapping.date);
+          
+          try {
+            const dateResult = parseDate(dateValue, rowNumber);
+>>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
             transactionDate = dateResult.date;
             if (dateResult.warning) {
               dateWarning = dateResult.warning;
               warnings.push(dateResult.warning);
             }
           } catch (dateError) {
-            console.error(`❌ Row ${rowNumber}: Date parsing failed for "${cleanedRow[0]}":`, dateError);
+            console.error(`❌ Row ${rowNumber}: Date parsing failed for "${dateValue}":`, dateError);
             
             // ✅ ENHANCEMENT 6: User-friendly error categorization for skipped rows
             let userFriendlyError = 'Invalid date format';
-            if (!cleanedRow[0] || cleanedRow[0].trim() === '') {
+            if (!dateValue || dateValue.trim() === '') {
               userFriendlyError = 'Missing date - this is normal for some CSV formats';
             } else {
-              userFriendlyError = `Invalid date format "${cleanedRow[0]}" - expected DD/MM/YYYY format`;
+              userFriendlyError = `Invalid date format "${dateValue}" - expected DD/MM/YYYY format`;
             }
             
             skippedRows.push({
               rowNumber,
               error: userFriendlyError,
-              rawDate: cleanedRow[0],
+              rawDate: dateValue,
               delimiter: validation.separator === '\t' ? '\\t' : validation.separator,
               headers: headers.join(' | '),
               rowData: cleanedRow.slice(0, 5) // First 5 fields for debugging
@@ -202,11 +209,26 @@ serve(async (req) => {
             continue; // Skip this row but don't treat as critical error
           }
           
+<<<<<<< HEAD
           }
 
           // Extract description and merchant properly
           const description = getColumnValue(values, headers, columnMapping.description);
           const merchant = getColumnValue(values, headers, columnMapping.merchant);
+=======
+          // Enhanced amount parsing
+          const amountValue = getColumnValue(cleanedRow, headers, columnMapping.amount);
+          const amountStr = amountValue.replace(/[$,\s]/g, '');
+          const amount = parseFloat(amountStr) || 0;
+          
+          if (amount === 0) {
+            warnings.push(`Row ${rowNumber}: Amount is 0 or invalid: "${amountValue}"`);
+          }
+
+          // Extract description and merchant properly
+          const description = getColumnValue(cleanedRow, headers, columnMapping.description);
+          const merchant = getColumnValue(cleanedRow, headers, columnMapping.merchant);
+>>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
           
           // Determine best display text (prioritize merchant over card numbers)
           const displayText = getBestDisplayText(merchant, description);
@@ -216,6 +238,14 @@ serve(async (req) => {
             user_id: user.id,
             account_id: accountId,
             transaction_date: transactionDate,
+<<<<<<< HEAD
+=======
+            description: displayText.substring(0, 255),
+            amount: Math.abs(amount),
+            is_income: amount > 0,
+            category_id: null, // Will be set by categorization
+            merchant: merchant && merchant.trim() ? merchant.trim() : null,
+>>>>>>> aa71c1c (Fix CSV merchant extraction, dashboard updates, and AI coach integration)
             imported_from: fileName,
             external_id: `${fileName}_${rowNumber}_${Date.now()}`,
             created_at: new Date().toISOString(),
