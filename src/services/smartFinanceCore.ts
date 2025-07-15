@@ -7,6 +7,7 @@ import { CSVProcessingService } from './csvProcessingService';
 import { zeroBudgetGenerator } from './zeroBudgetGenerator';
 import { smartGoalsService } from './smartGoalsService';
 import { supabase } from '@/integrations/supabase/client';
+import { ClaudeTransactionCategorizer } from './claudeTransactionCategorizer';
 
 export interface ProcessingResult {
   success: boolean;
@@ -34,6 +35,7 @@ export interface ProcessingResult {
 
 export class SmartFinanceCore {
   private csvProcessor = new CSVProcessingService();
+  private claudeCategorizer = new ClaudeTransactionCategorizer();
 
   /**
    * Complete processing pipeline: CSV -> Categorization -> Budget -> Goals
@@ -80,13 +82,13 @@ export class SmartFinanceCore {
         return result;
       }
 
-      // Stage 2: Claude categorization (simulate for now - this would call AI service)
+      // Stage 2: 🧠 AI CATEGORIZATION FIX - Use Claude AI categorization service
       onProgress?.('AI categorizing transactions...', 30);
-      const categorizedTransactions = await this.categorizeTransactions(
+      const categorizedTransactions = await this.claudeCategorizer.categorizeTransactions(
         processingResult.transactions,
-        (completed, total) => {
-          const progress = 30 + (completed / total) * 40;
-          onProgress?.(`AI categorizing: ${completed}/${total}`, progress);
+        (progress) => {
+          const progressPercentage = 30 + (progress.completed / progress.total) * 40;
+          onProgress?.(`AI categorizing: ${progress.completed}/${progress.total}`, progressPercentage);
         }
       );
 
@@ -281,40 +283,58 @@ export class SmartFinanceCore {
   }
 
   /**
-   * Categorize transactions using AI (mock implementation)
+   * 🧠 AI CATEGORIZATION FIX - Use Claude AI categorization service
    */
   private async categorizeTransactions(
     transactions: any[],
     onProgress?: (completed: number, total: number) => void
   ): Promise<any[]> {
-    // Mock categorization - in real implementation this would call Claude API
-    const categorized = transactions.map((tx, index) => {
-      onProgress?.(index + 1, transactions.length);
+    console.log('🧠 Using Claude AI categorization service...');
+    
+    try {
+      const categorized = await this.claudeCategorizer.categorizeTransactions(
+        transactions,
+        (progress) => {
+          onProgress?.(progress.completed, progress.total);
+        }
+      );
       
-      // Simple category assignment based on description
-      let category = 'Other';
-      const desc = tx.description.toLowerCase();
-      
-      if (desc.includes('groceries') || desc.includes('supermarket') || desc.includes('food')) {
-        category = 'Groceries';
-      } else if (desc.includes('fuel') || desc.includes('petrol') || desc.includes('gas')) {
-        category = 'Transport';
-      } else if (desc.includes('rent') || desc.includes('mortgage')) {
-        category = 'Housing';
-      } else if (desc.includes('salary') || desc.includes('wage')) {
-        category = 'Income';
-      }
-      
-      return {
+      return categorized.map(tx => ({
         ...tx,
-        category,
         merchant: this.extractMerchant(tx.description),
         is_income: tx.isIncome,
         source_bank: 'CSV Import'
-      };
-    });
-    
-    return categorized;
+      }));
+    } catch (error) {
+      console.warn('🧠 Claude AI categorization failed, falling back to basic categorization:', error);
+      
+      // Fallback to basic categorization if Claude fails
+      return transactions.map((tx, index) => {
+        onProgress?.(index + 1, transactions.length);
+        
+        // Simple category assignment based on description
+        let category = 'Other';
+        const desc = tx.description.toLowerCase();
+        
+        if (desc.includes('groceries') || desc.includes('supermarket') || desc.includes('food')) {
+          category = 'Groceries';
+        } else if (desc.includes('fuel') || desc.includes('petrol') || desc.includes('gas')) {
+          category = 'Transport';
+        } else if (desc.includes('rent') || desc.includes('mortgage')) {
+          category = 'Housing';
+        } else if (desc.includes('salary') || desc.includes('wage')) {
+          category = 'Income';
+        }
+        
+        return {
+          ...tx,
+          category,
+          merchant: this.extractMerchant(tx.description),
+          is_income: tx.isIncome,
+          source_bank: 'CSV Import'
+        };
+      });
+    }
   }
 
   private extractMerchant(description: string): string {

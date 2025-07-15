@@ -264,45 +264,80 @@ export function CSVUpload() {
 
       setResult(result);
       
-      if (result.success) {
-        console.log('[CSVUpload] ✅ Upload successful:', result);
-        
-        // Create user-friendly success message with clear summary
-        const successParts = [];
-        
-        // Main success message
-        if (result.transactionsProcessed > 0) {
-          successParts.push(`${result.transactionsProcessed} transactions imported successfully`);
-        }
-        
-        // Handle skipped rows in a friendly way (not as errors)
-        if (result.skippedRows && result.skippedRows > 0) {
-          successParts.push(`${result.skippedRows} rows skipped (missing data)`);
-        }
-        
-        // Handle duplicates
-        if (result.duplicatesSkipped && result.duplicatesSkipped > 0) {
-          successParts.push(`${result.duplicatesSkipped} duplicates avoided`);
-        }
-        
-        // Additional features completed
-        const features = [];
-        if (result.budgetGenerated) features.push('budgets generated');
-        if (result.smartGoals && result.smartGoals.length > 0) {
-          features.push(`${result.smartGoals.length} SMART goals created`);
-        }
-        
-        if (features.length > 0) {
-          successParts.push(features.join(' and '));
-        }
-        
-        const successMessage = successParts.join(', ');
-        
-        toast({ 
-          title: "✅ Upload Complete", 
-          description: successMessage,
-          duration: 8000 // Show longer for detailed message
-        });
+              if (result.success) {
+          console.log('[CSVUpload] ✅ Upload successful:', result);
+          
+          // Create user-friendly success message with clear summary
+          const successParts = [];
+          
+          // Main success message
+          if (result.transactionsProcessed > 0) {
+            successParts.push(`${result.transactionsProcessed} transactions imported successfully`);
+          }
+          
+          // Handle skipped rows in a friendly way (not as errors)
+          if (result.skippedRows && result.skippedRows > 0) {
+            successParts.push(`${result.skippedRows} rows skipped (missing data)`);
+          }
+          
+          // Handle duplicates
+          if (result.duplicatesSkipped && result.duplicatesSkipped > 0) {
+            successParts.push(`${result.duplicatesSkipped} duplicates avoided`);
+          }
+          
+          // Additional features completed
+          const features = [];
+          if (result.budgetGenerated) features.push('budgets generated');
+          if (result.smartGoals && result.smartGoals.length > 0) {
+            features.push(`${result.smartGoals.length} SMART goals created`);
+          }
+          
+          if (features.length > 0) {
+            successParts.push(features.join(' and '));
+          }
+          
+          const successMessage = successParts.join(', ');
+          
+          toast({ 
+            title: "✅ Upload Complete", 
+            description: successMessage,
+            duration: 8000 // Show longer for detailed message
+          });
+
+          // 🔄 DASHBOARD REFRESH FIX - Dispatch custom events to trigger dashboard refresh
+          console.log('[CSVUpload] 🔄 Triggering dashboard refresh events...');
+          
+          // Dispatch multiple events to ensure all components refresh
+          const dashboardRefreshEvent = new CustomEvent('dashboard-refresh', {
+            detail: { 
+              transactionsProcessed: result.transactionsProcessed,
+              budgetGenerated: result.budgetGenerated,
+              smartGoals: result.smartGoals,
+              timestamp: new Date().toISOString()
+            }
+          });
+          
+          const transactionsCategorizedEvent = new CustomEvent('transactions-categorized', {
+            detail: { 
+              transactionsProcessed: result.transactionsProcessed,
+              timestamp: new Date().toISOString()
+            }
+          });
+
+          const csvUploadCompleteEvent = new CustomEvent('csv-upload-complete', {
+            detail: { 
+              result: result,
+              timestamp: new Date().toISOString()
+            }
+          });
+
+          // Dispatch events with a small delay to ensure UI is ready
+          setTimeout(() => {
+            window.dispatchEvent(dashboardRefreshEvent);
+            window.dispatchEvent(transactionsCategorizedEvent);
+            window.dispatchEvent(csvUploadCompleteEvent);
+            console.log('[CSVUpload] ✅ Dashboard refresh events dispatched');
+          }, 500);
         
         // Show additional details if there were skipped rows (but not as an error)
         if (result.skippedRows && result.skippedRows > 0 && result.skippedRowDetails && result.skippedRowDetails.length > 0) {

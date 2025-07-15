@@ -38,8 +38,8 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
       <Table>
         <TableHeader>
           <TableRow className="border-white/20 hover:bg-white/5">
-            <TableHead className="text-white/70 font-medium">Transaction</TableHead>
-            <TableHead className="text-white/70 font-medium hidden sm:table-cell">Merchant</TableHead>
+            <TableHead className="text-white/70 font-medium">Code</TableHead>
+            <TableHead className="text-white/70 font-medium">Details</TableHead>
             <TableHead className="text-white/70 font-medium hidden md:table-cell">Category</TableHead>
             <TableHead className="text-white/70 font-medium">Date</TableHead>
             <TableHead className="text-white/70 font-medium text-right">Amount</TableHead>
@@ -65,14 +65,15 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-white font-medium truncate max-w-[200px]">{transaction.description}</p>
-                      <p className="text-white/60 text-sm sm:hidden truncate">{transaction.merchant || 'Unknown'}</p>
+                      <p className="text-white font-medium truncate max-w-[150px]" title={transaction.merchant || 'Unknown Merchant'}>
+                        {transaction.merchant || 'Unknown Merchant'}
+                      </p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  <span className="text-white/80 truncate block max-w-[150px]">
-                    {transaction.merchant || 'Unknown Merchant'}
+                <TableCell>
+                  <span className="text-white/80 truncate block max-w-[200px]" title={transaction.description}>
+                    {transaction.description}
                   </span>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">

@@ -58,8 +58,16 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="text-white font-medium truncate">{transaction.description}</h4>
-            <p className="text-white/60 text-sm truncate">{transaction.merchant || 'Unknown Merchant'}</p>
+            <div className="flex flex-col space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="text-white/50 text-xs font-medium">Code:</span>
+                <h4 className="text-white font-medium truncate">{transaction.merchant || 'Unknown Merchant'}</h4>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-white/50 text-xs font-medium">Details:</span>
+                <p className="text-white/80 text-sm truncate">{transaction.description}</p>
+              </div>
+            </div>
           </div>
         </div>
         <div className="text-right flex-shrink-0 ml-3">

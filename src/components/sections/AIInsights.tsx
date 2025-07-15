@@ -146,30 +146,55 @@ export const AIInsights = () => {
     checkForDataAndGenerateInsights();
   }, [user, refreshKey]);
 
-  // Listen for CSV uploads to refresh insights
+  // 🤖 AI COACH FIX - Listen for CSV uploads to refresh insights and activate AI coach
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'csv-upload-complete') {
-        console.log('CSV upload detected, refreshing AI insights...');
+        console.log('[AIInsights] 🤖 CSV upload detected via storage, refreshing AI insights...');
         setTimeout(() => {
           setRefreshKey(prev => prev + 1);
         }, 2000); // Give time for transaction processing to complete
       }
     };
 
-    const handleCustomEvent = () => {
-      console.log('Custom CSV upload event detected, refreshing AI insights...');
-      setTimeout(() => {
-        setRefreshKey(prev => prev + 1);
-      }, 2000);
+    const handleCSVUploadComplete = (event: CustomEvent) => {
+      console.log('[AIInsights] 🤖 CSV upload complete event detected, activating AI coach...', event.detail);
+      const result = event.detail.result;
+      
+      // Force refresh insights with immediate activation
+      if (result.transactionsProcessed > 0) {
+        setHasTransactions(true);
+        setTimeout(() => {
+          setRefreshKey(prev => prev + 1);
+        }, 2000);
+      }
     };
 
+    const handleDashboardRefresh = () => {
+      console.log('[AIInsights] 🤖 Dashboard refresh detected, updating AI coach...');
+      setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+      }, 1500);
+    };
+
+    const handleTransactionsCategorized = () => {
+      console.log('[AIInsights] 🤖 Transactions categorized, generating new insights...');
+      setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+      }, 1000);
+    };
+
+    // Listen for multiple events to ensure AI coach activates
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('csv-upload-complete', handleCustomEvent);
+    window.addEventListener('csv-upload-complete', handleCSVUploadComplete);
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
+    window.addEventListener('transactions-categorized', handleTransactionsCategorized);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('csv-upload-complete', handleCustomEvent);
+      window.removeEventListener('csv-upload-complete', handleCSVUploadComplete);
+      window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
+      window.removeEventListener('transactions-categorized', handleTransactionsCategorized);
     };
   }, []);
 
