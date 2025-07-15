@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { CSVUpload } from './CSVUpload';
+import { AICoach } from './AICoach'; // Add AI Coach import
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useAIInsights } from '@/hooks/useAIInsights';
 import { DashboardEvents } from '@/components/dashboard/DashboardEvents';
@@ -107,6 +108,11 @@ export const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BudgetBreakdown />
           <SmartBudgetGoals />
+        </div>
+
+        {/* AI Coach Section */}
+        <div className="mt-6">
+          <AICoach />
         </div>
 
         <div className="grid grid-cols-1 gap-6">

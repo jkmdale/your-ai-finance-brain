@@ -5,6 +5,8 @@ export interface Transaction {
   amount: number;
   isIncome: boolean;
   description: string;
+  merchant?: string; // Add merchant field
+  originalRow: any; // Add originalRow field
   [key: string]: any;
 }
 export interface BankFormat {
@@ -14,6 +16,7 @@ export interface BankFormat {
     debit?: string[];
     credit?: string[];
     description: string[];
+    merchant?: string[]; // Add merchant field
   };
   [key: string]: any;
 }
@@ -58,61 +61,33 @@ export class UnifiedTransactionProcessor {
     } else {
       const debitValue = this.findColumnValue(row, this.bankFormat.columnMappings.debit || []);
       const creditValue = this.findColumnValue(row, this.bankFormat.columnMappings.credit || []);
-      if ((debitValue && debitValue !== '' && debitValue !== '0') ||
-          (creditValue && creditValue !== '' && creditValue !== '0')) {
-        const debitAmount = this.parseAmount(debitValue || '0');
-        const creditAmount = this.parseAmount(creditValue || '0');
-        if (debitAmount > 0 && creditAmount > 0) {
-          throw new Error('Both debit and credit have values - ambiguous transaction');
-        }
-        if (debitAmount > 0) {
-          amount = debitAmount;
-          isIncome = false;
-        } else if (creditAmount > 0) {
-          amount = creditAmount;
-          isIncome = true;
-        } else {
-          throw new Error(`No amount found in debit or credit columns - Debit: "${debitValue || '[empty]'}", Credit: "${creditValue || '[empty]'}"`);
-        }
+
+      if (debitValue && debitValue !== '' && debitValue !== '0') {
+        amount = Math.abs(this.parseAmount(debitValue));
+        isIncome = false;
+      } else if (creditValue && creditValue !== '' && creditValue !== '0') {
+        amount = Math.abs(this.parseAmount(creditValue));
+        isIncome = true;
       } else {
-        const availableColumns = Object.keys(row).join(', ');
-        const expectedColumns = [
-          ...(this.bankFormat.columnMappings.amount || []),
-          ...(this.bankFormat.columnMappings.debit || []),
-          ...(this.bankFormat.columnMappings.credit || [])
-        ].join(', ');
-        throw new Error(`No amount column detected. Available columns: [${availableColumns}]. Expected: [${expectedColumns}]`);
+        return null;
       }
     }
+
+    if (amount <= 0) return null;
 
     const dateValue = this.findColumnValue(row, this.bankFormat.columnMappings.date);
-    let dateParsed: Date | null = null;
-    let dateFormats = [
-      'dd/MM/yyyy', 'yyyy-MM-dd', 'dd MMM yyyy', 'dd-MM-yyyy', 'dd-MM-yy', 'dd.MM.yyyy', 'yyyyMMdd'
-    ];
-    for (const fmt of dateFormats) {
-      const d = parseDate(dateValue, fmt, new Date());
-      if (isValidDate(d)) {
-        dateParsed = d;
-        break;
-      }
-    }
-    if (!dateParsed) {
-      throw new Error(`Invalid date value: "${dateValue}" - expected one of formats [${dateFormats.join(', ')}]`);
-    }
+    const description = this.findColumnValue(row, this.bankFormat.columnMappings.description);
+    const merchant = this.findColumnValue(row, this.bankFormat.columnMappings.merchant || []);
 
-    let description = '';
-    for (const descCol of this.bankFormat.columnMappings.description) {
-      const v = this.findColumnValue(row, [descCol]);
-      if (v) description += v + ' ';
-    }
-    description = description.trim();
+    if (!dateValue) return null;
 
     return {
-      date: dateParsed.toISOString(),
+      date: dateValue,
       amount,
       isIncome,
-      description
+      description,
+      merchant: merchant || null, // Include merchant information
+      originalRow: row
     };
   }
 }

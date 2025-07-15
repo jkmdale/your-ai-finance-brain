@@ -11,6 +11,7 @@ export interface BankFormatAnalysis {
     amount: { index: number; confidence: number; pattern: string };
     balance?: { index: number; confidence: number; pattern: string };
     reference?: { index: number; confidence: number; pattern: string };
+    merchant?: { index: number; confidence: number; pattern: string }; // Add merchant field
   };
   dateFormat: string;
   negativePattern: 'brackets' | 'minus' | 'debit_credit' | 'column_based';
@@ -60,13 +61,10 @@ Return analysis in JSON format with confidence scores (0-1) for each mapping.`;
 
   private parseAIResponse(aiResponse: string, headers: string[], sampleRows: string[][]): BankFormatAnalysis {
     try {
-      // Extract JSON from AI response if it's embedded in text
-      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-      const analysisData = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-
-      // Build structured analysis with fallbacks
+      const analysisData = JSON.parse(aiResponse);
+      
       return {
-        confidence: analysisData.confidence || 0.7,
+        confidence: analysisData.confidence || 0.8,
         bankName: analysisData.bankName,
         country: analysisData.country,
         columnMappings: {
@@ -74,7 +72,8 @@ Return analysis in JSON format with confidence scores (0-1) for each mapping.`;
           description: this.findBestColumn(headers, sampleRows, ['description', 'details', 'particulars', 'memo', 'reference'], analysisData.descriptionColumn),
           amount: this.findBestColumn(headers, sampleRows, ['amount', 'value', 'debit', 'credit', 'transaction_amount'], analysisData.amountColumn),
           balance: this.findBestColumn(headers, sampleRows, ['balance', 'running_balance', 'account_balance'], analysisData.balanceColumn),
-          reference: this.findBestColumn(headers, sampleRows, ['reference', 'ref', 'transaction_id', 'check_number'], analysisData.referenceColumn)
+          reference: this.findBestColumn(headers, sampleRows, ['reference', 'ref', 'transaction_id', 'check_number'], analysisData.referenceColumn),
+          merchant: this.findBestColumn(headers, sampleRows, ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative', 'memo'], analysisData.merchantColumn) // Add merchant mapping
         },
         dateFormat: analysisData.dateFormat || this.detectDateFormat(sampleRows),
         negativePattern: analysisData.negativePattern || this.detectNegativePattern(sampleRows),
@@ -257,18 +256,25 @@ Return analysis in JSON format with confidence scores (0-1) for each mapping.`;
   }
 
   private fallbackDetection(headers: string[], sampleRows: string[][]): BankFormatAnalysis {
+    console.log('🔄 Using fallback detection for bank format');
+    
     return {
       confidence: 0.5,
+      bankName: 'Unknown',
+      country: 'Unknown',
       columnMappings: {
-        date: this.findBestColumn(headers, sampleRows, ['date', 'transaction_date', 'posting_date']),
-        description: this.findBestColumn(headers, sampleRows, ['description', 'details', 'particulars']),
-        amount: this.findBestColumn(headers, sampleRows, ['amount', 'value', 'debit', 'credit'])
+        date: this.findBestColumn(headers, sampleRows, ['date', 'transaction_date', 'posting_date', 'value_date']),
+        description: this.findBestColumn(headers, sampleRows, ['description', 'details', 'particulars', 'memo']),
+        amount: this.findBestColumn(headers, sampleRows, ['amount', 'value', 'debit', 'credit']),
+        balance: this.findBestColumn(headers, sampleRows, ['balance', 'running_balance', 'account_balance']),
+        reference: this.findBestColumn(headers, sampleRows, ['reference', 'ref', 'transaction_id']),
+        merchant: this.findBestColumn(headers, sampleRows, ['particulars', 'code', 'merchant', 'other party', 'payee', 'narrative', 'memo']) // Add merchant fallback
       },
-      dateFormat: 'DD/MM/YYYY',
-      negativePattern: 'minus',
-      currencySymbol: '$',
+      dateFormat: this.detectDateFormat(sampleRows),
+      negativePattern: this.detectNegativePattern(sampleRows),
+      currencySymbol: this.detectCurrency(sampleRows),
       skipRows: [],
-      specialInstructions: ['Using fallback detection due to AI analysis failure']
+      specialInstructions: []
     };
   }
 
