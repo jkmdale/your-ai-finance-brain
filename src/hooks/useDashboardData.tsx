@@ -27,17 +27,18 @@ export const useDashboardData = () => {
     return totals;
   };
 
-  const fetchDashboardData = async (forceRefresh = false) => {
+  const fetchDashboardData = async (forceRefresh = false, retryCount = 0) => {
     if (!user) {
       setLoading(false);
       return;
     }
 
-    const TIMEOUT_MS = 10000; // 10 second timeout
+    const TIMEOUT_MS = 30000; // 🔧 TIMEOUT FIX - Increased to 30 seconds
+    const MAX_RETRIES = 3;
     const startTime = Date.now();
     
     try {
-      console.log(`🔄 Loading dashboard data from Supabase ${forceRefresh ? '(forced refresh)' : ''}`);
+      console.log(`🔄 Loading dashboard data from Supabase ${forceRefresh ? '(forced refresh)' : ''} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
       setError(null);
 
       // Check network connectivity first
@@ -175,7 +176,7 @@ export const useDashboardData = () => {
         setLastDataRefresh(new Date());
       }
     } catch (error) {
-      console.error('❌ Error loading dashboard data from Supabase:', error);
+      console.error(`❌ Error loading dashboard data from Supabase (attempt ${retryCount + 1}):`, error);
       let errorMessage = 'An unexpected error occurred while loading your financial data.';
       
       if (error instanceof Error) {
@@ -184,11 +185,35 @@ export const useDashboardData = () => {
         errorMessage = error;
       }
       
+      // 🔄 RETRY LOGIC - Implement exponential backoff retry
+      if (retryCount < MAX_RETRIES) {
+        const isRetryableError = (
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('network') ||
+          errorMessage.includes('fetch') ||
+          errorMessage.includes('connection') ||
+          !navigator.onLine
+        );
+
+        if (isRetryableError) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
+          console.log(`🔄 Retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          
+          setTimeout(() => {
+            fetchDashboardData(forceRefresh, retryCount + 1);
+          }, delay);
+          
+          return; // Don't set error state yet, we're retrying
+        }
+      }
+      
       // Add additional context for common issues
       if (!navigator.onLine) {
         errorMessage = 'No internet connection. Please check your network and try again.';
       } else if (errorMessage.includes('timeout')) {
-        errorMessage += ' This might be due to a slow internet connection or server issues.';
+        errorMessage = `Dashboard data loading timed out after ${TIMEOUT_MS / 1000} seconds. This might be due to a slow internet connection or server issues.`;
+      } else if (retryCount >= MAX_RETRIES) {
+        errorMessage = `Failed to load dashboard data after ${MAX_RETRIES + 1} attempts. Please try refreshing the page.`;
       }
       
       setError(errorMessage);
@@ -198,7 +223,10 @@ export const useDashboardData = () => {
       setRecentTransactions([]);
       setLastDataRefresh(new Date());
     } finally {
-      setLoading(false);
+      // Only set loading to false if we're not retrying
+      if (retryCount >= MAX_RETRIES || !error) {
+        setLoading(false);
+      }
     }
   };
 

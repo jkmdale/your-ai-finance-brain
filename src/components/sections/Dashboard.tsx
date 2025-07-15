@@ -40,6 +40,38 @@ export const Dashboard = () => {
     }
   }, [refreshKey, recentTransactions, aiInsights, generateAIInsights]);
 
+  // 🔄 DASHBOARD REFRESH FIX - Listen for CSV upload events and trigger refresh
+  useEffect(() => {
+    const handleDashboardRefresh = (event: CustomEvent) => {
+      console.log('[Dashboard] 🔄 CSV upload complete, refreshing dashboard...', event.detail);
+      triggerRefresh();
+    };
+
+    const handleCSVUploadComplete = (event: CustomEvent) => {
+      console.log('[Dashboard] 📊 CSV upload complete, triggering AI insights...', event.detail);
+      const result = event.detail.result;
+      
+      // Force refresh dashboard data
+      triggerRefresh();
+      
+      // Trigger AI insights generation if transactions were processed
+      if (result.transactionsProcessed > 0) {
+        setTimeout(() => {
+          generateAIInsights(recentTransactions.slice(0, 20));
+        }, 2000); // Wait for data to be refreshed
+      }
+    };
+
+    // Listen for dashboard refresh events
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
+    window.addEventListener('csv-upload-complete', handleCSVUploadComplete);
+
+    return () => {
+      window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
+      window.removeEventListener('csv-upload-complete', handleCSVUploadComplete);
+    };
+  }, [triggerRefresh, generateAIInsights, recentTransactions]);
+
   if (loading) {
     return <LoadingState lastDataRefresh={lastDataRefresh} />;
   }
